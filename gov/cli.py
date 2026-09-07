@@ -1003,6 +1003,8 @@ def _init_uninstall_args(
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .root import force_utf8_stdio
+    force_utf8_stdio()  # every report leaves as UTF-8, on every OS (#168)
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
         _usage()

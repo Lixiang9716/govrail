@@ -285,6 +285,11 @@ def verify(commit: str, records: list[dict]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        from .root import force_utf8_stdio
+    except ImportError:  # direct-script execution (self-test scratch dirs)
+        from root import force_utf8_stdio
+    force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(
         prog="gov receipt",
         description="Verifiable run receipts: bind a green gov run to the "

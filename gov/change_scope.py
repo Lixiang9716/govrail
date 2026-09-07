@@ -138,6 +138,11 @@ def _suggest_gates(files: list[str], surfaces: dict[str, dict] | None) -> tuple[
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        from .root import force_utf8_stdio
+    except ImportError:  # direct-script execution (self-test scratch dirs)
+        from root import force_utf8_stdio
+    force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(
         prog="gov change-scope",
         description="Report touched surfaces since a base ref.",

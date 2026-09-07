@@ -94,6 +94,7 @@ jobs:
           set -e
           d=$(mktemp -d); cd "$d"
           git init -q .
+          git -c user.email=t@t -c user.name=t commit -qm init --allow-empty
           gov init
           gov doctor
           gov run --mode all

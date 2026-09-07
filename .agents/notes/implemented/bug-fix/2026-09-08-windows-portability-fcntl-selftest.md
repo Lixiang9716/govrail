@@ -38,6 +38,12 @@ the gates runner itself:
   diffs, root anchoring, history/receipt paths, merge preflight, pairing
   hashes — any non-ASCII path, filename, or repo content could crash the
   tooling on any non-UTF-8 locale, not just Windows.
+- A third layer, found by this PR's new Windows CI on its first run:
+  the print side. Windows pipes give stdout/stderr the ANSI code page,
+  and gates.py crashed with `UnicodeEncodeError` re-printing a child's
+  captured output that carried an unencodable character — the report
+  died mid-line. Decoding inputs as UTF-8 is half a wall without
+  emitting UTF-8 as the other half.
 
 ## Decision
 
@@ -66,9 +72,20 @@ the gates runner itself:
   change_scope.py, decisions.py (both `numbers_in_rev` reads), task.py,
   trend.py, verify_conflict_markers.py, verify_decisions.py,
   verify_note_presence.py, verify_translation_pairing.py.
-  self_test.py's own fixture harness keeps the locale codec on purpose:
-  its children are our own tools, so child-encode/parent-decode
-  round-trips within one locale.
+- The mirror of that decode wall is the PRINT side: Windows pipes give
+  stdout/stderr the ANSI code page (cp1252/GBK), and gates.py died
+  re-printing a child's output the moment it carried a character the
+  codec could not encode. `root.force_utf8_stdio()` reconfigures stdio
+  to UTF-8 with errors="replace" — the plane's reports always leave as
+  valid UTF-8, on every OS; a real console is unaffected (PEP 528), and
+  streams that cannot be reconfigured (pytest capsys) keep theirs. It
+  rides `anchor_to_git_root` for the root-anchored tools and is called
+  explicitly at every other entry point (cli, gates, self_test,
+  receipt, presets, review, change_scope, doctor, verify_note_presence,
+  verify_rubric). The self-test harness agrees with its children by
+  construction: `_case_env` sets `PYTHONIOENCODING=utf-8` and every
+  fixture capture decodes `utf-8`/`replace` — child-encode and
+  parent-decode can no longer disagree about the codec.
 - CI gains a `windows` job (windows-latest, Python 3.12): install the
   wheel, replay the reporter's verified end-to-end (`gov init` /
   `gov doctor` / `gov run --mode all` in a fresh repo), then
@@ -105,3 +122,6 @@ the gates runner itself:
   rejected: skipping the tools' own proof on a shipped platform is
   rule 6's "vacuous script" wearing a platform hat; portable fixtures
   keep the proof running everywhere the wheel installs.
+- **Require `PYTHONUTF8=1` / `PYTHONIOENCODING` from Windows users** —
+  rejected: an environment ritual is exactly the tax a stdlib-only,
+  pip-install-and-go tool must not levy; the tool pins its own codecs.

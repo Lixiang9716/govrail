@@ -49,8 +49,10 @@ from typing import Any
 # script (self-test scratch dirs), where the package context is absent.
 try:
     from . import receipt as receipt_mod
+    from .root import force_utf8_stdio
 except ImportError:  # direct-script execution (python gov/gates.py)
     import receipt as receipt_mod
+    from root import force_utf8_stdio
 
 BLOCKING_OUTCOMES = ("FAIL", "TIMEOUT", "MISSING")
 OUTCOME_ORDER = ("FAIL", "TIMEOUT", "MISSING", "SKIP", "PASS")
@@ -804,6 +806,7 @@ def _outcome_line(gate: Gate, outcome: str, in_scope: int | None = None) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(prog="gov run", description="Run the governance gate DAG.")
     parser.add_argument("--config", default="gates.json")
     parser.add_argument("--mode", default=None,

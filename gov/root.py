@@ -17,8 +17,35 @@ import sys
 from pathlib import Path
 
 
+def force_utf8_stdio() -> None:
+    """Print in UTF-8 regardless of the platform locale (#168).
+
+    On Windows, stdout/stderr attached to a pipe default to the ANSI code
+    page (cp1252/GBK/...), while everything this plane prints — repo
+    paths, note and decision prose, captured gate output — is UTF-8 by
+    convention. A character the locale codec cannot represent crashed the
+    tool mid-report (gates died re-printing a child's output). UTF-8 with
+    errors="replace" keeps the bytes valid for every downstream consumer
+    and never crashes on legacy content; a real console is unaffected
+    (PEP 528 already gives it UTF-8). Best-effort by contract: a stream
+    that cannot be reconfigured (pytest's capsys, a replaced object)
+    keeps its encoding — never worth failing over.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
 def anchor_to_git_root(tool: str) -> None:
-    """Chdir to the git work-tree root when the caller is deeper inside."""
+    """Chdir to the git work-tree root when the caller is deeper inside.
+
+    Also pins stdio to UTF-8 (#168): root anchoring is every root-anchored
+    tool's first statement, so the wall is up before the first report line
+    is printed.
+    """
+    force_utf8_stdio()
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
