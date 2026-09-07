@@ -41,15 +41,13 @@ def _gov(root: Path, *args, env=None, timeout=30):
     return subprocess.run(
         [sys.executable, "-m", "gov", *args],
         cwd=root, capture_output=True, text=True, timeout=timeout,
-        env=dict(SCRUBBED, PYTHONPATH=str(REPO), **(env or {})),
-    )
+        env=dict(SCRUBBED, PYTHONPATH=str(REPO), **(env or {})), encoding="utf-8", errors="replace")
 
 
 def _lockdir(root: Path) -> Path:
     out = subprocess.run(
         ["git", "rev-parse", "--git-common-dir"], cwd=root,
-        capture_output=True, text=True, env=SCRUBBED, check=True,
-    ).stdout.strip()
+        capture_output=True, text=True, env=SCRUBBED, check=True, encoding="utf-8", errors="replace").stdout.strip()
     p = Path(out)
     return (p if p.is_absolute() else root / p).resolve() / "gov-locks"
 
@@ -170,7 +168,7 @@ def test_concurrent_takeover_of_expired_lease_exactly_one_wins(tmp_path):
         procs.append(subprocess.Popen(
             [sys.executable, "-c", _WRAPPER, str(go), "contested", agent],
             cwd=tmp_path, env=env, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True))
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"))
     go.write_text("go", encoding="utf-8")  # release both at once
     outs = [p.communicate(timeout=30) for p in procs]
     codes = [p.returncode for p in procs]
@@ -197,7 +195,7 @@ def test_concurrent_fresh_acquires_also_exactly_one_wins(tmp_path):
         procs.append(subprocess.Popen(
             [sys.executable, "-c", _WRAPPER, str(go), "fresh", agent],
             cwd=tmp_path, env=env, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True))
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"))
     go.write_text("go", encoding="utf-8")
     outs = [p.communicate(timeout=30) for p in procs]
     codes = [p.returncode for p in procs]

@@ -53,8 +53,7 @@ def _listed_flags(cmd: str) -> tuple[set[str], str]:
     for argv in surfaces:
         proc = subprocess.run(
             [sys.executable, "-m", "gov", *argv],
-            cwd=REPO, capture_output=True, text=True, timeout=60,
-        )
+            cwd=REPO, capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
         assert proc.returncode == 0, f"gov {argv} --help failed: {proc.stderr}"
         outs.append(proc.stdout)
         in_options = False
@@ -108,14 +107,12 @@ def test_init_accepts_every_registered_flag(tmp_path):
          "--adopt", "all", "--preview"],
         cwd=tmp_path, capture_output=True, text=True, timeout=60,
         env={"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin",
-             "HOME": str(tmp_path)},
-    )
+             "HOME": str(tmp_path)}, encoding="utf-8", errors="replace")
     assert "unexpected argument" not in ok.stderr, ok.stderr
     dead = sp.run(
         [sys.executable, "-m", "gov", "init", "--nonexistent"],
         cwd=tmp_path, capture_output=True, text=True, timeout=60,
         env={"PYTHONPATH": str(REPO), "PATH": "/usr/bin:/bin",
-             "HOME": str(tmp_path)},
-    )
+             "HOME": str(tmp_path)}, encoding="utf-8", errors="replace")
     assert dead.returncode == 2
     assert "unexpected argument '--nonexistent'" in dead.stderr

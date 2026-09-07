@@ -25,11 +25,11 @@ def _main_repo_with_worktree(tmp_path):
 def _fingerprint(repo):
     config = hashlib.sha256((repo / ".git" / "config").read_bytes()).hexdigest()
     refs = subprocess.run(["git", "show-ref"], cwd=repo,
-                          capture_output=True, text=True).stdout
+                          capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
     status = subprocess.run(["git", "status", "--porcelain"], cwd=repo,
-                            capture_output=True, text=True).stdout
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
     heads = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
-                           capture_output=True, text=True).stdout
+                           capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
     return config, hashlib.sha256(refs.encode()).hexdigest(), status, heads
 
 
@@ -39,8 +39,7 @@ def test_full_selftest_from_worktree_leaves_host_identical(tmp_path):
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent.parent)}
     result = subprocess.run(
         [sys.executable, "-m", "gov", "self-test"],
-        cwd=wt, env=env, capture_output=True, text=True, timeout=300,
-    )
+        cwd=wt, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert result.returncode == 0, result.stdout + result.stderr
     assert _fingerprint(main) == before  # byte-identical host (#24 acceptance)
 
@@ -55,8 +54,7 @@ def test_full_selftest_from_worktree_under_hostile_env(tmp_path):
            "GIT_WORK_TREE": str(main)}
     result = subprocess.run(
         [sys.executable, "-m", "gov", "self-test"],
-        cwd=wt, env=env, capture_output=True, text=True, timeout=300,
-    )
+        cwd=wt, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert result.returncode == 0, result.stdout + result.stderr
     assert "scrubbed repository-resolving" in result.stdout
     assert _fingerprint(main) == before

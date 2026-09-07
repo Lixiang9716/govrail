@@ -27,8 +27,7 @@ def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess:
         [sys.executable, "-m", "gov", "task", *args],
         cwd=cwd, capture_output=True, text=True,
         env={"PYTHONPATH": str(Path(__file__).resolve().parent.parent),
-             "PATH": "/usr/bin:/bin", "HOME": str(cwd)},
-    )
+             "PATH": "/usr/bin:/bin", "HOME": str(cwd)}, encoding="utf-8", errors="replace")
 
 
 def test_new_writes_card_with_pin_and_checklist(tmp_path, capsys, monkeypatch):
@@ -176,8 +175,7 @@ def _git_project(tmp_path: Path) -> Path:
 def _lease_dir(proj: Path) -> Path:
     out = subprocess.run(
         ["git", "rev-parse", "--git-common-dir"], cwd=proj,
-        capture_output=True, text=True, env=SCRUBBED, check=True,
-    ).stdout.strip()
+        capture_output=True, text=True, env=SCRUBBED, check=True, encoding="utf-8", errors="replace").stdout.strip()
     p = Path(out)
     return (p if p.is_absolute() else proj / p).resolve() / "gov-locks"
 
@@ -310,7 +308,7 @@ def test_two_processes_claim_same_card_exactly_one_wins(tmp_path):
              "      '--agent', agent, '--ttl', '300']))\n",
              str(go), "T-0001", agent],
             cwd=proj, env=env, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True))
+            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"))
     go.write_text("go", encoding="utf-8")
     t0 = time.monotonic()
     outs = [p.communicate(timeout=30) for p in procs]

@@ -74,12 +74,12 @@ def test_grade_approve_and_request_changes(tmp_path, monkeypatch):
     env = {**os.environ, "PYTHONPATH": "/home/lx/govrail"}
     approve = sp.run([_sys.executable, "-m", "gov.cli", "review", "--grade",
                       "--base", "HEAD"], cwd=tmp_path, env=env,
-                     input="p\np\n", capture_output=True, text=True)
+                     input="p\np\n", capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert approve.returncode == 0
     assert "verdict: approve" in approve.stdout
     changes = sp.run([_sys.executable, "-m", "gov.cli", "review", "--grade",
                       "--base", "HEAD"], cwd=tmp_path, env=env,
-                     input="p\nf\napp.py:2 broken\ns\n", capture_output=True, text=True)
+                     input="p\nf\napp.py:2 broken\ns\n", capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert changes.returncode == 1
     out = changes.stdout
     assert "R2 — fail — app.py:2 broken" in out
@@ -97,11 +97,11 @@ def test_grade_needs_rubric_and_quit(tmp_path, monkeypatch):
     env = {**os.environ, "PYTHONPATH": "/home/lx/govrail"}
     norubric = sp.run([_sys.executable, "-m", "gov.cli", "review", "--grade",
                        "--base", "HEAD"], cwd=tmp_path, env=env,
-                      input="", capture_output=True, text=True)
+                      input="", capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert norubric.returncode == 2
     _rubric(tmp_path)
     quit_ = sp.run([_sys.executable, "-m", "gov.cli", "review", "--grade",
                     "--base", "HEAD"], cwd=tmp_path, env=env,
-                   input="q\n", capture_output=True, text=True)
+                   input="q\n", capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert quit_.returncode == 1
     assert "grade quit" in quit_.stdout

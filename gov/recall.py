@@ -105,7 +105,7 @@ def _corpus() -> Corpus:
         files = sorted(root.rglob("*.md"))
         for p in files:
             text = p.read_text(encoding="utf-8")
-            out.append(Entry(str(p), _title_of(text), _headings_of(text), text))
+            out.append(Entry(p.as_posix(), _title_of(text), _headings_of(text), text))
         if lifecycle == "implemented":
             implemented = len(files)
         else:
@@ -113,11 +113,11 @@ def _corpus() -> Corpus:
     from . import decisions as dec
     src = dec.load()
     if src is not None:
-        decisions_path = str(src.path)
+        decisions_path = src.path.as_posix()
         triples = src.entries()
         for did, title, body in triples:
             out.append(
-                Entry(source=f"{src.path}#{did}", title=title,
+                Entry(source=f"{src.path.as_posix()}#{did}", title=title,
                       headings=[], body=body)
             )
         decisions = len(triples)
@@ -126,7 +126,7 @@ def _corpus() -> Corpus:
                  if not p.name.startswith("README")]
         for p in files:
             text = p.read_text(encoding="utf-8")
-            out.append(Entry(str(p), _title_of(text), _headings_of(text), text))
+            out.append(Entry(p.as_posix(), _title_of(text), _headings_of(text), text))
         postmortems = len(files)
     return Corpus(implemented, archived, postmortems, decisions,
                   decisions_path, out)

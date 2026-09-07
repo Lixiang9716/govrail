@@ -39,25 +39,25 @@ def _env(**extra):
 
 def _git(root, *argv, check=True):
     return subprocess.run(["git", *argv], cwd=root, check=check,
-                          capture_output=True, text=True, env=_env())
+                          capture_output=True, text=True, env=_env(), encoding="utf-8", errors="replace")
 
 
 def _gov(root, *argv, env=None):
     return subprocess.run([sys.executable, "-m", "gov", "run", *argv],
                           cwd=root, capture_output=True, text=True,
-                          env=env if env is not None else _env())
+                          env=env if env is not None else _env(), encoding="utf-8", errors="replace")
 
 
 def _fingerprint(repo):
     """(config, refs, status, HEAD) — the host must be byte-identical."""
     config = hashlib.sha256((repo / ".git" / "config").read_bytes()).hexdigest()
     refs = subprocess.run(["git", "show-ref"], cwd=repo, capture_output=True,
-                          text=True, env=_env()).stdout
+                          text=True, env=_env(), encoding="utf-8", errors="replace").stdout
     status = subprocess.run(["git", "status", "--porcelain"], cwd=repo,
                             capture_output=True, text=True,
-                            env=_env()).stdout
+                            env=_env(), encoding="utf-8", errors="replace").stdout
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
-                          capture_output=True, text=True, env=_env()).stdout
+                          capture_output=True, text=True, env=_env(), encoding="utf-8", errors="replace").stdout
     return config, hashlib.sha256(refs.encode()).hexdigest(), status, head
 
 
@@ -323,7 +323,7 @@ def test_merge_receipt_verifies_landed_union_by_tree(tmp_path):
     landed = _git(root, "rev-parse", "HEAD").stdout.strip()
     verify = subprocess.run(
         [sys.executable, "-m", "gov", "receipt", "verify", landed],
-        cwd=root, capture_output=True, text=True, env=_env())
+        cwd=root, capture_output=True, text=True, env=_env(), encoding="utf-8", errors="replace")
     assert verify.returncode == 0, (
         f"the landed union must verify by tree sha: {verify.stderr}")
     assert "all PASS" in verify.stdout

@@ -66,6 +66,17 @@ true for a contributor on Windows.
     them to the locale codec, so non-ASCII fixtures crashed the fixtures
     themselves. The pinning is semantic (files are UTF-8 by convention),
     not cosmetic.
+  - Second Windows run's residue (71 → 11 → 0 across three runs) was one
+    class with two halves. Children now speak UTF-8 (the stdio wall), so
+    the parent side of every test capture decodes
+    `encoding="utf-8", errors="replace"` too (52 subprocess sites) — and
+    the plane's own path displays are normalized: `verify-archive`,
+    `recall` (matched paths, corpus statement), and `verify-pairing`
+    (out-of-sync lines, `--write` hints and echoes, exclusion matching)
+    print and compare paths in posix form, matching git's own convention
+    on every OS. Backslashed display paths were cosmetic locally but made
+    the fix-command hints uncopypasteable and the exclusion matching
+    silently wrong on Windows.
 - **CI**: the windows job now installs `-e ".[dev]"`, runs
   `python -m pytest -q` before the smoke, and keeps the tools-family
   self-test. Ubuntu's job is unchanged (full self-test including this

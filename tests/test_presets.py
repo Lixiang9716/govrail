@@ -602,7 +602,7 @@ def test_acceptance_init_preset_then_every_gate_green(tmp_path):
     _git_repo(scratch, env)
     r = subprocess.run(
         [sys.executable, "-m", "gov", "init", "--preset", AGENT_HEAVY],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
 
     cfg = json.loads((scratch / "gates.json").read_text(encoding="utf-8"))
@@ -614,7 +614,7 @@ def test_acceptance_init_preset_then_every_gate_green(tmp_path):
     # the full matrix, inside the scratch, must be green
     run = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--every-gate"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert run.returncode == 0, run.stdout + run.stderr
     assert "PASS verify-decisions" in run.stdout
 
@@ -624,7 +624,7 @@ def test_acceptance_init_preset_then_every_gate_green(tmp_path):
     again = subprocess.run(
         [sys.executable, "-m", "gov", "preset", "apply", AGENT_HEAVY,
          "--project", "."],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert again.returncode == 0, again.stdout + again.stderr
     assert "already adopted — nothing written" in again.stdout
     for p, content in before.items():
@@ -665,12 +665,12 @@ def test_acceptance_python_lib_scratch_green(tmp_path):
 
     r = subprocess.run([sys.executable, "-m", "gov", "init"],
                        cwd=scratch, env=env, capture_output=True, text=True,
-                       timeout=300)
+                       timeout=300, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     r = subprocess.run(
         [sys.executable, "-m", "gov", "preset", "apply", PYTHON_LIB,
          "--project", "."],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "gates: added 2 (in preset order): pytest, build" in r.stdout
 
@@ -683,7 +683,7 @@ def test_acceptance_python_lib_scratch_green(tmp_path):
 
     run = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--every-gate"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert run.returncode == 0, run.stdout + run.stderr
     assert "PASS pytest" in run.stdout
     assert "PASS build" in run.stdout
@@ -710,18 +710,18 @@ def test_acceptance_docs_bilingual_scratch_green_then_fail_loud(tmp_path):
 
     r = subprocess.run([sys.executable, "-m", "gov", "init"],
                        cwd=scratch, env=env, capture_output=True, text=True,
-                       timeout=300)
+                       timeout=300, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     r = subprocess.run(
         [sys.executable, "-m", "gov", "preset", "apply", DOCS_BILINGUAL,
          "--project", "."],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "gates: added 1 (in preset order): doc-sync" in r.stdout
 
     run = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--every-gate"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert run.returncode == 0, run.stdout + run.stderr
     assert "PASS doc-sync" in run.stdout
     assert "1 version(s) paired" in run.stdout
@@ -733,7 +733,7 @@ def test_acceptance_docs_bilingual_scratch_green_then_fail_loud(tmp_path):
         "## [1.0.0] - 2026-09-05\n\n- first release\n", encoding="utf-8")
     red = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--gate", "doc-sync"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert red.returncode == 1
     assert "FAIL doc-sync" in red.stdout
     assert "CHANGELOG has [1.1.0] but HIGHLIGHTS has" in red.stdout

@@ -181,7 +181,7 @@ def test_argparse_backport_shadow_is_named(tmp_path):
     clean = subprocess.run(
         [sys.executable, "-m", "gov", "doctor"], cwd=tmp_path,
         capture_output=True, text=True,
-        env={**os.environ, "PYTHONPATH": str(repo)})
+        env={**os.environ, "PYTHONPATH": str(repo)}, encoding="utf-8", errors="replace")
     assert "argparse resolves to the stdlib" in clean.stdout
 
     shadow = tmp_path / "shadow"
@@ -191,7 +191,7 @@ def test_argparse_backport_shadow_is_named(tmp_path):
            "PYTHONPATH": os.pathsep.join([str(shadow), str(repo)])}
     r = subprocess.run(
         [sys.executable, "-m", "gov", "doctor"], cwd=tmp_path,
-        capture_output=True, text=True, env=env)
+        capture_output=True, text=True, env=env, encoding="utf-8", errors="replace")
     assert r.returncode == 1, r.stdout
     assert "argparse resolves to" in r.stdout
     assert "pip uninstall argparse" in r.stdout

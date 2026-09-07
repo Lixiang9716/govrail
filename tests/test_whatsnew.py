@@ -39,7 +39,7 @@ def test_every_released_tag_has_a_highlights_section():
     import subprocess as _sp
     from gov import whatsnew as _wn
     tags = _sp.run(["git", "tag", "--list", "v*"], capture_output=True,
-                   text=True).stdout.split()
+                   text=True, encoding="utf-8", errors="replace").stdout.split()
     if not tags:
         import pytest as _pytest
         _pytest.skip("no tags available to check (CI fetch-tags race or a "

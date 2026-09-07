@@ -167,7 +167,7 @@ def _sources(cfg: dict[str, list[str]]) -> list[Path]:
     pinned: dict[Path, set[str]] = {}
     out = []
     for f in sorted(files):
-        if str(f) in excluded or f.suffix != ".md":
+        if f.as_posix() in excluded or f.suffix != ".md":
             continue
         if any(f.name.endswith(lit) for lit in literals):
             continue  # a counterpart side by naming convention
@@ -290,7 +290,7 @@ def _render_record(fields: dict[str, str]) -> str:
 def _announce_wrote(record: Path, fields: dict[str, str]) -> None:
     """Issue #150: --write names the field values it wrote, not just the
     file — the hand-restamp failure was invisible until the gate went red."""
-    print(f"wrote {record}")
+    print(f"wrote {record.as_posix()}")
     print(f"  en: {fields['en']}  zh: {fields['zh']}"
           "  (git blob hashes, not file sha256)")
     print(f"  en_commit: {fields['en_commit'] or 'untracked'}  "
@@ -357,17 +357,17 @@ def _pair_errors(src: Path, cfg: dict[str, list[str]]) -> list[str]:
     zh = _counterpart(src, cfg)
     if zh is None:
         return [
-            f"{src}: no counterpart found (conventions: {_convention_hint(cfg)}) — "
-            f"translate it, or register one: --write en:{src} zh:<path>"
+            f"{src.as_posix()}: no counterpart found (conventions: {_convention_hint(cfg)}) — "
+            f"translate it, or register one: --write en:{src.as_posix()} zh:<path>"
         ]
     if not zh.exists():
         return [
-            f"{src}: recorded counterpart '{zh.name}' is missing — "
-            "re-register with --write en:" + str(src) + " zh:<path>"
+            f"{src.as_posix()}: recorded counterpart '{zh.name}' is missing — "
+            "re-register with --write en:" + src.as_posix() + " zh:<path>"
         ]
     rec = _record_path(src)
     if not rec.exists():
-        return [f"{src}: missing record {rec.name} — baseline with --write {src}"]
+        return [f"{src.as_posix()}: missing record {rec.name} — baseline with --write {src.as_posix()}"]
     recorded = _parse_record(rec)
     current = {"en": _blob_hash(src), "zh": _blob_hash(zh)}
     errors: list[str] = []
@@ -377,8 +377,8 @@ def _pair_errors(src: Path, cfg: dict[str, list[str]]) -> list[str]:
         elif recorded[side] != current[side]:
             moved = _last_commit(expect) or "uncommitted"
             errors.append(
-                f"{expect}: out of sync — re-confirm: "
-                f"gov verify-pairing --write {src} "
+                f"{expect.as_posix()}: out of sync — re-confirm: "
+                f"gov verify-pairing --write {src.as_posix()} "
                 f"(the {side} side last moved in {moved}, "
                 f"confirmed {recorded.get('last_confirmed', 'unknown time')})"
             )
@@ -428,7 +428,7 @@ def _write(items: list[str], cfg: dict[str, list[str]]) -> int:
             print(f"verify_translation_pairing: no such source: {en}", file=sys.stderr)
             return 2
         if not zh.exists():
-            print(f"verify_translation_pairing: no such counterpart: {zh}", file=sys.stderr)
+            print(f"verify_translation_pairing: no such counterpart: {zh.as_posix()}", file=sys.stderr)
             return 2
         if en.suffix != ".md":
             print(f"verify_translation_pairing: source must be a .md file: {en}", file=sys.stderr)
@@ -461,18 +461,18 @@ def _write(items: list[str], cfg: dict[str, list[str]]) -> int:
     unpairable = 0
     for src in sources:
         if not src.exists():
-            print(f"verify_translation_pairing: no such pair source: {src}", file=sys.stderr)
+            print(f"verify_translation_pairing: no such pair source: {src.as_posix()}", file=sys.stderr)
             return 2  # a named path that does not exist is a typo, not a pair state
         zh = _counterpart(src, cfg)
         problem = None
         if zh is None:
             problem = (
-                f"no counterpart for {src} (conventions: {_convention_hint(cfg)}) — "
-                f"translate it, or register explicitly: --write en:{src} zh:<path>"
+                f"no counterpart for {src.as_posix()} (conventions: {_convention_hint(cfg)}) — "
+                f"translate it, or register explicitly: --write en:{src.as_posix()} zh:<path>"
             )
         elif not zh.exists():
             problem = (
-                f"recorded counterpart '{zh.name}' for {src} is missing — "
+                f"recorded counterpart '{zh.name}' for {src.as_posix()} is missing — "
                 "re-register: --write en:" + str(src) + " zh:<path>"
             )
         if problem is not None:

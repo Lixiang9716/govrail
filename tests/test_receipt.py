@@ -15,7 +15,7 @@ PASS = [sys.executable, "-c", "pass"]
 
 def _git(tmp_path, *args):
     subprocess.run(["git", *args], cwd=tmp_path, check=True,
-                   capture_output=True, text=True)
+                   capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _init_repo(tmp_path):
@@ -56,7 +56,7 @@ def test_chain_append_and_verify_green(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     _append(tmp_path, _green_record(commit))
     assert receipt_mod.main(["verify", commit]) == 0
     assert "all PASS" in capsys.readouterr().out
@@ -66,7 +66,7 @@ def test_verify_fails_without_receipt(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     assert receipt_mod.main(["verify", commit]) == 1
     assert "no receipt" in capsys.readouterr().err
 
@@ -75,7 +75,7 @@ def test_tampered_line_breaks_loudly(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     good = _green_record(commit)
     _append(tmp_path, good)
     # An editor's lie: flip an outcome without re-signing.
@@ -94,7 +94,7 @@ def test_broken_prev_link_named(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     first = _green_record(commit)
     _append(tmp_path, first)
     # History reordered/rewritten: second receipt's prev no longer chains.
@@ -108,7 +108,7 @@ def test_partial_or_dirty_run_never_verifies(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     r1 = _green_record(commit, selection={"kind": "gate", "value": "a"})
     _append(tmp_path, r1)
     r2 = _green_record(commit, dirty=True, prev=r1["hash"])
@@ -126,7 +126,7 @@ def test_prefix_commit_and_record_verification(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     record = _green_record(commit)
     assert receipt_mod.main(["verify", commit[:8],
                              "--record", json.dumps(record)]) == 0
@@ -151,7 +151,7 @@ def test_run_receipt_end_to_end_and_no_flag_unchanged(tmp_path, monkeypatch, cap
     out = capsys.readouterr().out
     assert "receipt: r-" in out
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     assert receipt_mod.main(["verify", commit]) == 0
     lines = _receipt_path(tmp_path).read_text(encoding="utf-8").splitlines()
     assert json.loads(lines[-1])["tag"] == "agent"  # #120's caller rides along
@@ -175,6 +175,6 @@ def test_run_receipt_selection_scoping(tmp_path, monkeypatch, capsys):
     assert gates.main(["--gate", "ok", "--receipt"]) == 0
     capsys.readouterr()
     commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     assert receipt_mod.main(["verify", commit]) == 1
     assert "partial run" in capsys.readouterr().err

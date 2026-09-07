@@ -41,12 +41,12 @@ def _git_repo(root: Path) -> None:
 
 def _gov(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-m", "gov", *args],
-                          cwd=root, capture_output=True, text=True, env=_env(root))
+                          cwd=root, capture_output=True, text=True, env=_env(root), encoding="utf-8", errors="replace")
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args],
-                          cwd=root, capture_output=True, text=True, env=_env(root))
+                          cwd=root, capture_output=True, text=True, env=_env(root), encoding="utf-8", errors="replace")
 
 
 def _baseline_pair(root: Path) -> None:

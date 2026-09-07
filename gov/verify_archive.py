@@ -47,7 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     if not ARCHIVED.is_dir():
         print("verify_archive: nothing archived — nothing to seal")
         return 0
-    files = {str(p.relative_to(ARCHIVED)): p for p in sorted(ARCHIVED.rglob("*.md"))}
+    # as_posix: seal keys are posix on every OS (#168)
+    files = {p.relative_to(ARCHIVED).as_posix(): p for p in sorted(ARCHIVED.rglob("*.md"))}
     if not MANIFEST.is_file():
         if not files:
             print("verify_archive: nothing archived — nothing to seal")

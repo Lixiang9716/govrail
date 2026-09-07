@@ -360,8 +360,7 @@ def test_two_worktrees_dir_format_merge_clean_or_named_collision(tmp_path,
             [sys.executable, "-m", "gov", "decision", "add", "--from",
              _draft(tmp_path, title, "- **选项**: a\n- **被否**: b")],
             cwd=wt, check=True, capture_output=True, text=True,
-            env=dict(env, PYTHONPATH=repo_root),
-        )
+            env=dict(env, PYTHONPATH=repo_root), encoding="utf-8", errors="replace")
 
     add_in(tmp_path / "wt-a", "from a")
     add_in(tmp_path / "wt-b", "from b")  # same base → same number D2
@@ -374,7 +373,7 @@ def test_two_worktrees_dir_format_merge_clean_or_named_collision(tmp_path,
     # merge B into A: dir format → no textual conflict (different files)
     merge = subprocess.run(["git", "merge", "-q", "--no-edit", "wt-b"],
                            cwd=tmp_path / "wt-a", capture_output=True,
-                           text=True, env=env)
+                           text=True, env=env, encoding="utf-8", errors="replace")
     assert merge.returncode == 0, (merge.stdout, merge.stderr)
     # but the duplicate number is a loud, named gate failure
     monkeypatch.chdir(tmp_path / "wt-a")
