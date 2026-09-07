@@ -831,6 +831,7 @@ def _resolved_target() -> str:
         proc = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",  # git speaks UTF-8, not the locale codec (#168)
         )
     except OSError:
         proc = None

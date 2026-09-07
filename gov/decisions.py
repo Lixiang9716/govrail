@@ -140,6 +140,7 @@ def numbers_in_rev(rev: str) -> set[int]:
         out = subprocess.run(
             ["git", "ls-tree", "-r", "--name-only", rev, "--", str(path)],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         if out.returncode != 0:
             raise subprocess.CalledProcessError(out.returncode, out.args,
@@ -155,6 +156,11 @@ def numbers_in_rev(rev: str) -> set[int]:
     out = subprocess.run(
         ["git", "show", f"{rev}:{path.as_posix()}"],
         capture_output=True, text=True,
+        # #168: the blob is repo content (UTF-8 by convention) — decoding
+        # with the locale codec crashed verify-decisions --base on non-UTF-8
+        # locales (a GBK Windows died on the Chinese decisions table before
+        # the number-collision check could fire).
+        encoding="utf-8", errors="replace",
     )
     if out.returncode != 0:
         raise subprocess.CalledProcessError(out.returncode, out.args,

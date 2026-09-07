@@ -15,7 +15,9 @@ Liveness, not correctness (fail-open). A lease only prevents DUPLICATED
 WORK; correctness is anchored elsewhere (push CAS for master, delivery
 rebase for docs). A holder that stalls past its TTL can therefore share
 the resource with a taker-over — the upper-layer validation catches that,
-and the tests say so in plain language.
+and the tests say so in plain language. The guard flock below is POSIX-only
+(issue #168): on Windows the takeover critical section runs unserialized,
+which widens that same already-priced-in race instead of breaking the CLI.
 
 Storage: ``<git-common-dir>/gov-locks/<resource>.json`` (``/`` in the
 resource name becomes ``__``), created on demand. The git common dir is
@@ -53,7 +55,6 @@ on, so it gets its own code rather than overloading 1.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import getpass
 import json
 import os
@@ -62,6 +63,13 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:  # POSIX only (issue #168); on Windows the guard degrades to no
+    # serialization — the lease stays fail-open liveness (D52), same
+    # precedent and wording as decision.py's atomic-write lock.
+    import fcntl
+except ImportError:  # pragma: no cover - Windows has no fcntl module
+    fcntl = None
 
 try:  # package context (`gov ...`)
     from .root import anchor_to_git_root
@@ -112,7 +120,9 @@ def _common_dir(tool: str) -> Path:
     """
     proc = subprocess.run(
         ["git", "rev-parse", "--git-common-dir"],
-        capture_output=True, text=True, env=_scrubbed_env(),
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace",  # git speaks UTF-8, not the locale codec (#168)
+        env=_scrubbed_env(),
     )
     out = proc.stdout.strip()
     if proc.returncode != 0 or not out:
@@ -213,15 +223,22 @@ def _guarded(common: Path, resource: str, action) -> object:
     It serializes takers-over (and holder-verified releases) on the same
     resource so the unlink→recreate takeover can never double-issue a
     lease, and never holds anything once the process exits.
+
+    Windows has no fcntl (issue #168): the guard degrades to an unserialized
+    critical section — the takeover race window widens exactly as the
+    module docstring's fail-open contract already prices in (a lease only
+    prevents duplicated work; upper-layer validation carries correctness).
     """
     guard_path = _guard_path(common, resource)
     guard_path.parent.mkdir(parents=True, exist_ok=True)
     with open(guard_path, "w") as guard:
-        fcntl.flock(guard, fcntl.LOCK_EX)
+        if fcntl is not None:
+            fcntl.flock(guard, fcntl.LOCK_EX)
         try:
             return action()
         finally:
-            fcntl.flock(guard, fcntl.LOCK_UN)
+            if fcntl is not None:
+                fcntl.flock(guard, fcntl.LOCK_UN)
 
 
 def _takeover(common: Path, resource: str, payload: str,

@@ -88,7 +88,8 @@ def _git_dir() -> str | None:
     FILE; git rev-parse --git-common-dir resolves the shared dir (hooks
     live there even from a linked worktree)."""
     proc = subprocess.run(["git", "rev-parse", "--git-common-dir"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         return None
     import os

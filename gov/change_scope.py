@@ -90,7 +90,8 @@ def _changed(base: str) -> tuple[list[str], str | None]:
         ["git", "diff", "--name-only", base],
         ["git", "ls-files", "--others", "--exclude-standard"],
     ):
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode != 0:
             return [], proc.stderr.strip()
         files.update(f for f in proc.stdout.splitlines() if f)

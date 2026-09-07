@@ -29,6 +29,10 @@
 pip install govrail        # 或：uv tool install govrail / pipx install govrail
 ```
 
+国内镜像同步滞后时，wheel 可能暂缺而 `pip index versions` 已能看到新版本
+（JSON API 先于 simple index 更新）；此时改用官方源安装：
+`pip install govrail --index-url https://pypi.org/simple`。
+
 这把 `gov` CLI 放到你的 PATH 上（纯标准库，无第三方依赖）。每个动作一个子命令：
 
 ```sh

@@ -64,6 +64,27 @@ def _case_env() -> dict:
     return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
+# Portable gate-command fixtures (#168). The fixtures below used the Unix
+# coreutils `true`/`false` and `sh -c` to say "a command that exits 0/1" —
+# none of which exists on Windows, where every such gate came out MISSING
+# and ten cases failed for fixture reasons, not tool reasons (the wheel is
+# py3-none-any / OS Independent, so the tools' own proof must be too).
+# Fixtures whose gates actually EXECUTE use these; config-error fixtures
+# that exit 2 before any gate runs keep their `["true"]` placeholders.
+_PASS_CMD = [sys.executable, "-c", "pass"]
+_FAIL_CMD = [sys.executable, "-c", "raise SystemExit(1)"]
+
+
+def _pass_cmd() -> list[str]:
+    """A fresh portable always-exit-0 command (the Unix `true`)."""
+    return list(_PASS_CMD)
+
+
+def _fail_cmd() -> list[str]:
+    """A fresh portable always-exit-1 command (the Unix `false`)."""
+    return list(_FAIL_CMD)
+
+
 def _pinned_env() -> dict:
     """Case env whose PYTHONPATH pins gov to the tested tree (#138).
 
@@ -188,9 +209,9 @@ def test_gates_skips_transitively() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "A", "command": ["true"], "needs": ["B"]},
-                        {"id": "B", "command": ["true"], "needs": ["C"]},
-                        {"id": "C", "command": ["false"]},
+                        {"id": "A", "command": _pass_cmd(), "needs": ["B"]},
+                        {"id": "B", "command": _pass_cmd(), "needs": ["C"]},
+                        {"id": "C", "command": _fail_cmd()},
                     ]
                 }
             ),
@@ -299,8 +320,8 @@ def test_gates_default_mode_scopes_run() -> None:
                     "modes": {"all": ["a"], "also": ["b"]},
                     "defaultMode": "all",
                     "gates": [
-                        {"id": "a", "command": ["true"]},
-                        {"id": "b", "command": ["false"]},
+                        {"id": "a", "command": _pass_cmd()},
+                        {"id": "b", "command": _fail_cmd()},
                     ],
                 }
             ),
@@ -336,8 +357,8 @@ def test_gates_disabled_gate_never_runs() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "a", "command": ["true"]},
-                        {"id": "b", "command": ["false"], "enabled": False},
+                        {"id": "a", "command": _pass_cmd()},
+                        {"id": "b", "command": _fail_cmd(), "enabled": False},
                     ]
                 }
             ),
@@ -357,7 +378,7 @@ def test_gates_advisory_failure_reports_without_blocking() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "a", "command": ["false"], "allowFailure": True},
+                        {"id": "a", "command": _fail_cmd(), "allowFailure": True},
                     ]
                 }
             ),
@@ -489,8 +510,8 @@ def test_run_base_scopes_gates_by_paths() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "docs-gate", "command": ["true"], "paths": ["docs/**"]},
-                        {"id": "code-gate", "command": ["false"], "paths": ["src/**"]},
+                        {"id": "docs-gate", "command": _pass_cmd(), "paths": ["docs/**"]},
+                        {"id": "code-gate", "command": _fail_cmd(), "paths": ["src/**"]},
                     ]
                 }
             ),
@@ -519,8 +540,9 @@ def test_run_failure_summary_and_gate_flag() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "boom", "command": ["sh", "-c", "echo boom >&2; exit 3"]},
-                        {"id": "ok", "command": ["true"]},
+                        {"id": "boom", "command": [sys.executable, "-c",
+                                                   "import sys; print('boom', file=sys.stderr); raise SystemExit(3)"]},
+                        {"id": "ok", "command": _pass_cmd()},
                     ]
                 }
             ),
@@ -1054,7 +1076,8 @@ def test_passing_gate_output_stays_visible() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "warny", "command": ["sh", "-c", "echo heads up; exit 0"]},
+                        {"id": "warny", "command": [sys.executable, "-c",
+                                                    "print('heads up')"]},
                     ]
                 }
             ),
@@ -1190,7 +1213,7 @@ def _receipt_repo(root: Path, two_gates: bool = False) -> str:
     """A committed scratch repo with passing gate(s); returns HEAD sha."""
     _git_repo(root)
     gate_ids = ["ok", "two"] if two_gates else ["ok"]
-    config = {"gates": [{"id": gid, "command": ["true"]} for gid in gate_ids]}
+    config = {"gates": [{"id": gid, "command": _pass_cmd()} for gid in gate_ids]}
     (root / "gates.json").write_text(json.dumps(config), encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=root, check=True,
                    capture_output=True)
@@ -1253,7 +1276,7 @@ def test_run_merge_rejects_text_conflict() -> None:
         git("config", "user.email", "t@t")
         git("config", "user.name", "t")
         (root / "gates.json").write_text(
-            json.dumps({"gates": [{"id": "ok", "command": ["true"]}]}),
+            json.dumps({"gates": [{"id": "ok", "command": _pass_cmd()}]}),
             encoding="utf-8")
         (root / ".gitignore").write_text(".gov/history/\n", encoding="utf-8")
         (root / "f.txt").write_text("one\ntwo\nthree\n", encoding="utf-8")

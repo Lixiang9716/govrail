@@ -33,6 +33,10 @@ surfaces, decisions). Task-oriented recipes: [docs/cookbook.md](docs/cookbook.md
 pip install govrail        # or: uv tool install govrail / pipx install govrail
 ```
 
+On a lagging pip mirror the wheel can be missing while `pip index versions`
+already lists it (the JSON API updates before the simple index). Install
+from the official index then: `pip install govrail --index-url https://pypi.org/simple`.
+
 This puts the `gov` CLI on your PATH (stdlib only — no third-party
 dependencies). It has one subcommand per action:
 

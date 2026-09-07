@@ -72,3 +72,30 @@ jobs:
             echo "doctor must flag the shadowed argparse"; exit 1
           fi
           PYTHONPATH="$SP" gov doctor 2>&1 | grep -q "pip uninstall argparse"
+
+  windows:
+    # Issue #168: the wheel is py3-none-any ("OS Independent"), so the CLI
+    # and its own rejection proof must hold on Windows too — no fcntl
+    # module, no coreutils true/false/sh on PATH. This is the reporter's
+    # verified end-to-end (init / doctor / run on a fresh project) kept
+    # alive in CI, plus the full self-test. pytest stays POSIX-only for now
+    # (its fixtures lean on shebangs and execute bits).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install .
+      - name: Fresh-project smoke (init / doctor / run)
+        shell: bash
+        run: |
+          set -e
+          d=$(mktemp -d); cd "$d"
+          git init -q .
+          gov init
+          gov doctor
+          gov run --mode all
+      - name: Rejection cases
+        run: gov self-test

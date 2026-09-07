@@ -467,7 +467,8 @@ def _history_path() -> Path:
     git common dir's parent), so ledgers do not fragment per worktree."""
     try:
         proc = subprocess.run(["git", "rev-parse", "--git-common-dir"],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode == 0:
             common = Path(proc.stdout.strip()).resolve()
             root = common.parent
@@ -494,6 +495,9 @@ def _run_one(gate: Gate) -> tuple[Gate, str, str, bool]:
             gate.command,
             capture_output=True,
             text=True,
+            # Gate output is repo tooling output, UTF-8 by convention;
+            # the locale codec must not crash the run on it (#168).
+            encoding="utf-8", errors="replace",
             timeout=gate.timeout_ms / 1000 if gate.timeout_ms else None,
         )
     except subprocess.TimeoutExpired:
@@ -516,7 +520,8 @@ def _changed_files(base: str) -> list[str] | None:
         ["git", "diff", "--name-only", base],
         ["git", "ls-files", "--others", "--exclude-standard"],
     ):
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode != 0:
             print(
                 f"gov run: --base {base!r} failed: {proc.stderr.strip()}",

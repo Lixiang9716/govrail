@@ -127,7 +127,8 @@ def _changed_files(base: str) -> tuple[list[str], str | None]:
             continue  # zero-commit repo: there is no HEAD to diff against;
             # the untracked listing below is the whole change (D13: a fresh
             # install's first run must not go red)
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode != 0:
             return [], proc.stderr.strip()
         files.update(f for f in proc.stdout.splitlines() if f)
@@ -135,7 +136,8 @@ def _changed_files(base: str) -> tuple[list[str], str | None]:
 
 
 def _run_git(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], capture_output=True, text=True)
+    return subprocess.run(["git", *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 def _resolve_auto_base() -> tuple[str, str]:
@@ -179,7 +181,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.staged:
         import subprocess as _sp
         proc = _sp.run(["git", "diff", "--name-only", "--cached"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
         if proc.returncode != 0:
             print(f"verify_note_presence: --staged failed: {proc.stderr.strip()}",
                   file=sys.stderr)

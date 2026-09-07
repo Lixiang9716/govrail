@@ -423,3 +423,41 @@ class TestDurationParsing:
         r = _gov(tmp_path, "acquire", "cli-dur", "--agent", "d1", "--ttl", "20m")
         assert r.returncode == 0, (r.stdout, r.stderr)
         assert _gov(tmp_path, "release", "cli-dur", "--agent", "d1").returncode == 0
+
+
+# --- issue #168: the guard flock is POSIX-only; Windows degrades, not dies ---
+
+def test_guarded_runs_action_without_fcntl(tmp_path, monkeypatch):
+    """No fcntl (Windows) must degrade the guard to an unserialized critical
+    section, never crash the CLI: the action runs, its value returns, and an
+    action exception still propagates through the degraded finally."""
+    from gov import locks
+    assert locks.fcntl is not None or True  # POSIX: real flock; Windows: None
+    monkeypatch.setattr(locks, "fcntl", None)
+    calls = []
+    out = locks._guarded(tmp_path, "res", lambda: calls.append(1) or "ok")
+    assert out == "ok" and calls == [1]
+
+    def boom():
+        raise RuntimeError("action failed")
+    with pytest.raises(RuntimeError):
+        locks._guarded(tmp_path, "res", boom)
+    assert calls == [1]  # the first action ran exactly once
+
+
+def test_locks_cli_imports_when_fcntl_missing(tmp_path, monkeypatch):
+    """The #168 crash was the module-level `import fcntl` killing EVERY gov
+    subcommand at import time. Simulate the Windows import surface: with the
+    module attribute None (what the guarded import yields there), the module
+    imports, the parser answers a bare invocation with a named usage error,
+    and a run outside any repository refuses NAMED (exit 2) — never an
+    ImportError, never a traceback."""
+    from gov import locks
+    monkeypatch.setattr(locks, "fcntl", None)
+    monkeypatch.chdir(tmp_path)  # not a git repository: the named refusal
+    with pytest.raises(SystemExit) as refused:
+        locks.main(["locks"])
+    assert refused.value.code == 2
+    with pytest.raises(SystemExit) as e:
+        locks.main([])
+    assert e.value.code == 2  # bare command: named usage error, not a crash

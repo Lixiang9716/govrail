@@ -44,7 +44,8 @@ def _split_by_base(runs: list[dict], base: str) -> tuple[list[dict], list[dict]]
     """Partition runs at --base's commit date; None = unresolvable ref."""
     import subprocess as _sp
     proc = _sp.run(["git", "show", "-s", "--format=%cI", base],
-                   capture_output=True, text=True)
+                   capture_output=True, text=True,
+                   encoding="utf-8", errors="replace")
     if proc.returncode != 0 or not proc.stdout.strip():
         print(f"trend: cannot resolve {base!r}: {proc.stderr.strip()}",
               file=sys.stderr)
