@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.29.3 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- pytest suite joins the windows CI job — portable fixtures, named skips ([#168](https://github.com/Lixiang9716/govrail/issues/168) follow-up)
+
 ## 0.29.2 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - pin UTF-8 on self-test's own spawns; thread crashes fail loud
