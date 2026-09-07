@@ -77,7 +77,8 @@ class Corpus:
             decisions = "decisions 0 (no source)"
         return (f"corpus — notes {notes} "
                 f"(implemented {self.implemented}, archived {self.archived}), "
-                f"{decisions}, postmortems {self.postmortems} ({POSTMORTEM}/)")
+                f"{decisions}, postmortems {self.postmortems} "
+                f"({POSTMORTEM.as_posix()}/)")
 
 
 def _title_of(text: str) -> str:
