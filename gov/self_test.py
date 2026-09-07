@@ -40,6 +40,7 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -128,6 +129,56 @@ def _case(script: str, cwd: Path, expect: int, why: str) -> None:
         f"{script} returned {result.returncode}, expected {expect}: {why}\n"
         f"{result.stdout}\n{result.stderr}"
     )
+
+
+def _run_text(cmd: list[str], **kw) -> subprocess.CompletedProcess:
+    """A text-mode ``subprocess.run`` with the decode codec pinned (#172).
+
+    ``text=True`` without ``encoding`` decodes the child's output with the
+    LOCALE codec — on a zh-CN Windows that is GBK, and the first non-ASCII
+    UTF-8 byte in a case's output (a Chinese rejection case, a 中文 decision
+    line) raised ``UnicodeDecodeError`` inside ``subprocess._readerthread``
+    — the ``buffer.append(fh.read())`` frame in #172's report. The
+    traceback surfaced only through ``threading.excepthook``: it changed no
+    exit code, so the case kept its emptied capture and still PASSED. The
+    git-spawn wall #168 built for the runner continues here, over the
+    harness's own spawns: every text subprocess in this module routes
+    through this helper, and ``errors="replace"`` bounds legacy bytes to
+    mojibake instead of a crash. Binary spawns keep plain
+    ``subprocess.run`` — there is nothing to decode.
+    """
+    kw.setdefault("text", True)
+    kw["encoding"] = "utf-8"
+    kw["errors"] = "replace"
+    return subprocess.run(cmd, **kw)
+
+
+def _unpinned_text_spawns(src: str, where: str) -> list[str]:
+    """``file:line`` of every text-mode subprocess call missing an encoding.
+
+    The scanner behind ``test_text_subprocess_decodes_are_pinned``: a
+    ``text=True``/``universal_newlines`` spawn without ``encoding=``
+    decodes with the locale codec — the #172 crash class. Call bodies are
+    captured by balanced-paren scan so multiline invocations read whole.
+    """
+    bad: list[str] = []
+    for m in re.finditer(r"subprocess\.(?:run|Popen|check_output)\s*\(", src):
+        start = m.end() - 1
+        depth = 0
+        i = start
+        while i < len(src):
+            if src[i] == "(":
+                depth += 1
+            elif src[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        call = src[start:i + 1]
+        is_text = "text=True" in call or "universal_newlines" in call
+        if is_text and "encoding=" not in call:
+            bad.append(f"{where}:{src[:m.start()].count(chr(10)) + 1}")
+    return bad
 
 
 def test_verify_notes_rejects_missing_section() -> None:
@@ -262,7 +313,7 @@ def test_pairing_write_resolves_bare_stem_and_zh_side() -> None:
         (docs / "foo.md").write_text("# foo\n", encoding="utf-8")
         (docs / "foo.zh.md").write_text("# foo 中文\n", encoding="utf-8")
         for arg in ("foo", "docs/foo.zh.md"):
-            result = subprocess.run(
+            result = _run_text(
                 [sys.executable, str(HERE / "verify_translation_pairing.py"), "--write", arg],
                 cwd=root,
                 capture_output=True,
@@ -615,7 +666,7 @@ def test_init_hooks_ci_roundtrip() -> None:
             ["-m", "gov", "init", "--hooks", "--ci"],
             ["-m", "gov", "uninstall"],
         ):
-            r = subprocess.run(
+            r = _run_text(
                 [sys.executable, *args], cwd=root, env=env,
                 capture_output=True, text=True,
             )
@@ -980,7 +1031,7 @@ def test_skills_text_command_drift_is_named() -> None:
         skills.mkdir(parents=True)
         (skills / "SKILL.md").write_text("run `gov run --every-gat`\n", encoding="utf-8")
         env = _pinned_env()
-        result = subprocess.run(
+        result = _run_text(
             [sys.executable, "-m", "gov", "audit-notes"],
             cwd=root, env=env, capture_output=True, text=True,
         )  # package mode: the command registry is importable
@@ -1004,7 +1055,7 @@ def test_registry_real_flags_are_not_drift() -> None:
             "never did.\n\n## Problem\np\n\n## Alternatives considered\na\n",
             encoding="utf-8")
         env = _pinned_env()
-        result = subprocess.run(
+        result = _run_text(
             [sys.executable, "-m", "gov", "audit-notes"],
             cwd=root, env=env, capture_output=True, text=True,
         )
@@ -1166,7 +1217,7 @@ def test_task_check_rejects_tampered_receipt() -> None:
                                    "blocking": True, "duration_ms": 1,
                                    "detail": ""}]},
         }), encoding="utf-8")
-        result = subprocess.run(
+        result = _run_text(
             [sys.executable, "-m", "gov", "task", "check"],
             cwd=root, capture_output=True, text=True,
             env=_pinned_env())
@@ -1255,8 +1306,8 @@ def _receipt_repo(root: Path, two_gates: bool = False) -> str:
                    capture_output=True)
     subprocess.run(["git", "commit", "-qm", "gates"], cwd=root, check=True,
                    capture_output=True)
-    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
-                          check=True, capture_output=True, text=True).stdout.strip()
+    return _run_text(["git", "rev-parse", "HEAD"], cwd=root,
+                     check=True, capture_output=True, text=True).stdout.strip()
 
 
 def test_receipt_rejects_forged_record() -> None:
@@ -1381,7 +1432,7 @@ def test_preset_rejects_unknown_name() -> None:
     available presets — never a silent empty adoption."""
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
-        result = subprocess.run(
+        result = _run_text(
             [sys.executable, "-m", "gov", "preset", "apply", "no-such-preset",
              "--project", "."],
             cwd=root, env=_pinned_env(), capture_output=True, text=True,
@@ -1393,6 +1444,26 @@ def test_preset_rejects_unknown_name() -> None:
         assert "no-such-preset" in result.stderr
         assert "agent-heavy" in result.stderr, \
             "the available presets must be named"
+
+
+def test_text_subprocess_decodes_are_pinned() -> None:
+    """#172: every text-mode subprocess in the shipped package pins UTF-8.
+
+    ``text=True`` without ``encoding`` decodes the child's output with the
+    locale codec — on a zh-CN Windows that is GBK, and non-ASCII UTF-8 in
+    a case's output crashed the reader thread while the case still PASSED.
+    The package itself must stay on the wall #168 built for the runner's
+    git decodes: this case re-runs that proof on every ``gov self-test``,
+    wheel included.
+    """
+    bad: list[str] = []
+    for p in sorted(HERE.rglob("*.py")):
+        bad += _unpinned_text_spawns(p.read_text(encoding="utf-8"), p.name)
+    assert not bad, (
+        "text-mode subprocess calls decode with the locale codec unless "
+        "encoding is pinned — on a GBK-locale Windows the first non-ASCII "
+        f"UTF-8 byte crashes the reader thread (#172): {bad} — route them "
+        "through _run_text()")
 
 
 CASES = [
@@ -1444,6 +1515,7 @@ CASES = [
     test_run_merge_rejects_text_conflict,
     test_failure_classifier_labels_tool_vs_environment,
     test_preset_rejects_unknown_name,
+    test_text_subprocess_decodes_are_pinned,
 ]
 
 
@@ -1462,7 +1534,7 @@ def _run_project_case(p: Path) -> tuple[str, bool]:
     if not os.access(p, os.X_OK):
         return f"FAIL {p} (not executable — chmod +x it)", False
     try:
-        proc = subprocess.run(
+        proc = _run_text(
             [str(p)], capture_output=True, text=True,
             timeout=REJECTION_TIMEOUT_S, cwd=str(Path.cwd()), env=_case_env(),
         )
@@ -1598,7 +1670,7 @@ def _classify_tool_failure(case) -> list[str]:
     """
     stage = _clean_stage()
     try:
-        proc = subprocess.run(
+        proc = _run_text(
             [sys.executable, "-m", "gov.self_test", "--case", case.__name__],
             cwd=str(stage), env=_clean_replay_env(stage),
             capture_output=True, text=True,
@@ -1679,6 +1751,46 @@ def _scrub_environment() -> None:
               "repositories by cwd (hook-context leak, #20)")
 
 
+# Rule 5 / #172: a crash inside one of the harness's own threads — on
+# Windows the subprocess reader threads are the residents — used to die in
+# threading.excepthook, print a traceback, and leave the exit code
+# untouched: the case kept its emptied capture and could still PASS. The
+# default hook still runs (the traceback stays on stderr as evidence);
+# the crash is ALSO recorded so the run itself fails loud.
+_THREAD_CRASHES: list = []
+_default_thread_excepthook = threading.excepthook
+
+
+def _recording_thread_excepthook(args: threading.ExceptHookArgs) -> None:
+    _default_thread_excepthook(args)
+    _THREAD_CRASHES.append(args)
+
+
+threading.excepthook = _recording_thread_excepthook
+
+
+def _fail_if_thread_crashed() -> int:
+    """1 when a harness thread crashed mid-run — never pass on that (#172).
+
+    A crashed reader thread empties the capture it was filling, so PASS
+    lines already printed may be blind. Prints one line per crash and
+    clears the record so an in-process second run starts clean (pytest
+    drives ``main`` repeatedly).
+    """
+    if not _THREAD_CRASHES:
+        return 0
+    for a in _THREAD_CRASHES:
+        name = a.thread.name if a.thread is not None else "<thread>"
+        print(f"HARNESS-ERROR thread {name!r} crashed: "
+              f"{a.exc_type.__name__}: {a.exc_value}")
+    n = len(_THREAD_CRASHES)
+    _THREAD_CRASHES.clear()
+    print(f"self-test: {n} harness thread crash(es) — a crashed reader "
+          "thread empties a case's captured output, so PASS lines above "
+          "may be blind (rule 5: fail loud, never silently skip)")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         from .root import force_utf8_stdio
@@ -1706,7 +1818,8 @@ def main(argv: list[str] | None = None) -> int:
         _scrub_environment()
         line, ok = _run_tool_case(case)
         print(line)
-        return 0 if ok else 1
+        crash_rc = _fail_if_thread_crashed()
+        return 0 if ok and not crash_rc else 1
 
     _scrub_environment()
 
@@ -1750,9 +1863,11 @@ def main(argv: list[str] | None = None) -> int:
     tools_n, project_n = len(tool_jobs), len(project_jobs)
     parts = [f"tools {tools_n}" if tools_n else "", f"project {project_n}" if project_n else ""]
     family = " + ".join(p for p in parts if p)
-    if failures:
-        tally = ", ".join(f"{k} {v}" for k, v in counts.items())
-        print(f"self-test: {len(failures)} failure(s) ({family}) — {tally}")
+    crash_rc = _fail_if_thread_crashed()
+    if failures or crash_rc:
+        if failures:
+            tally = ", ".join(f"{k} {v}" for k, v in counts.items())
+            print(f"self-test: {len(failures)} failure(s) ({family}) — {tally}")
         return 1
     print(f"self-test: {family or 'no cases selected'} — all pass")
     return 0
