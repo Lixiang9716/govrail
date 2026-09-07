@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.3](https://github.com/Lixiang9716/govrail/compare/v0.29.2...v0.29.3) (2026-09-07)
+
+
+### Bug Fixes
+
+* pytest suite joins the windows CI job — portable fixtures, named skips ([#168](https://github.com/Lixiang9716/govrail/issues/168) follow-up) ([0216de1](https://github.com/Lixiang9716/govrail/commit/0216de194266710e2b98caf03d0003e0b418ed41))
+
 ## [0.29.2](https://github.com/Lixiang9716/govrail/compare/v0.29.1...v0.29.2) (2026-09-07)
 
 
