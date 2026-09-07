@@ -22,10 +22,10 @@ def test_external_d_reference_is_legal(tmp_path, monkeypatch, capsys):
     (notes / "x.md").write_text(
         "# Agent Note: x\n\nStatus: implemented\nRelated: govrail:D24\n\n"
         "## Problem\np\n\n## Decision\nd\n\n## Alternatives considered\na\n"
-        "Locked by govrail:D32 too.\n")
+        "Locked by govrail:D32 too.\n", encoding="utf-8")
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text("## D1 — local\n\n- **选项**：y\n")
+    (docs / "decisions.md").write_text("## D1 — local\n\n- **选项**：y\n", encoding="utf-8")
     from gov import audit_notes, verify_decisions
     assert audit_notes.main([]) == 0  # no missing-D signal for govrail:D24/32
     assert verify_decisions.main([]) == 0
@@ -47,10 +47,10 @@ def test_local_d_ref_still_validated(tmp_path, monkeypatch, capsys):
     notes.mkdir(parents=True)
     (notes / "x.md").write_text(
         "# Agent Note: x\n\nStatus: implemented\n\n## Problem\np\n\n"
-        "## Decision\nLocked by D99.\n\n## Alternatives considered\na\n")
+        "## Decision\nLocked by D99.\n\n## Alternatives considered\na\n", encoding="utf-8")
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text("## D1 — local\n\n- **选项**：y\n")
+    (docs / "decisions.md").write_text("## D1 — local\n\n- **选项**：y\n", encoding="utf-8")
     from gov import audit_notes
     assert audit_notes.main([]) == 0  # advisory
     assert "D99" in capsys.readouterr().out  # ...but named
@@ -59,7 +59,7 @@ def test_local_d_ref_still_validated(tmp_path, monkeypatch, capsys):
 def test_manifest_records_template_hashes(tmp_path):
     _repo(tmp_path)
     assert cli.init(tmp_path) == 0
-    manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text())
+    manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text(encoding="utf-8"))
     hashes = manifest.get("templates", {})
     assert ".gov/rules.md" in hashes
     assert "gates.json" in hashes

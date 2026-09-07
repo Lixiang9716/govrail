@@ -7,17 +7,27 @@ import pytest
 
 from gov import self_test as st
 
+# The project family executes arbitrary scripts directly; a POSIX shebang
+# script cannot run on Windows (WinError 193). Teaching self-test to run
+# .sh cases through a host bash — or to report a named SKIP for
+# OS-unrunnable cases — is the rule-6 semantics decision deferred in the
+# #168 note; until then these tests pin the POSIX side only.
+needs_posix_exec = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="project rejection cases are POSIX shebang scripts")
+
 
 def _rejection(root, name, body, executable=True):
     d = root / ".gov" / "rejections"
     d.mkdir(parents=True, exist_ok=True)
     p = d / name
-    p.write_text(body)
+    p.write_text(body, encoding="utf-8")
     if executable:
         p.chmod(0o755)
     return p
 
 
+@needs_posix_exec
 def test_project_rejection_failure_names_the_case(tmp_path, monkeypatch, capsys):
     """A local rejection case that cannot prove rejection fails the self-test."""
     monkeypatch.chdir(tmp_path)
@@ -28,10 +38,11 @@ def test_project_rejection_failure_names_the_case(tmp_path, monkeypatch, capsys)
     assert "exit 1" in out
 
 
+@needs_posix_exec
 def test_project_rejection_pass_and_scope(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _rejection(tmp_path, "case-good.sh", "#!/bin/sh\nexit 0\n")
-    (tmp_path / ".gov" / "rejections" / "README.md").write_text("docs\n")
+    (tmp_path / ".gov" / "rejections" / "README.md").write_text("docs\n", encoding="utf-8")
     assert st.main([]) == 0
     out = capsys.readouterr().out
     assert "PASS .gov/rejections/case-good.sh" in out
@@ -43,6 +54,7 @@ def test_project_rejection_pass_and_scope(tmp_path, monkeypatch, capsys):
     assert "project 1" not in capsys.readouterr().out
 
 
+@needs_posix_exec
 def test_non_executable_case_is_named(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _rejection(tmp_path, "case-dead.sh", "#!/bin/sh\nexit 0\n", executable=False)
@@ -56,6 +68,7 @@ def test_readme_skipped(tmp_path, monkeypatch):
     assert st.main(["--scope", "project"]) == 0
 
 
+@needs_posix_exec
 def test_parallel_reports_all_failures(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _rejection(tmp_path, "case-a.sh", "#!/bin/sh\nexit 1\n")
@@ -65,6 +78,7 @@ def test_parallel_reports_all_failures(tmp_path, monkeypatch, capsys):
     assert "case-a.sh" in out and "case-b.sh" in out  # both, not just the first
 
 
+@needs_posix_exec
 def test_runaway_case_times_out_fast(tmp_path, monkeypatch, capsys):
     """Wish 5: a sleep-30 case fails as TIMEOUT within the 10s budget."""
     import time
@@ -88,14 +102,14 @@ def test_coverage_ledger_and_bad_shebang(tmp_path, monkeypatch, capsys):
     (tmp_path / "gates.json").write_text(_json.dumps(
         {"modes": {"all": ["alpha", "beta"]},
          "gates": [{"id": "alpha", "command": ["true"]},
-                   {"id": "beta", "command": ["true"]}]}))
+                   {"id": "beta", "command": ["true"]}]}), encoding="utf-8")
     rej = tmp_path / ".gov" / "rejections"
     rej.mkdir()
     good = rej / "case-alpha.sh"
-    good.write_text("#!/bin/sh\n# gate: alpha\nexit 0\n")
+    good.write_text("#!/bin/sh\n# gate: alpha\nexit 0\n", encoding="utf-8")
     good.chmod(0o755)
     bad = rej / "case-noshebang.sh"
-    bad.write_text("# gate: ghost\nexit 0\n")  # no shebang, unknown gate
+    bad.write_text("# gate: ghost\nexit 0\n", encoding="utf-8")  # no shebang, unknown gate
     bad.chmod(0o755)
     assert st.main(["--scope", "project"]) == 1  # the bad case fails, named
     out = capsys.readouterr().out
@@ -109,7 +123,7 @@ def test_coverage_pointer_when_uncovered(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".gov").mkdir()
     (tmp_path / "gates.json").write_text(_json.dumps(
-        {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}))
+        {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}), encoding="utf-8")
     assert st.main(["--scope", "project"]) == 0  # no cases at all
     out = capsys.readouterr().out
     assert "x(NONE — rule 6)" in out

@@ -13,7 +13,7 @@ def _git_repo(root):
         ["git", "config", "user.name", "t"],
     ):
         subprocess.run(cmd, cwd=root, check=True)
-    (root / "seed.txt").write_text("seed\n")
+    (root / "seed.txt").write_text("seed\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
     subprocess.run(
         ["git", "-c", "commit.gpgsign=false", "commit", "-qm", "init"],
@@ -29,9 +29,9 @@ def test_suggests_from_gates_paths(tmp_path, monkeypatch, capsys):
             {"id": "docs-gate", "command": ["true"], "paths": ["docs/**"]},
             {"id": "code-gate", "command": ["true"], "paths": ["src/**"]},
         ]
-    }))
+    }), encoding="utf-8")
     (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "a.md").write_text("x\n")
+    (tmp_path / "docs" / "a.md").write_text("x\n", encoding="utf-8")
     assert change_scope.main(["--base", "HEAD"]) == 0
     out = capsys.readouterr().out
     assert "gates.json paths" in out
@@ -43,8 +43,8 @@ def test_suggests_from_gates_paths(tmp_path, monkeypatch, capsys):
 def test_note_hint_when_code_changed_without_note(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _git_repo(tmp_path)
-    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}))
-    (tmp_path / "app.py").write_text("x = 1\n")
+    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}), encoding="utf-8")
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
     assert change_scope.main(["--base", "HEAD"]) == 0
     assert "no Agent Note in this change" in capsys.readouterr().out
 
@@ -53,7 +53,7 @@ def test_no_ghost_gate_in_fallback(tmp_path, monkeypatch, capsys):
     """The fallback suggestion list must not name gates that do not exist."""
     monkeypatch.chdir(tmp_path)
     _git_repo(tmp_path)
-    (tmp_path / "app.py").write_text("x = 1\n")  # no gates.json at all
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")  # no gates.json at all
     assert change_scope.main(["--base", "HEAD"]) == 0
     out = capsys.readouterr().out
     assert "links" not in out
@@ -67,15 +67,15 @@ def test_surfaces_config_scopes_suggestion(tmp_path, monkeypatch, capsys):
     gov.mkdir()
     (gov / "surfaces.json").write_text(json.dumps({
         "eval/**": {"surface": "experiments", "gates": ["source-limits"]},
-    }))
-    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}))
+    }), encoding="utf-8")
+    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}), encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)  # commit the
     subprocess.run(  # config itself, so the diff below is eval-only
         ["git", "-c", "commit.gpgsign=false", "commit", "-qm", "config"],
         cwd=tmp_path, check=True,
     )
     (tmp_path / "eval").mkdir()
-    (tmp_path / "eval" / "run.py").write_text("x = 1\n")
+    (tmp_path / "eval" / "run.py").write_text("x = 1\n", encoding="utf-8")
     assert change_scope.main(["--base", "HEAD"]) == 0
     out = capsys.readouterr().out
     assert "experiments: 1 file(s)" in out
@@ -88,7 +88,7 @@ def test_surfaces_config_malformed_fails_loud(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     gov = tmp_path / ".gov"
     gov.mkdir()
-    (gov / "surfaces.json").write_text(json.dumps({"x/**": {"surface": "s"}}))
+    (gov / "surfaces.json").write_text(json.dumps({"x/**": {"surface": "s"}}), encoding="utf-8")
     with pytest.raises(SystemExit) as exc:
         change_scope.main(["--base", "HEAD"])
     assert exc.value.code == 2
@@ -98,7 +98,7 @@ def test_note_hint_matches_gate_exemptions(tmp_path, monkeypatch, capsys):
     """#149: the reminder gates the same surface as verify-note-presence."""
     monkeypatch.chdir(tmp_path)
     _git_repo(tmp_path)
-    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}))
+    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}), encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
     subprocess.run(
         ["git", "-c", "commit.gpgsign=false", "commit", "-qm", "cfg"],
@@ -106,12 +106,12 @@ def test_note_hint_matches_gate_exemptions(tmp_path, monkeypatch, capsys):
     )
     tasks = tmp_path / ".gov" / "tasks"
     tasks.mkdir(parents=True)
-    (tasks / "T-0001-x.json").write_text("{}\n")  # bookkeeping alone: no hint
+    (tasks / "T-0001-x.json").write_text("{}\n", encoding="utf-8")  # bookkeeping alone: no hint
     assert change_scope.main(["--base", "HEAD"]) == 0
     assert "no Agent Note" not in capsys.readouterr().out
-    (tmp_path / "app.py").write_text("x = 1\n")
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
     (tmp_path / ".gov" / "manifest.json").write_text(
-        json.dumps({"note_presence_exempt": ["app.py"]}))
+        json.dumps({"note_presence_exempt": ["app.py"]}), encoding="utf-8")
     subprocess.run(["git", "add", ".gov/manifest.json"], cwd=tmp_path, check=True)
     subprocess.run(
         ["git", "-c", "commit.gpgsign=false", "commit", "-qm", "exempt"],
@@ -119,7 +119,7 @@ def test_note_hint_matches_gate_exemptions(tmp_path, monkeypatch, capsys):
     )
     assert change_scope.main(["--base", "HEAD"]) == 0
     assert "no Agent Note" not in capsys.readouterr().out  # declared exempt
-    (tmp_path / ".gov" / "manifest.json").write_text(json.dumps({}))
+    (tmp_path / ".gov" / "manifest.json").write_text(json.dumps({}), encoding="utf-8")
     subprocess.run(["git", "add", ".gov/manifest.json"], cwd=tmp_path, check=True)
     subprocess.run(
         ["git", "-c", "commit.gpgsign=false", "commit", "-qm", "bare"],
@@ -132,11 +132,11 @@ def test_note_hint_matches_gate_exemptions(tmp_path, monkeypatch, capsys):
 def test_note_hint_ill_shaped_manifest_fails_loud(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _git_repo(tmp_path)
-    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}))
-    (tmp_path / "app.py").write_text("x = 1\n")
+    (tmp_path / "gates.json").write_text(json.dumps({"gates": []}), encoding="utf-8")
+    (tmp_path / "app.py").write_text("x = 1\n", encoding="utf-8")
     gov = tmp_path / ".gov"
     gov.mkdir()
     (gov / "manifest.json").write_text(
-        json.dumps({"note_presence_exempt": "app.py"}))
+        json.dumps({"note_presence_exempt": "app.py"}), encoding="utf-8")
     assert change_scope.main(["--base", "HEAD"]) == 2
     assert "note_presence_exempt" in capsys.readouterr().err

@@ -4,7 +4,7 @@ from gov import audit_notes
 def _note(root, name, body):
     d = root / ".agents" / "notes" / "implemented" / "architecture"
     d.mkdir(parents=True, exist_ok=True)
-    (d / name).write_text(body)
+    (d / name).write_text(body, encoding="utf-8")
 
 
 def test_clean_note_passes_silently(tmp_path, monkeypatch, capsys):
@@ -34,7 +34,7 @@ def test_d_reference_without_entry_flagged(tmp_path, monkeypatch, capsys):
           "## Decision\nLocked by D99.\n")
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text("## D1 — real\n\n- **状态**：已决\n")
+    (docs / "decisions.md").write_text("## D1 — real\n\n- **状态**：已决\n", encoding="utf-8")
     assert audit_notes.main([]) == 0
     out = capsys.readouterr().out
     assert "D99" in out
@@ -46,7 +46,7 @@ def test_unresolved_path_flagged_placeholders_ignored(tmp_path, monkeypatch, cap
           "# Agent Note: paths\n\nStatus: implemented\n\n"
           "## Decision\nSee docs/real.md via `docs/real.md` and example `docs/foo.md`.\n")
     (tmp_path / "docs").mkdir(exist_ok=True)
-    (tmp_path / "docs" / "real.md").write_text("x\n")
+    (tmp_path / "docs" / "real.md").write_text("x\n", encoding="utf-8")
     assert audit_notes.main([]) == 0
     out = capsys.readouterr().out
     assert "`docs/missing" not in out  # sanity
@@ -68,7 +68,7 @@ def test_archived_exempt(tmp_path, monkeypatch, capsys):
     arch = tmp_path / ".agents" / "notes" / "archived" / "process"
     arch.mkdir(parents=True)
     (arch / "2026-01-01-frozen.md").write_text(
-        "# Agent Note: frozen\n\n`gov verify-ancient` and `gone/old.py`.\n")
+        "# Agent Note: frozen\n\n`gov verify-ancient` and `gone/old.py`.\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     # implemented/ missing entirely → exit 2, so add one clean implemented note
     _note(tmp_path, "2026-01-01-clean.md",
@@ -92,7 +92,7 @@ def test_summary_distinguishes_missing_from_malformed_decisions(tmp_path, monkey
           "## Problem\np\n\n## Alternatives considered\na\n")
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text("- D1: colon list format\n")
+    (docs / "decisions.md").write_text("- D1: colon list format\n", encoding="utf-8")
     assert audit_notes.main([]) == 0
     out = capsys.readouterr()
     assert "has no '## Dn — ' sections" in out.out
@@ -120,7 +120,7 @@ def test_skills_command_and_flag_drift(tmp_path, monkeypatch, capsys):
     skills.mkdir(parents=True)
     (skills / "SKILL.md").write_text(
         "run `gov run --every-gat` then `gov verife-pairing`, "
-        "legally `gov run --every-gate` and `gov archive-notes --rebaseline`.\n")
+        "legally `gov run --every-gate` and `gov archive-notes --rebaseline`.\n", encoding="utf-8")
     assert audit_notes.main([]) == 0  # advisory report
     out = capsys.readouterr().out
     assert "unknown flag `--every-gat` on `gov run`" in out

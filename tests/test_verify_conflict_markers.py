@@ -36,8 +36,7 @@ def _repo(root: Path) -> None:
 def _gate(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
-        cwd=root, capture_output=True, text=True, timeout=60,
-    )
+        cwd=root, capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
 
 
 def test_marked_file_fails_naming_file_and_line(tmp_path):

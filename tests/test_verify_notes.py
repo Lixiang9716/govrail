@@ -13,7 +13,7 @@ VALID = (
 
 def _note(tmp_path: Path, text: str) -> Path:
     p = tmp_path / "n.md"
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return p
 
 

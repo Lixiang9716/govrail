@@ -24,6 +24,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 _SCRUB = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+# Portable gate command (#168): the Unix coreutils true/false and sh do
+# not exist on Windows — "a command that exits 0" must not depend on PATH.
+PASS = [sys.executable, "-c", "pass"]
+PASS_JSON = json.dumps(PASS)
 
 
 def _env(**extra):
@@ -35,25 +39,25 @@ def _env(**extra):
 
 def _git(root, *argv, check=True):
     return subprocess.run(["git", *argv], cwd=root, check=check,
-                          capture_output=True, text=True, env=_env())
+                          capture_output=True, text=True, env=_env(), encoding="utf-8", errors="replace")
 
 
 def _gov(root, *argv, env=None):
     return subprocess.run([sys.executable, "-m", "gov", "run", *argv],
                           cwd=root, capture_output=True, text=True,
-                          env=env if env is not None else _env())
+                          env=env if env is not None else _env(), encoding="utf-8", errors="replace")
 
 
 def _fingerprint(repo):
     """(config, refs, status, HEAD) — the host must be byte-identical."""
     config = hashlib.sha256((repo / ".git" / "config").read_bytes()).hexdigest()
     refs = subprocess.run(["git", "show-ref"], cwd=repo, capture_output=True,
-                          text=True, env=_env()).stdout
+                          text=True, env=_env(), encoding="utf-8", errors="replace").stdout
     status = subprocess.run(["git", "status", "--porcelain"], cwd=repo,
                             capture_output=True, text=True,
-                            env=_env()).stdout
+                            env=_env(), encoding="utf-8", errors="replace").stdout
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
-                          capture_output=True, text=True, env=_env()).stdout
+                          capture_output=True, text=True, env=_env(), encoding="utf-8", errors="replace").stdout
     return config, hashlib.sha256(refs.encode()).hexdigest(), status, head
 
 
@@ -68,7 +72,7 @@ def _host(tmp_path):
     # preflight runs record into the HOST checkout's .gov/history (D32).
     (root / ".gitignore").write_text(".gov/history/\n", encoding="utf-8")
     (root / "gates.json").write_text(
-        json.dumps({"gates": [{"id": "ok", "command": ["true"]}]}),
+        json.dumps({"gates": [{"id": "ok", "command": PASS}]}),
         encoding="utf-8")
     (root / "f.txt").write_text("one\ntwo\nthree\n", encoding="utf-8")
     _git(root, "add", "-A")
@@ -141,10 +145,10 @@ def _semantic_fixture(tmp_path):
     root = _host(tmp_path)
     base = (
         '{"gates": [\n'
-        '  {"id": "filler-1", "command": ["true"]},\n'
-        '  {"id": "filler-2", "command": ["true"]},\n'
-        '  {"id": "filler-3", "command": ["true"]},\n'
-        '  {"id": "base-ok", "command": ["true"]}\n'
+        '  {"id": "filler-1", "command": ' + PASS_JSON + '},\n'
+        '  {"id": "filler-2", "command": ' + PASS_JSON + '},\n'
+        '  {"id": "filler-3", "command": ' + PASS_JSON + '},\n'
+        '  {"id": "base-ok", "command": ' + PASS_JSON + '}\n'
         ']}\n'
     )
     (root / "gates.json").write_text(base, encoding="utf-8")
@@ -155,15 +159,16 @@ def _semantic_fixture(tmp_path):
         cfg = (r / "gates.json").read_text(encoding="utf-8")
         (r / "gates.json").write_text(cfg.replace(
             '{"gates": [\n',
-            '{"gates": [\n  {"id": "drill-dup", "command": ["true"]},\n',
+            '{"gates": [\n  {"id": "drill-dup", "command": '
+            + PASS_JSON + '},\n',
             1), encoding="utf-8")
 
     def back(r):
         cfg = (r / "gates.json").read_text(encoding="utf-8")
         (r / "gates.json").write_text(cfg.replace(
-            '  {"id": "base-ok", "command": ["true"]}\n]}\n',
-            '  {"id": "base-ok", "command": ["true"]},\n'
-            '  {"id": "drill-dup", "command": ["sh", "-c", "true"]}\n'
+            '  {"id": "base-ok", "command": ' + PASS_JSON + '}\n]}\n',
+            '  {"id": "base-ok", "command": ' + PASS_JSON + '},\n'
+            '  {"id": "drill-dup", "command": ' + PASS_JSON + '}\n'
             ']}\n', 1), encoding="utf-8")
 
     _branch(root, "a", front)
@@ -272,8 +277,8 @@ def test_merge_receipt_scopes_steps_but_full_matrix_last(tmp_path):
     never verify as full evidence (D44)."""
     root = _host(tmp_path)
     (root / "gates.json").write_text(json.dumps({"gates": [
-        {"id": "ok", "command": ["true"]},
-        {"id": "docs", "command": ["true"], "paths": ["docs/**"]},
+        {"id": "ok", "command": PASS},
+        {"id": "docs", "command": PASS, "paths": ["docs/**"]},
     ]}), encoding="utf-8")
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "docs gate")
@@ -318,7 +323,7 @@ def test_merge_receipt_verifies_landed_union_by_tree(tmp_path):
     landed = _git(root, "rev-parse", "HEAD").stdout.strip()
     verify = subprocess.run(
         [sys.executable, "-m", "gov", "receipt", "verify", landed],
-        cwd=root, capture_output=True, text=True, env=_env())
+        cwd=root, capture_output=True, text=True, env=_env(), encoding="utf-8", errors="replace")
     assert verify.returncode == 0, (
         f"the landed union must verify by tree sha: {verify.stderr}")
     assert "all PASS" in verify.stdout

@@ -130,7 +130,7 @@ def test_preset_show_unknown_name_lists_available(tmp_path, capsys):
 def _write_bundle(root: Path, raw, name: str = "probe") -> Path:
     bundle = root / name
     (bundle / "skills" / "some-skill").mkdir(parents=True)
-    (bundle / "skills" / "some-skill" / "SKILL.md").write_text("x\n")
+    (bundle / "skills" / "some-skill" / "SKILL.md").write_text("x\n", encoding="utf-8")
     (bundle / "preset.json").write_text(
         raw if isinstance(raw, str) else json.dumps(raw), encoding="utf-8")
     return root
@@ -240,7 +240,7 @@ def test_apply_lands_gates_skill_and_hint(tmp_path, capsys):
     assert "created .agents/skills/parallel-workers/SKILL.md" in out
     assert "note_presence_exempt" in out
 
-    cfg = json.loads((tmp_path / "gates.json").read_text())
+    cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
     ids = [g["id"] for g in cfg["gates"]]
     assert "verify-decisions" in ids
     assert "verify-decisions" in cfg["modes"]["governance"]
@@ -250,7 +250,7 @@ def test_apply_lands_gates_skill_and_hint(tmp_path, capsys):
 
     skill = tmp_path / ".agents" / "skills" / "parallel-workers" / "SKILL.md"
     assert skill.exists()
-    manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text())
+    manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["note_presence_exempt"] == [".gov/tasks/**"]
 
 
@@ -287,12 +287,12 @@ def test_apply_appends_into_existing_template_modes(tmp_path):
     from gov import gates as gates_mod
     _init(tmp_path)
     template = json.loads((REPO / "gov" / "templates" / "gates.json")
-                          .read_text())
+                          .read_text(encoding="utf-8"))
     assert template["modes"]["all"] and template["modes"]["quick"]
 
     assert cli.main(["preset", "apply", PYTHON_LIB,
                      "--project", str(tmp_path)]) == 0
-    cfg = json.loads((tmp_path / "gates.json").read_text())
+    cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
     assert cfg["modes"]["all"] == (template["modes"]["all"]
                                    + ["pytest", "build"])
     assert cfg["modes"]["quick"] == template["modes"]["quick"] + ["pytest"]
@@ -354,7 +354,7 @@ def test_apply_converges_mode_membership_for_already_adopted_gates(
     from gov import gates as gates_mod
     _init(tmp_path)
     gates_path = tmp_path / "gates.json"
-    cfg = json.loads(gates_path.read_text())
+    cfg = json.loads(gates_path.read_text(encoding="utf-8"))
     my_gate = {"id": "my-own-first", "label": "mine", "command": ["true"]}
     cfg["gates"].insert(1, my_gate)
     cfg["gates"] += [{"id": "pytest", "label": "hand-wired",
@@ -364,7 +364,7 @@ def test_apply_converges_mode_membership_for_already_adopted_gates(
     cfg["modes"]["all"] = ["self-test", "my-own-first", "notes", "pairing",
                            "note-presence", "conflict-markers", "archive",
                            "task"]
-    gates_path.write_text(json.dumps(cfg, indent=2))
+    gates_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     with pytest.raises(gates_mod.ConfigError):
         gates_mod.load_config(str(gates_path))  # the drill's D24 state
 
@@ -373,7 +373,7 @@ def test_apply_converges_mode_membership_for_already_adopted_gates(
     out = capsys.readouterr().out
     assert "nothing to add" in out                      # gates were present
     assert "mode 'all' += pytest, build" in out
-    merged = json.loads(gates_path.read_text())
+    merged = json.loads(gates_path.read_text(encoding="utf-8"))
     assert merged["modes"]["all"] == cfg["modes"]["all"] + ["pytest", "build"]
     assert merged["modes"]["quick"] == ["notes", "pytest"]
     by_id = {g["id"]: g for g in merged["gates"]}
@@ -395,11 +395,11 @@ def test_apply_skips_mode_ids_missing_from_the_project(tmp_path, capsys):
     from gov import gates as gates_mod
     _init(tmp_path)
     gates_path = tmp_path / "gates.json"
-    cfg = json.loads(gates_path.read_text())
+    cfg = json.loads(gates_path.read_text(encoding="utf-8"))
     cfg["gates"] = [g for g in cfg["gates"] if g["id"] != "self-test"]
     cfg["modes"]["all"] = [m for m in cfg["modes"]["all"] if m != "self-test"]
     cfg["modes"]["governance"] = []
-    gates_path.write_text(json.dumps(cfg, indent=2))
+    gates_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     capsys.readouterr()
 
     root = tmp_path / "bundles"
@@ -408,7 +408,7 @@ def test_apply_skips_mode_ids_missing_from_the_project(tmp_path, capsys):
     assert presets.apply(tmp_path, "probe", root=root) == 0
     out = capsys.readouterr().out
     assert "self-test" in out and "skipped" in out
-    merged = json.loads(gates_path.read_text())
+    merged = json.loads(gates_path.read_text(encoding="utf-8"))
     assert "self-test" not in merged["modes"]["all"]
     gates_mod.load_config(str(gates_path))  # the skip kept the config valid
 
@@ -417,18 +417,18 @@ def test_apply_never_overwrites_a_local_same_id_gate(tmp_path, capsys):
     """D8/D39: the local gate IS the adopted state — kept and named."""
     _init(tmp_path)
     gates_path = tmp_path / "gates.json"
-    cfg = json.loads(gates_path.read_text())
+    cfg = json.loads(gates_path.read_text(encoding="utf-8"))
     mine = {"id": "verify-decisions", "label": "my own guard",
             "command": ["my-guard", "run"]}
     cfg["gates"].append(mine)
     cfg["modes"]["governance"].append("verify-decisions")
-    gates_path.write_text(json.dumps(cfg, indent=2))
+    gates_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
     assert cli.main(["preset", "apply", AGENT_HEAVY,
                      "--project", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "kept your local version" in out
-    merged = json.loads(gates_path.read_text())
+    merged = json.loads(gates_path.read_text(encoding="utf-8"))
     landed = [g for g in merged["gates"] if g["id"] == "verify-decisions"]
     assert landed == [mine]  # exactly one gate, the local object untouched
 
@@ -437,15 +437,15 @@ def test_apply_never_overwrites_an_existing_manifest_hint(tmp_path, capsys):
     """D49: the local value always wins; the notice says so."""
     _init(tmp_path)
     manifest_path = tmp_path / ".gov" / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["note_presence_exempt"] = ["local/**"]
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     assert cli.main(["preset", "apply", AGENT_HEAVY,
                      "--project", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "local value kept" in out
-    assert json.loads(manifest_path.read_text())["note_presence_exempt"] == ["local/**"]
+    assert json.loads(manifest_path.read_text(encoding="utf-8"))["note_presence_exempt"] == ["local/**"]
 
 
 def test_apply_skips_an_existing_skill(tmp_path, capsys):
@@ -482,19 +482,19 @@ def test_apply_unknown_preset_lists_available(tmp_path, capsys):
 
 def test_init_preset_on_fresh_project(tmp_path):
     assert cli.init(tmp_path, preset=AGENT_HEAVY) == 0
-    cfg = json.loads((tmp_path / "gates.json").read_text())
+    cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
     assert "verify-decisions" in [g["id"] for g in cfg["gates"]]
     assert "verify-decisions" in cfg["modes"]["governance"]
     assert (tmp_path / ".agents" / "skills" / "parallel-workers"
             / "SKILL.md").exists()
-    manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text())
+    manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["note_presence_exempt"] == [".gov/tasks/**"]
 
 
 def test_init_preset_retrofits_an_initialized_project(tmp_path):
     _init(tmp_path)
     assert cli.init(tmp_path, preset=AGENT_HEAVY) == 0
-    cfg = json.loads((tmp_path / "gates.json").read_text())
+    cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
     assert "verify-decisions" in [g["id"] for g in cfg["gates"]]
 
 
@@ -525,7 +525,7 @@ def test_preset_skill_matches_live_skill():
     shipped = (REPO / "gov" / "templates" / "presets" / AGENT_HEAVY
                / "skills" / "parallel-workers" / "SKILL.md")
     live = REPO / ".agents" / "skills" / "parallel-workers" / "SKILL.md"
-    assert shipped.read_text() == live.read_text(), (
+    assert shipped.read_text(encoding="utf-8") == live.read_text(encoding="utf-8"), (
         "parallel-workers: preset template and live skill drifted — align them")
 
 
@@ -570,7 +570,11 @@ def _git_repo(root: Path, env: dict) -> None:
 
 def _gov_env(root: Path) -> dict:
     """Hermetic env whose PATH carries a `gov` shim running THIS tree —
-    the scratch's gates invoke `gov ...` commands (D33's fixture walls)."""
+    the scratch's gates invoke `gov ...` commands (D33's fixture walls).
+
+    The shim is a POSIX shebang script: these acceptance tests are the
+    POSIX side of the #168 portability story (a Windows equivalent would
+    need a .bat shim — deferred with the rule-6 decision)."""
     bin_dir = root / "bin"
     bin_dir.mkdir(exist_ok=True)
     gov_shim = bin_dir / "gov"
@@ -585,6 +589,12 @@ def _gov_env(root: Path) -> dict:
     return env
 
 
+posix_shim = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the PATH `gov` shim is a POSIX shebang script")
+
+
+@posix_shim
 def test_acceptance_init_preset_then_every_gate_green(tmp_path):
     scratch = tmp_path / "scratch"
     scratch.mkdir()
@@ -592,19 +602,19 @@ def test_acceptance_init_preset_then_every_gate_green(tmp_path):
     _git_repo(scratch, env)
     r = subprocess.run(
         [sys.executable, "-m", "gov", "init", "--preset", AGENT_HEAVY],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
 
-    cfg = json.loads((scratch / "gates.json").read_text())
+    cfg = json.loads((scratch / "gates.json").read_text(encoding="utf-8"))
     assert "verify-decisions" in [g["id"] for g in cfg["gates"]]
     assert (scratch / ".agents" / "skills" / "parallel-workers" / "SKILL.md").exists()
-    manifest = json.loads((scratch / ".gov" / "manifest.json").read_text())
+    manifest = json.loads((scratch / ".gov" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["note_presence_exempt"] == [".gov/tasks/**"]
 
     # the full matrix, inside the scratch, must be green
     run = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--every-gate"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert run.returncode == 0, run.stdout + run.stderr
     assert "PASS verify-decisions" in run.stdout
 
@@ -614,7 +624,7 @@ def test_acceptance_init_preset_then_every_gate_green(tmp_path):
     again = subprocess.run(
         [sys.executable, "-m", "gov", "preset", "apply", AGENT_HEAVY,
          "--project", "."],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert again.returncode == 0, again.stdout + again.stderr
     assert "already adopted — nothing written" in again.stdout
     for p, content in before.items():
@@ -634,6 +644,7 @@ def _build_available() -> bool:
 @pytest.mark.skipif(not _build_available(),
                     reason="the python-lib build gate needs the 'build' "
                            "package (pip install build)")
+@posix_shim
 def test_acceptance_python_lib_scratch_green(tmp_path):
     """Minimal python project → plain init → apply python-lib → the full
     matrix is green with pytest and build actually executing."""
@@ -654,30 +665,31 @@ def test_acceptance_python_lib_scratch_green(tmp_path):
 
     r = subprocess.run([sys.executable, "-m", "gov", "init"],
                        cwd=scratch, env=env, capture_output=True, text=True,
-                       timeout=300)
+                       timeout=300, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     r = subprocess.run(
         [sys.executable, "-m", "gov", "preset", "apply", PYTHON_LIB,
          "--project", "."],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "gates: added 2 (in preset order): pytest, build" in r.stdout
 
-    cfg = json.loads((scratch / "gates.json").read_text())
+    cfg = json.loads((scratch / "gates.json").read_text(encoding="utf-8"))
     template = json.loads((REPO / "gov" / "templates" / "gates.json")
-                          .read_text())
+                          .read_text(encoding="utf-8"))
     # D39 append: template membership preserved, preset ids appended
     assert cfg["modes"]["all"] == template["modes"]["all"] + ["pytest", "build"]
     assert cfg["modes"]["quick"] == template["modes"]["quick"] + ["pytest"]
 
     run = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--every-gate"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert run.returncode == 0, run.stdout + run.stderr
     assert "PASS pytest" in run.stdout
     assert "PASS build" in run.stdout
 
 
+@posix_shim
 def test_acceptance_docs_bilingual_scratch_green_then_fail_loud(tmp_path):
     """Minimal bilingual docs repo (CHANGELOG.md + the HIGHLIGHTS file
     verify-doc-sync reads, each carrying the same version section) →
@@ -698,18 +710,18 @@ def test_acceptance_docs_bilingual_scratch_green_then_fail_loud(tmp_path):
 
     r = subprocess.run([sys.executable, "-m", "gov", "init"],
                        cwd=scratch, env=env, capture_output=True, text=True,
-                       timeout=300)
+                       timeout=300, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     r = subprocess.run(
         [sys.executable, "-m", "gov", "preset", "apply", DOCS_BILINGUAL,
          "--project", "."],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "gates: added 1 (in preset order): doc-sync" in r.stdout
 
     run = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--every-gate"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=300)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert run.returncode == 0, run.stdout + run.stderr
     assert "PASS doc-sync" in run.stdout
     assert "1 version(s) paired" in run.stdout
@@ -721,7 +733,7 @@ def test_acceptance_docs_bilingual_scratch_green_then_fail_loud(tmp_path):
         "## [1.0.0] - 2026-09-05\n\n- first release\n", encoding="utf-8")
     red = subprocess.run(
         [sys.executable, "-m", "gov", "run", "--gate", "doc-sync"],
-        cwd=scratch, env=env, capture_output=True, text=True, timeout=120)
+        cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert red.returncode == 1
     assert "FAIL doc-sync" in red.stdout
     assert "CHANGELOG has [1.1.0] but HIGHLIGHTS has" in red.stdout

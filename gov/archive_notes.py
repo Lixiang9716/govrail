@@ -56,7 +56,9 @@ def main(argv: list[str] | None = None) -> int:
 
     files: dict[str, dict[str, str]] = {}
     for p in sorted(ARCHIVED.rglob("*.md")):
-        rel = str(p.relative_to(ARCHIVED))
+        # as_posix: the seal must be byte-stable across operating systems —
+        # a manifest sealed on Linux must verify on Windows (#168).
+        rel = p.relative_to(ARCHIVED).as_posix()
         files[rel] = {"sha256": _sha256(p)}
     if not files:
         print("archive_notes: nothing to seal (no notes under archived/)")

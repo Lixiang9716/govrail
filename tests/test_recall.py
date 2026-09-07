@@ -9,23 +9,23 @@ def _memory(root):
         "## Problem\nconcurrency was unbounded.\n\n"
         "## Decision\nthe runner respects the needs DAG.\n\n"
         "## Alternatives considered\na plain loop.\n"
-    )
+    , encoding="utf-8")
     (notes / "2026-01-02-pairing.md").write_text(
         "# Agent Note: pairing by blob hash\n\nStatus: implemented\n\n"
         "## Problem\ndrift between languages.\n\n"
         "## Decision\nhashes pin the pair.\n\n"
         "## Alternatives considered\nmanual review.\n"
-    )
+    , encoding="utf-8")
     docs = root / "docs"
     docs.mkdir()
     (docs / "decisions.md").write_text(
         "# log\n\n## D1 — 默认运行集\n\n- **状态**：已决\n- **决定**：defaultMode 声明默认集。\n\n"
         "## D2 — pairing 约定\n\n- **状态**：已决\n"
-    )
+    , encoding="utf-8")
     pm = docs / "postmortem"
     pm.mkdir()
-    (pm / "2026-01-03-outage.md").write_text("# Postmortem: the outage\n\n## Root cause\ndrift.\n")
-    (pm / "README.md").write_text("# Postmortems\ncontract only\n")
+    (pm / "2026-01-03-outage.md").write_text("# Postmortem: the outage\n\n## Root cause\ndrift.\n", encoding="utf-8")
+    (pm / "README.md").write_text("# Postmortems\ncontract only\n", encoding="utf-8")
 
 
 def test_recall_ranks_title_above_body(tmp_path, monkeypatch, capsys):
@@ -91,7 +91,7 @@ def test_corpus_statement_names_a_missing_decisions_source(tmp_path, monkeypatch
     monkeypatch.chdir(tmp_path)
     notes = tmp_path / ".agents" / "notes" / "implemented" / "architecture"
     notes.mkdir(parents=True)
-    (notes / "2026-01-01-solo.md").write_text("# Agent Note: solo\n\n## Problem\nx\n")
+    (notes / "2026-01-01-solo.md").write_text("# Agent Note: solo\n\n## Problem\nx\n", encoding="utf-8")
     assert recall.main(["solo"]) == 0
     assert "decisions 0 (no source)" in capsys.readouterr().err
 
@@ -135,7 +135,7 @@ def test_recall_no_sources_fails_loud(tmp_path, monkeypatch):
 def test_recall_archived_notes_searchable(tmp_path, monkeypatch, capsys):
     arch = tmp_path / ".agents" / "notes" / "archived" / "process"
     arch.mkdir(parents=True)
-    (arch / "2026-01-01-old.md").write_text("# Agent Note: the old way\n\n## Problem\nhistory.\n")
+    (arch / "2026-01-01-old.md").write_text("# Agent Note: the old way\n\n## Problem\nhistory.\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     assert recall.main(["old way"]) == 0
     assert "archived/process/2026-01-01-old.md" in capsys.readouterr().out
@@ -148,7 +148,7 @@ def test_implemented_outranks_archived_at_equal_rank(tmp_path, monkeypatch, caps
         d = tmp_path / ".agents" / "notes" / rel
         d.mkdir(parents=True)
         (d / "2026-01-01-pairing.md").write_text(
-            "# Agent Note: pairing\n\n## Problem\nx\n")
+            "# Agent Note: pairing\n\n## Problem\nx\n", encoding="utf-8")
     assert recall.main(["pairing"]) == 0
     lines = [l for l in capsys.readouterr().out.splitlines() if "2026-01-01-pairing.md" in l]
     assert lines[0].startswith(".agents/notes/implemented/")

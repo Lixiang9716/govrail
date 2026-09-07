@@ -21,8 +21,8 @@ def test_valid_rubric_passes(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "review-rubric.md").write_text(_rubric(_item(1), _item(2)))
-    (docs / "review-rubric.zh.md").write_text(_rubric(_item(1), _item(2)))
+    (docs / "review-rubric.md").write_text(_rubric(_item(1), _item(2)), encoding="utf-8")
+    (docs / "review-rubric.zh.md").write_text(_rubric(_item(1), _item(2)), encoding="utf-8")
     assert vr.main([]) == 0
     assert "2 item(s) ok + zh" in capsys.readouterr().out
 
@@ -32,7 +32,7 @@ def test_missing_field_rejected(tmp_path, monkeypatch, capsys):
     docs = tmp_path / "docs"
     docs.mkdir()
     broken = _item(1).replace("- **Evidence:** the observed proof 1.\n", "")
-    (docs / "review-rubric.md").write_text(_rubric(broken))
+    (docs / "review-rubric.md").write_text(_rubric(broken), encoding="utf-8")
     assert vr.main([]) == 1
     out = capsys.readouterr().out
     assert "R1" in out and "Evidence" in out
@@ -42,7 +42,7 @@ def test_gap_in_numbering_rejected(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "review-rubric.md").write_text(_rubric(_item(1), _item(3)))
+    (docs / "review-rubric.md").write_text(_rubric(_item(1), _item(3)), encoding="utf-8")
     assert vr.main([]) == 1
     assert "contiguous from R1" in capsys.readouterr().out
 
@@ -51,7 +51,7 @@ def test_gate_candidate_yes_needs_destination(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "review-rubric.md").write_text(_rubric(_item(1, gate_candidate="yes")))
+    (docs / "review-rubric.md").write_text(_rubric(_item(1, gate_candidate="yes")), encoding="utf-8")
     assert vr.main([]) == 1
     assert "graduates" in capsys.readouterr().out
 
@@ -60,8 +60,8 @@ def test_zh_id_parity(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "review-rubric.md").write_text(_rubric(_item(1), _item(2)))
-    (docs / "review-rubric.zh.md").write_text(_rubric(_item(1)))  # missing R2
+    (docs / "review-rubric.md").write_text(_rubric(_item(1), _item(2)), encoding="utf-8")
+    (docs / "review-rubric.zh.md").write_text(_rubric(_item(1)), encoding="utf-8")  # missing R2
     assert vr.main([]) == 1
     assert "missing on zh side: R2" in capsys.readouterr().out
 
@@ -71,8 +71,8 @@ def test_zh_side_fields_are_translators_freedom(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "review-rubric.md").write_text(_rubric(_item(1)))
-    (docs / "review-rubric.zh.md").write_text("### R1 — 中文条目\n\n- **查什么：** 中文内容。\n")
+    (docs / "review-rubric.md").write_text(_rubric(_item(1)), encoding="utf-8")
+    (docs / "review-rubric.zh.md").write_text("### R1 — 中文条目\n\n- **查什么：** 中文内容。\n", encoding="utf-8")
     assert vr.main([]) == 0
 
 
@@ -84,6 +84,6 @@ def test_missing_file_fails_loud(tmp_path, monkeypatch):
 def test_path_flag(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     p = tmp_path / "my-rubric.md"
-    p.write_text(_rubric(_item(1)))
+    p.write_text(_rubric(_item(1)), encoding="utf-8")
     assert vr.main(["--path", str(p)]) == 0
     assert "1 item(s) ok" in capsys.readouterr().out

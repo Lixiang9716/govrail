@@ -78,8 +78,9 @@ jobs:
     # and its own rejection proof must hold on Windows too — no fcntl
     # module, no coreutils true/false/sh on PATH. This is the reporter's
     # verified end-to-end (init / doctor / run on a fresh project) kept
-    # alive in CI, plus the full self-test. pytest stays POSIX-only for now
-    # (its fixtures lean on shebangs and execute bits).
+    # alive in CI, plus the full self-test (tools family) and the pytest
+    # suite: fixtures are portable as of #168's follow-up, and the few
+    # POSIX-exec-inherent tests skip themselves by platform, named.
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +88,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install
-        run: pip install .
+        run: pip install -e ".[dev]"
+      - name: Unit tests
+        run: python -m pytest -q
       - name: Fresh-project smoke (init / doctor / run)
         shell: bash
         run: |
