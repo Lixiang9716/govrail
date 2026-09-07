@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.1](https://github.com/Lixiang9716/govrail/compare/v0.29.0...v0.29.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* Windows portability — guarded fcntl, portable self-test fixtures, UTF-8 git decode ([#168](https://github.com/Lixiang9716/govrail/issues/168)) ([c49630a](https://github.com/Lixiang9716/govrail/commit/c49630aaa23c781ad4d84d6ad83bb8acfb3039f7))
+
 ## [0.29.0](https://github.com/Lixiang9716/govrail/compare/v0.28.0...v0.29.0) (2026-09-05)
 
 
