@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.2](https://github.com/Lixiang9716/govrail/compare/v0.29.1...v0.29.2) (2026-09-07)
+
+
+### Bug Fixes
+
+* pin UTF-8 on self-test's own spawns; thread crashes fail loud ([#172](https://github.com/Lixiang9716/govrail/issues/172)) ([#173](https://github.com/Lixiang9716/govrail/issues/173)) ([a82386a](https://github.com/Lixiang9716/govrail/commit/a82386ae884ddac2891835538fbe24790503af96))
+
 ## [0.29.1](https://github.com/Lixiang9716/govrail/compare/v0.29.0...v0.29.1) (2026-09-07)
 
 
