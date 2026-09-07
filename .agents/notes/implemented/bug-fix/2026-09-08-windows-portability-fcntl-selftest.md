@@ -99,6 +99,21 @@ the gates runner itself:
   index when a mirror's simple index trails its JSON API — #168's
   aside); the pair is re-confirmed in README.i18n.yaml (rule 7).
 
+## Consequences
+
+- Open boundary, recorded on purpose: the windows job runs
+  `gov self-test --scope tools`. The project family is this repo's own
+  dogfood — POSIX shell scripts — and cannot execute on Windows
+  ("%1 is not a valid Win32 application"); its home stays the ubuntu
+  job's full `gov self-test`. Whether self-test should one day run .sh
+  cases through a host bash or report a named SKIP for OS-unrunnable
+  cases is a rule-6 semantics decision left to a maintainer (freshly
+  initialized adopter projects have no project cases, so their
+  full `gov self-test` is green on Windows — proven by the smoke).
+- pytest on Windows stays out of CI: the unit suite still leans on
+  shebangs and execute bits (e.g. tests writing `#!/bin/sh` cases and
+  chmod-ing them). Porting it is the same class of follow-up.
+
 ## Alternatives considered
 
 - **`msvcrt.locking` adapter for the guard** (or excluding

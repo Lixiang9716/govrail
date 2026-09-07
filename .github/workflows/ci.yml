@@ -98,5 +98,11 @@ jobs:
           gov init
           gov doctor
           gov run --mode all
-      - name: Rejection cases
-        run: gov self-test
+      - name: Rejection cases (tools family)
+        # The tools family IS the shipped product's proof (48 cases, all
+        # green on this runner). The project family is THIS repo's own
+        # dogfood — POSIX shell scripts by convention — and stays owned by
+        # the ubuntu job's full `gov self-test`. Making .sh cases runnable
+        # on Windows (or teaching self-test a named SKIP for them) is a
+        # rule-6 semantics decision, deliberately not taken in #168.
+        run: gov self-test --scope tools
