@@ -67,7 +67,8 @@ def _receipt_path() -> Path:
     receipts belong to the main checkout's .gov/history, not per-worktree."""
     try:
         proc = subprocess.run(["git", "rev-parse", "--git-common-dir"],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode == 0 and proc.stdout.strip():
             root = Path(proc.stdout.strip()).resolve().parent
             return root / ".gov" / "history" / "receipts.jsonl"
@@ -94,16 +95,19 @@ def tree_state() -> tuple[str | None, str | None, bool]:
     commit = tree = None
     try:
         proc = subprocess.run(["git", "rev-parse", "HEAD"],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode == 0:
             commit = proc.stdout.strip() or None
         treep = subprocess.run(["git", "rev-parse", "HEAD^{tree}"],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
         if treep.returncode == 0:
             tree = treep.stdout.strip() or None
         dirty = subprocess.run(
             ["git", "status", "--porcelain", "--untracked-files=no"],
-            capture_output=True, text=True)
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
         return commit, tree, bool(dirty.returncode == 0 and dirty.stdout.strip())
     except OSError:
         return commit, tree, False
@@ -224,7 +228,8 @@ def _is_green_full(record: dict) -> tuple[bool, str]:
 def _sha(rev: str) -> str | None:
     try:
         proc = subprocess.run(["git", "rev-parse", rev],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode == 0:
             return proc.stdout.strip() or None
     except OSError:
@@ -280,6 +285,11 @@ def verify(commit: str, records: list[dict]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        from .root import force_utf8_stdio
+    except ImportError:  # direct-script execution (self-test scratch dirs)
+        from root import force_utf8_stdio
+    force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(
         prog="gov receipt",
         description="Verifiable run receipts: bind a green gov run to the "

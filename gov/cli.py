@@ -831,6 +831,7 @@ def _resolved_target() -> str:
         proc = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",  # git speaks UTF-8, not the locale codec (#168)
         )
     except OSError:
         proc = None
@@ -1002,6 +1003,8 @@ def _init_uninstall_args(
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .root import force_utf8_stdio
+    force_utf8_stdio()  # every report leaves as UTF-8, on every OS (#168)
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:
         _usage()

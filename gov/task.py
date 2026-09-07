@@ -245,6 +245,7 @@ def cmd_close(args: argparse.Namespace) -> int:
             "--mode", args.mode]
     try:
         proc = subprocess.run(argv, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace",
                               timeout=args.timeout)
     except subprocess.TimeoutExpired:
         print(f"task: gate run timed out after {args.timeout}s",
@@ -288,6 +289,7 @@ def _common_dir_quiet() -> Path | None:
     """
     proc = subprocess.run(["git", "rev-parse", "--git-common-dir"],
                           capture_output=True, text=True,
+                          encoding="utf-8", errors="replace",
                           env=locks._scrubbed_env())
     out = proc.stdout.strip()
     if proc.returncode != 0 or not out:

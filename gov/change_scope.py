@@ -90,7 +90,8 @@ def _changed(base: str) -> tuple[list[str], str | None]:
         ["git", "diff", "--name-only", base],
         ["git", "ls-files", "--others", "--exclude-standard"],
     ):
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode != 0:
             return [], proc.stderr.strip()
         files.update(f for f in proc.stdout.splitlines() if f)
@@ -137,6 +138,11 @@ def _suggest_gates(files: list[str], surfaces: dict[str, dict] | None) -> tuple[
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        from .root import force_utf8_stdio
+    except ImportError:  # direct-script execution (self-test scratch dirs)
+        from root import force_utf8_stdio
+    force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(
         prog="gov change-scope",
         description="Report touched surfaces since a base ref.",

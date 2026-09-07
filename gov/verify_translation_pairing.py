@@ -73,6 +73,7 @@ def _blob_hash(path: Path) -> str:
         ["git", "hash-object", str(path)],
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",
         check=True,
     )
     return proc.stdout.strip()
@@ -242,6 +243,7 @@ def _last_commit(path: Path) -> str:
     proc = subprocess.run(
         ["git", "log", "-1", "--format=%h", "--", str(path)],
         capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
     )
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
@@ -313,6 +315,7 @@ def _staged_files() -> list[str] | None:
     proc = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=d"],
         capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
     )
     if proc.returncode != 0:
         print(f"verify_translation_pairing: --staged failed: "

@@ -61,7 +61,32 @@ def _case_env() -> dict:
     scrubbed of GIT_* so they resolve repositories by cwd, like the tools
     do when run by hand.
     """
-    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    # Children speak UTF-8 regardless of the platform locale (#168): the
+    # harness decodes their output as UTF-8, so both ends agree.
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
+# Portable gate-command fixtures (#168). The fixtures below used the Unix
+# coreutils `true`/`false` and `sh -c` to say "a command that exits 0/1" —
+# none of which exists on Windows, where every such gate came out MISSING
+# and ten cases failed for fixture reasons, not tool reasons (the wheel is
+# py3-none-any / OS Independent, so the tools' own proof must be too).
+# Fixtures whose gates actually EXECUTE use these; config-error fixtures
+# that exit 2 before any gate runs keep their `["true"]` placeholders.
+_PASS_CMD = [sys.executable, "-c", "pass"]
+_FAIL_CMD = [sys.executable, "-c", "raise SystemExit(1)"]
+
+
+def _pass_cmd() -> list[str]:
+    """A fresh portable always-exit-0 command (the Unix `true`)."""
+    return list(_PASS_CMD)
+
+
+def _fail_cmd() -> list[str]:
+    """A fresh portable always-exit-1 command (the Unix `false`)."""
+    return list(_FAIL_CMD)
 
 
 def _pinned_env() -> dict:
@@ -92,6 +117,7 @@ def _run(script: str, cwd: Path,
         cwd=cwd,
         capture_output=True,
         text=True,
+        encoding="utf-8", errors="replace",  # tools speak UTF-8 (#168)
         env=_case_env(),
     )
 
@@ -188,9 +214,9 @@ def test_gates_skips_transitively() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "A", "command": ["true"], "needs": ["B"]},
-                        {"id": "B", "command": ["true"], "needs": ["C"]},
-                        {"id": "C", "command": ["false"]},
+                        {"id": "A", "command": _pass_cmd(), "needs": ["B"]},
+                        {"id": "B", "command": _pass_cmd(), "needs": ["C"]},
+                        {"id": "C", "command": _fail_cmd()},
                     ]
                 }
             ),
@@ -221,6 +247,7 @@ def test_cli_init_help_no_side_effect() -> None:
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         assert result.returncode == 0, f"init --help must exit 0: {result.stderr}"
         assert not list(root.iterdir()), "init --help must not create any file"
@@ -261,6 +288,7 @@ def test_pairing_staged_rejects_stale_sidecar() -> None:
         wrote = subprocess.run(
             [sys.executable, script, "--write", "docs/a.md"], cwd=root,
             capture_output=True, text=True, env=env,
+            encoding="utf-8", errors="replace",
         )
         assert wrote.returncode == 0, wrote.stderr
         subprocess.run(["git", "add", "-A"], cwd=root, check=True, env=env)
@@ -274,6 +302,7 @@ def test_pairing_staged_rejects_stale_sidecar() -> None:
         quiet = subprocess.run(
             [sys.executable, script, "--staged"], cwd=root,
             capture_output=True, text=True, env=env,
+            encoding="utf-8", errors="replace",
         )
         assert quiet.returncode == 0, quiet.stdout + quiet.stderr
         assert "no staged file belongs to a pair" in quiet.stdout
@@ -284,6 +313,7 @@ def test_pairing_staged_rejects_stale_sidecar() -> None:
         bad = subprocess.run(
             [sys.executable, script, "--staged"], cwd=root,
             capture_output=True, text=True, env=env,
+            encoding="utf-8", errors="replace",
         )
         assert bad.returncode == 1, "a stale sidecar passed --staged"
         assert "gov verify-pairing --write docs/a.md" in bad.stdout, bad.stdout
@@ -299,8 +329,8 @@ def test_gates_default_mode_scopes_run() -> None:
                     "modes": {"all": ["a"], "also": ["b"]},
                     "defaultMode": "all",
                     "gates": [
-                        {"id": "a", "command": ["true"]},
-                        {"id": "b", "command": ["false"]},
+                        {"id": "a", "command": _pass_cmd()},
+                        {"id": "b", "command": _fail_cmd()},
                     ],
                 }
             ),
@@ -336,8 +366,8 @@ def test_gates_disabled_gate_never_runs() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "a", "command": ["true"]},
-                        {"id": "b", "command": ["false"], "enabled": False},
+                        {"id": "a", "command": _pass_cmd()},
+                        {"id": "b", "command": _fail_cmd(), "enabled": False},
                     ]
                 }
             ),
@@ -357,7 +387,7 @@ def test_gates_advisory_failure_reports_without_blocking() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "a", "command": ["false"], "allowFailure": True},
+                        {"id": "a", "command": _fail_cmd(), "allowFailure": True},
                     ]
                 }
             ),
@@ -407,6 +437,7 @@ def test_pairing_explicit_registration_sticks() -> None:
             cwd=root,
             capture_output=True,
             text=True,
+            encoding="utf-8", errors="replace",
         )
         assert register.returncode == 0, f"explicit registration must exit 0: {register.stderr}"
         (docs / "foo_CN.md").write_text("# 单边修改\n", encoding="utf-8")
@@ -440,6 +471,7 @@ def _git_repo(root: Path) -> None:
     top = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"], cwd=root,
         capture_output=True, text=True, env=env,
+        encoding="utf-8", errors="replace",
     )
     resolved = Path(top.stdout.strip()).resolve() if top.returncode == 0 else None
     if resolved != root.resolve():
@@ -469,12 +501,14 @@ def test_note_presence_warns_then_strict_blocks() -> None:
         (root / "app.py").write_text("x = 1\n", encoding="utf-8")
         script = str(HERE / "verify_note_presence.py")
         warn = subprocess.run(
-            [sys.executable, script], cwd=root, capture_output=True, text=True
+            [sys.executable, script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert warn.returncode == 0, "advisory mode must not block (D3)"
         assert ".gov/rules.md rule 2" in warn.stdout, "the warning must name its rule"
         strict = subprocess.run(
-            [sys.executable, script, "--strict"], cwd=root, capture_output=True, text=True
+            [sys.executable, script, "--strict"], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert strict.returncode == 1, "--strict must catch the missing note"
 
@@ -489,8 +523,8 @@ def test_run_base_scopes_gates_by_paths() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "docs-gate", "command": ["true"], "paths": ["docs/**"]},
-                        {"id": "code-gate", "command": ["false"], "paths": ["src/**"]},
+                        {"id": "docs-gate", "command": _pass_cmd(), "paths": ["docs/**"]},
+                        {"id": "code-gate", "command": _fail_cmd(), "paths": ["src/**"]},
                     ]
                 }
             ),
@@ -501,6 +535,7 @@ def test_run_base_scopes_gates_by_paths() -> None:
         result = subprocess.run(
             [sys.executable, str(HERE / "gates.py"), "--base", "HEAD"],
             cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert result.returncode == 0, (
             "the failing gate is out of scope; the run must be green\n"
@@ -519,8 +554,9 @@ def test_run_failure_summary_and_gate_flag() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "boom", "command": ["sh", "-c", "echo boom >&2; exit 3"]},
-                        {"id": "ok", "command": ["true"]},
+                        {"id": "boom", "command": [sys.executable, "-c",
+                                                   "import sys; print('boom', file=sys.stderr); raise SystemExit(3)"]},
+                        {"id": "ok", "command": _pass_cmd()},
                     ]
                 }
             ),
@@ -535,6 +571,7 @@ def test_run_failure_summary_and_gate_flag() -> None:
         single = subprocess.run(
             [sys.executable, str(HERE / "gates.py"), "--gate", "ok"],
             cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert single.returncode == 0
         assert "PASS boom" not in single.stdout
@@ -561,6 +598,7 @@ def test_change_scope_suggests_from_paths() -> None:
         result = subprocess.run(
             [sys.executable, str(HERE / "change_scope.py"), "--base", "HEAD"],
             cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert "gates.json paths" in result.stdout, result.stdout + result.stderr
         assert "docs-gate" in result.stdout
@@ -604,14 +642,16 @@ def test_rubric_rejects_broken_structure() -> None:
         )
         script = str(HERE / "verify_rubric.py")
         ok = subprocess.run(
-            [sys.executable, script], cwd=root, capture_output=True, text=True
+            [sys.executable, script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert ok.returncode == 0, ok.stderr
         (docs / "review-rubric.md").write_text(
             good.replace("- **Evidence:** e\n", ""), encoding="utf-8"
         )
         broken = subprocess.run(
-            [sys.executable, script], cwd=root, capture_output=True, text=True
+            [sys.executable, script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert broken.returncode == 1, "a rubric item missing a field must fail"
         assert "Evidence" in broken.stdout
@@ -620,7 +660,8 @@ def test_rubric_rejects_broken_structure() -> None:
             "### R2 — 乙\n\n- **查什么：** x\n", encoding="utf-8"
         )
         drift = subprocess.run(
-            [sys.executable, script], cwd=root, capture_output=True, text=True
+            [sys.executable, script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert drift.returncode == 1, "bilingual id drift must fail"
         assert "R2" in drift.stdout
@@ -703,12 +744,14 @@ def test_note_presence_auto_base_catches_committed_work() -> None:
         )  # clean tree, committed, no upstream
         script = str(HERE / "verify_note_presence.py")
         warn = subprocess.run(
-            [sys.executable, script], cwd=root, capture_output=True, text=True
+            [sys.executable, script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert warn.returncode == 0, warn.stderr
         assert "app.py" in warn.stdout, "the pushed work must be reviewed, not an empty diff"
         strict = subprocess.run(
-            [sys.executable, script, "--strict"], cwd=root, capture_output=True, text=True
+            [sys.executable, script, "--strict"], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert strict.returncode == 1, "--strict must catch the committed no-note change"
 
@@ -726,6 +769,7 @@ def test_note_presence_task_receipts_and_manifest_exemptions() -> None:
         receipt = subprocess.run(
             [sys.executable, script, "--strict"], cwd=root,
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert receipt.returncode == 0, (
             "a task receipt is machine bookkeeping; it must not warn (#149)\n"
@@ -743,6 +787,7 @@ def test_note_presence_task_receipts_and_manifest_exemptions() -> None:
         exempt = subprocess.run(
             [sys.executable, script, "--strict"], cwd=root,
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert exempt.returncode == 0, (
             "a repo-declared exemption must silence its paths (#149)\n"
@@ -758,6 +803,7 @@ def test_note_presence_task_receipts_and_manifest_exemptions() -> None:
         bare = subprocess.run(
             [sys.executable, script, "--strict"], cwd=root,
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert bare.returncode == 1, (
             "without the exemption the warning must still fire\n" + bare.stdout)
@@ -774,6 +820,7 @@ def test_note_presence_rejects_ill_shaped_manifest() -> None:
         result = subprocess.run(
             [sys.executable, str(HERE / "verify_note_presence.py")], cwd=root,
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert result.returncode == 2, (
             "an ill-shaped note_presence_exempt must fail loud (rule 5)\n"
@@ -806,6 +853,7 @@ def test_archive_seal_detects_tampering_and_refuses_laundering() -> None:
         seal = subprocess.run(
             [sys.executable, str(HERE / "archive_notes.py")],
             cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert seal.returncode == 0, seal.stderr
         note.write_text("# Agent Note: x  # tampered\n", encoding="utf-8")
@@ -814,6 +862,7 @@ def test_archive_seal_detects_tampering_and_refuses_laundering() -> None:
         refused = subprocess.run(
             [sys.executable, str(HERE / "archive_notes.py")],
             cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert refused.returncode == 1, "re-sealing a drift must refuse (no laundering)"
         assert "refusing to re-seal" in refused.stdout
@@ -854,6 +903,7 @@ def test_self_test_adopts_project_rejection_cases() -> None:
         result = subprocess.run(
             [sys.executable, str(HERE / "self_test.py"), "--scope", "project"],
             cwd=root, capture_output=True, text=True, timeout=120,
+            encoding="utf-8", errors="replace",
         )
         assert result.returncode == 1, "a failing project case must fail self-test"
         assert "case-broken.sh" in result.stdout, "the case must be named"
@@ -888,6 +938,7 @@ def test_verify_decisions_rejects_base_collision() -> None:
             return subprocess.run(
                 list(argv), cwd=root, check=check, capture_output=True,
                 text=True, env=env,
+                encoding="utf-8", errors="replace",
             )
 
         git("git", "branch", "-q", "-m", "main")
@@ -1012,7 +1063,8 @@ def test_conflict_markers_rejects_marked_file() -> None:
             encoding="utf-8",
         )
         result = subprocess.run(
-            [sys.executable, script], cwd=root, capture_output=True, text=True
+            [sys.executable, script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert result.returncode == 1, (
             "a file with conflict markers must fail the gate\n"
@@ -1028,7 +1080,8 @@ def test_conflict_markers_rejects_marked_file() -> None:
             encoding="utf-8",
         )
         clean = subprocess.run(
-            [sys.executable, script], cwd=root, capture_output=True, text=True
+            [sys.executable, script], cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         assert clean.returncode == 0, (
             "the ignore token must exempt a deliberate literal\n" + clean.stdout
@@ -1054,7 +1107,8 @@ def test_passing_gate_output_stays_visible() -> None:
             json.dumps(
                 {
                     "gates": [
-                        {"id": "warny", "command": ["sh", "-c", "echo heads up; exit 0"]},
+                        {"id": "warny", "command": [sys.executable, "-c",
+                                                    "print('heads up')"]},
                     ]
                 }
             ),
@@ -1074,7 +1128,8 @@ def test_task_check_rejects_stale_rules_pin() -> None:
         env = _pinned_env()
         made = subprocess.run(
             [sys.executable, "-m", "gov", "task", "new", "Brief me"],
-            cwd=root, capture_output=True, text=True, env=env)
+            cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", env=env)
         assert made.returncode == 0, made.stderr
         # the adoption: the rule set moves under the open card
         (root / ".gov" / "rules.md").write_text(
@@ -1082,7 +1137,8 @@ def test_task_check_rejects_stale_rules_pin() -> None:
             + "\n## 8. New rule adopted mid-flight\n", encoding="utf-8")
         result = subprocess.run(
             [sys.executable, "-m", "gov", "task", "check"],
-            cwd=root, capture_output=True, text=True, env=env)
+            cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", env=env)
         assert result.returncode == 1, (
             "a card pinning a pre-adoption rules hash must fail check\n"
             f"{result.stdout}\n{result.stderr}")
@@ -1159,19 +1215,22 @@ def test_task_survives_pre37_argparse_shadow() -> None:
             [sys.executable, "-c",
              "import argparse; "
              "argparse.ArgumentParser().add_subparsers(required=True)"],
-            capture_output=True, text=True, env=env)
+            capture_output=True, text=True, env=env,
+            encoding="utf-8", errors="replace")
         assert trap.returncode != 0 and "'required'" in trap.stderr, (
             "the shadow must model the pre-3.7 backport first\n"
             f"{trap.stdout}\n{trap.stderr}")
         root = _task_project(Path(td) / "proj")
         made = subprocess.run(
             [sys.executable, "-m", "gov", "task", "new", "Brief me"],
-            cwd=root, capture_output=True, text=True, env=env)
+            cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", env=env)
         assert made.returncode == 0, made.stderr
         assert "obey rules@" in made.stdout, "the pin line is the brief"
         bare = subprocess.run(
             [sys.executable, "-m", "gov", "task"],
-            cwd=root, capture_output=True, text=True, env=env)
+            cwd=root, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", env=env)
         assert bare.returncode == 2, bare.stderr
         assert "subcommand is required" in bare.stderr, (
             "the hand-rolled rule names the choices, fail loud")
@@ -1190,7 +1249,7 @@ def _receipt_repo(root: Path, two_gates: bool = False) -> str:
     """A committed scratch repo with passing gate(s); returns HEAD sha."""
     _git_repo(root)
     gate_ids = ["ok", "two"] if two_gates else ["ok"]
-    config = {"gates": [{"id": gid, "command": ["true"]} for gid in gate_ids]}
+    config = {"gates": [{"id": gid, "command": _pass_cmd()} for gid in gate_ids]}
     (root / "gates.json").write_text(json.dumps(config), encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=root, check=True,
                    capture_output=True)
@@ -1247,13 +1306,14 @@ def test_run_merge_rejects_text_conflict() -> None:
 
         def git(*argv: str, check: bool = True):
             return subprocess.run(["git", *argv], cwd=root, check=check,
-                                  capture_output=True, text=True, env=env)
+                                  capture_output=True, text=True, env=env,
+                                  encoding="utf-8", errors="replace")
 
         git("init", "-q", "-b", "main", ".")
         git("config", "user.email", "t@t")
         git("config", "user.name", "t")
         (root / "gates.json").write_text(
-            json.dumps({"gates": [{"id": "ok", "command": ["true"]}]}),
+            json.dumps({"gates": [{"id": "ok", "command": _pass_cmd()}]}),
             encoding="utf-8")
         (root / ".gitignore").write_text(".gov/history/\n", encoding="utf-8")
         (root / "f.txt").write_text("one\ntwo\nthree\n", encoding="utf-8")
@@ -1620,6 +1680,11 @@ def _scrub_environment() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        from .root import force_utf8_stdio
+    except ImportError:  # direct-script execution (python gov/self_test.py)
+        from root import force_utf8_stdio
+    force_utf8_stdio()  # case reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(
         prog="gov self-test",
         description="Run rejection cases: the tools' own plus the project's "

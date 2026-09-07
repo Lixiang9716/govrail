@@ -90,7 +90,9 @@ def _git(root: Path, *argv: str) -> subprocess.CompletedProcess:
     """One git command, pinned to ``root`` with -C and the scrubbed env."""
     return subprocess.run(
         ["git", "-C", str(root), *argv],
-        capture_output=True, text=True, env=_scrubbed_env(),
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace",  # git speaks UTF-8, not the locale codec (#168)
+        env=_scrubbed_env(),
     )
 
 
@@ -180,7 +182,8 @@ def run_merge(branches: list[str], base: str | None = None,
     # The caller's repository, resolved by git from cwd (D21) — then pinned:
     # every later git call targets this root or the scratch with -C.
     proc = subprocess.run(["git", "rev-parse", "--show-toplevel"],
-                          capture_output=True, text=True, env=env)
+                          capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", env=env)
     if proc.returncode != 0:
         print(f"gov run --merge: not a git repository: {proc.stderr.strip()}",
               file=sys.stderr, flush=True)
@@ -283,7 +286,8 @@ def run_merge(branches: list[str], base: str | None = None,
         # stderr streams live (the human report must not be buffered away);
         # stdout is the one JSON value the orchestrator summarizes (D26).
         step = subprocess.run(argv, cwd=tmp, env=step_env,
-                              stdout=subprocess.PIPE, text=True)
+                              stdout=subprocess.PIPE, text=True,
+                              encoding="utf-8", errors="replace")
         records: list[dict] = []
         if step.stdout and step.stdout.strip():
             import json

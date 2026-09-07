@@ -88,7 +88,8 @@ def _git_dir() -> str | None:
     FILE; git rev-parse --git-common-dir resolves the shared dir (hooks
     live there even from a linked worktree)."""
     proc = subprocess.run(["git", "rev-parse", "--git-common-dir"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         return None
     import os
@@ -266,6 +267,11 @@ def _check_decisions(checks: list[dict]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        from .root import force_utf8_stdio
+    except ImportError:  # direct-script execution
+        from root import force_utf8_stdio
+    force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(
         prog="gov doctor",
         description="Environment self-check: PATH, Python, hooks, gates schema.",

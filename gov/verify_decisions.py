@@ -172,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         fork = subprocess.run(
             ["git", "merge-base", "HEAD", args.base],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         if fork.returncode != 0:
             print(f"verify_decisions: cannot resolve --base '{args.base}' "
