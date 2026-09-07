@@ -197,3 +197,52 @@ def test_project_failure_carries_hand_repro_hint(tmp_path, monkeypatch, capsys):
     assert "reproduce by hand" in out
     assert "clean-env replay" not in out
     assert "unclassified 1" in out
+
+
+def test_run_text_survives_non_utf8_child_bytes(tmp_path):
+    """#172: the harness's text spawns decode pinned UTF-8/replace — a
+    child emitting non-UTF-8 (GBK) bytes comes back as mojibake, never a
+    UnicodeDecodeError in a reader thread. This is the GBK-locale Windows
+    crash made deterministic on every OS: the child writes GBK bytes
+    directly, the way a UTF-8-speaking child's output hit a GBK decoder."""
+    script = ("import sys; "
+              "sys.stdout.buffer.write('中文“引号”'.encode('gbk'))")
+    r = st._run_text(
+        [sys.executable, "-c", script],
+        cwd=tmp_path, capture_output=True,
+        env=st._case_env(),
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout, "the bytes must decode to something, not raise"
+    assert "\ufffd" in r.stdout  # bounded to replacement, not a crash
+
+
+def test_scanner_rejects_unpinned_text_spawn():
+    """Rule 6: the #172 pin scan must be able to fail — an unpinned
+    text=True spawn is named by file:line; a pinned one passes clean."""
+    bad = 'subprocess.run(cmd, capture_output=True, text=True)'
+    good = ('subprocess.run(cmd, capture_output=True, text=True, '
+            'encoding="utf-8")')
+    multiline = 'subprocess.run(\n    cmd,\n    text=True,\n)'
+    assert st._unpinned_text_spawns(bad, "x.py") == ["x.py:1"]
+    assert st._unpinned_text_spawns(multiline, "x.py") == ["x.py:1"]
+    assert st._unpinned_text_spawns(good, "x.py") == []
+    assert st._unpinned_text_spawns('subprocess.run(cmd, capture_output=True)',
+                                    "x.py") == []  # binary: nothing to decode
+
+
+def test_thread_crash_fails_loud(tmp_path, monkeypatch, capsys):
+    """Rule 5 / #172: a harness thread crash must fail the run — it used
+    to print a traceback and leave the exit code (and the PASS) intact."""
+    import threading
+    crash = threading.ExceptHookArgs((
+        RuntimeError, RuntimeError("boom"), None, threading.current_thread(),
+    ))
+    monkeypatch.setattr(st, "CASES", [])
+    monkeypatch.chdir(tmp_path)  # no project cases; the crash alone must fail it
+    st._THREAD_CRASHES.append(crash)
+    assert st.main(["--scope", "project"]) == 1  # no failures, still loud
+    out = capsys.readouterr().out
+    assert "HARNESS-ERROR" in out
+    assert "RuntimeError: boom" in out
+    assert st._THREAD_CRASHES == []  # cleared for the next in-process run

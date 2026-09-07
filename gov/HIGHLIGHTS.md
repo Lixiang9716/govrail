@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.29.2 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- pin UTF-8 on self-test's own spawns; thread crashes fail loud
+
 ## 0.29.1 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - Windows portability — guarded fcntl, portable self-test fixtures, UTF-8 git decode
