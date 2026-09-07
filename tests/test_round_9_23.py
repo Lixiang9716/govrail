@@ -5,7 +5,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parent.parent / "gov"
+
+# POSIX-exec-inherent checks (see the #168 note's deferred rule-6
+# decision): sh -n linting and shebang-script execution need a POSIX
+# host; on Windows they are named skips, not failures.
+needs_posix_exec = pytest.mark.skipif(
+    sys.platform == "win32", reason="needs a POSIX shell / shebang execution")
 
 
 def _repo(root, commit=True):
@@ -55,6 +63,7 @@ def test_16_bare_write_touches_only_stale(tmp_path, monkeypatch, capsys):
     assert "nothing out of sync" in capsys.readouterr().out
 
 
+@needs_posix_exec
 def test_18_ledger_credits_executed_undeclared(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".gov").mkdir()
@@ -102,6 +111,7 @@ def test_20_self_test_scrubs_hook_environment(tmp_path, monkeypatch, capsys):
     assert "GIT_DIR" in out
 
 
+@needs_posix_exec
 def test_22_hook_selects_by_push_range():
     hook = (HERE / "templates" / "pre-push").read_text()
     assert 'run --base "$base"' in hook

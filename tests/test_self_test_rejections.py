@@ -7,6 +7,15 @@ import pytest
 
 from gov import self_test as st
 
+# The project family executes arbitrary scripts directly; a POSIX shebang
+# script cannot run on Windows (WinError 193). Teaching self-test to run
+# .sh cases through a host bash — or to report a named SKIP for
+# OS-unrunnable cases — is the rule-6 semantics decision deferred in the
+# #168 note; until then these tests pin the POSIX side only.
+needs_posix_exec = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="project rejection cases are POSIX shebang scripts")
+
 
 def _rejection(root, name, body, executable=True):
     d = root / ".gov" / "rejections"
@@ -18,6 +27,7 @@ def _rejection(root, name, body, executable=True):
     return p
 
 
+@needs_posix_exec
 def test_project_rejection_failure_names_the_case(tmp_path, monkeypatch, capsys):
     """A local rejection case that cannot prove rejection fails the self-test."""
     monkeypatch.chdir(tmp_path)
@@ -28,6 +38,7 @@ def test_project_rejection_failure_names_the_case(tmp_path, monkeypatch, capsys)
     assert "exit 1" in out
 
 
+@needs_posix_exec
 def test_project_rejection_pass_and_scope(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _rejection(tmp_path, "case-good.sh", "#!/bin/sh\nexit 0\n")
@@ -43,6 +54,7 @@ def test_project_rejection_pass_and_scope(tmp_path, monkeypatch, capsys):
     assert "project 1" not in capsys.readouterr().out
 
 
+@needs_posix_exec
 def test_non_executable_case_is_named(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _rejection(tmp_path, "case-dead.sh", "#!/bin/sh\nexit 0\n", executable=False)
@@ -56,6 +68,7 @@ def test_readme_skipped(tmp_path, monkeypatch):
     assert st.main(["--scope", "project"]) == 0
 
 
+@needs_posix_exec
 def test_parallel_reports_all_failures(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _rejection(tmp_path, "case-a.sh", "#!/bin/sh\nexit 1\n")
@@ -65,6 +78,7 @@ def test_parallel_reports_all_failures(tmp_path, monkeypatch, capsys):
     assert "case-a.sh" in out and "case-b.sh" in out  # both, not just the first
 
 
+@needs_posix_exec
 def test_runaway_case_times_out_fast(tmp_path, monkeypatch, capsys):
     """Wish 5: a sleep-30 case fails as TIMEOUT within the 10s budget."""
     import time

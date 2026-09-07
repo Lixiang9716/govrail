@@ -2,10 +2,15 @@
 # tree binding, and the no-flag path staying byte-for-byte unchanged.
 import json
 import subprocess
+import sys
 
 import pytest
 
 from gov import receipt as receipt_mod
+
+# Portable gate command (#168): the Unix `true` does not exist on
+# Windows — "a command that exits 0" must not depend on PATH.
+PASS = [sys.executable, "-c", "pass"]
 
 
 def _git(tmp_path, *args):
@@ -137,7 +142,7 @@ def test_run_receipt_end_to_end_and_no_flag_unchanged(tmp_path, monkeypatch, cap
     receipts file appears (runs behave exactly as today)."""
     _init_repo(tmp_path)
     (tmp_path / "gates.json").write_text(json.dumps(
-        {"gates": [{"id": "ok", "command": ["true"]}]}))
+        {"gates": [{"id": "ok", "command": PASS}]}))
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "gates")
     from gov import gates
@@ -161,8 +166,8 @@ def test_run_receipt_selection_scoping(tmp_path, monkeypatch, capsys):
     """A --gate run records kind=gate; verification refuses to call it full."""
     _init_repo(tmp_path)
     (tmp_path / "gates.json").write_text(json.dumps(
-        {"gates": [{"id": "ok", "command": ["true"]},
-                    {"id": "two", "command": ["true"]}]}))
+        {"gates": [{"id": "ok", "command": PASS},
+                    {"id": "two", "command": PASS}]}))
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "gates")
     from gov import gates

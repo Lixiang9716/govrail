@@ -1,11 +1,17 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from gov import gates
+
+# Portable gate commands (#168): the Unix coreutils true/false do not
+# exist on Windows — "a command that exits 0/1" must not depend on PATH.
+PASS = [sys.executable, "-c", "pass"]
+FAIL = [sys.executable, "-c", "raise SystemExit(1)"]
 
 
 def _write(tmp_path: Path, data) -> Path:
@@ -28,10 +34,10 @@ def _git_repo(tmp_path: Path) -> None:
 
 
 def test_load_config_valid(tmp_path):
-    p = _write(tmp_path, {"gates": [{"id": "a", "command": ["true"]}]})
+    p = _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
     modes, gs, concurrency, default_mode = gates.load_config(str(p))
     assert [g.id for g in gs] == ["a"]
-    assert gs[0].command == ["true"]
+    assert gs[0].command == PASS
     assert concurrency == 0
     assert default_mode is None
     assert gs[0].enabled is True
@@ -44,8 +50,8 @@ def test_load_config_parses_default_mode_and_enabled(tmp_path):
             "modes": {"all": ["a"]},
             "defaultMode": "all",
             "gates": [
-                {"id": "a", "command": ["true"]},
-                {"id": "b", "command": ["true"], "enabled": False},
+                {"id": "a", "command": PASS},
+                {"id": "b", "command": PASS, "enabled": False},
             ],
         },
     )
@@ -58,12 +64,12 @@ def test_load_config_parses_default_mode_and_enabled(tmp_path):
     "data",
     [
         {"modes": {"all": ["a"]}, "defaultMode": "ghost",
-         "gates": [{"id": "a", "command": ["true"]}]},
+         "gates": [{"id": "a", "command": PASS}]},
         {"modes": {"all": ["a"]}, "defaultMode": 3,
-         "gates": [{"id": "a", "command": ["true"]}]},
+         "gates": [{"id": "a", "command": PASS}]},
         {"modes": {"all": ["a"]}, "defaultMode": "",
-         "gates": [{"id": "a", "command": ["true"]}]},
-        {"gates": [{"id": "a", "command": ["true"], "enabled": "false"}]},
+         "gates": [{"id": "a", "command": PASS}]},
+        {"gates": [{"id": "a", "command": PASS, "enabled": "false"}]},
     ],
 )
 def test_load_config_rejects_bad_default_mode_or_enabled(tmp_path, data):
@@ -75,18 +81,18 @@ def test_load_config_rejects_bad_default_mode_or_enabled(tmp_path, data):
 @pytest.mark.parametrize(
     "data",
     [
-        {"gates": [{"id": "a", "command": ["true"]}, {"id": "a", "command": ["true"]}]},
-        {"gates": [{"id": "a", "command": ["true"], "needs": ["ghost"]}]},
+        {"gates": [{"id": "a", "command": PASS}, {"id": "a", "command": PASS}]},
+        {"gates": [{"id": "a", "command": PASS, "needs": ["ghost"]}]},
         {
             "gates": [
-                {"id": "a", "command": ["true"], "needs": ["b"]},
-                {"id": "b", "command": ["true"], "needs": ["a"]},
+                {"id": "a", "command": PASS, "needs": ["b"]},
+                {"id": "b", "command": PASS, "needs": ["a"]},
             ]
         },
         {"gates": [None]},
         {"gates": "nope"},
-        {"concurrency": -1, "gates": [{"id": "a", "command": ["true"]}]},
-        {"gates": [{"id": "a", "command": ["true"], "timeoutMs": "x"}]},
+        {"concurrency": -1, "gates": [{"id": "a", "command": PASS}]},
+        {"gates": [{"id": "a", "command": PASS, "timeoutMs": "x"}]},
         [],
     ],
 )
@@ -97,15 +103,15 @@ def test_load_config_rejects(tmp_path, data):
 
 
 def test_run_gates_passes():
-    gs = [gates.Gate(id="a", command=["true"]), gates.Gate(id="b", command=["true"])]
+    gs = [gates.Gate(id="a", command=PASS), gates.Gate(id="b", command=PASS)]
     assert gates.run_gates(gs, None, 1, False) == 0
 
 
 def test_run_gates_skips_transitively(capsys):
     gs = [
-        gates.Gate(id="A", command=["true"], needs=["B"]),
-        gates.Gate(id="B", command=["true"], needs=["C"]),
-        gates.Gate(id="C", command=["false"]),
+        gates.Gate(id="A", command=PASS, needs=["B"]),
+        gates.Gate(id="B", command=PASS, needs=["C"]),
+        gates.Gate(id="C", command=FAIL),
     ]
     assert gates.run_gates(gs, None, 1, False) == 1
     out = capsys.readouterr().out
@@ -121,8 +127,8 @@ def test_run_gates_missing_command():
 
 def test_run_gates_reports_disabled_and_never_runs_them(capsys):
     gs = [
-        gates.Gate(id="a", command=["true"]),
-        gates.Gate(id="b", command=["false"], enabled=False),
+        gates.Gate(id="a", command=PASS),
+        gates.Gate(id="b", command=FAIL, enabled=False),
     ]
     assert gates.run_gates(gs, None, 1, False) == 0
     out = capsys.readouterr().out
@@ -132,8 +138,8 @@ def test_run_gates_reports_disabled_and_never_runs_them(capsys):
 
 def test_run_gates_selection_skips_disabled(capsys):
     gs = [
-        gates.Gate(id="a", command=["true"]),
-        gates.Gate(id="b", command=["false"], enabled=False),
+        gates.Gate(id="a", command=PASS),
+        gates.Gate(id="b", command=FAIL, enabled=False),
     ]
     assert gates.run_gates(gs, ["a", "b"], 1, False) == 0
     out = capsys.readouterr().out
@@ -142,7 +148,7 @@ def test_run_gates_selection_skips_disabled(capsys):
 
 
 def test_run_gates_advisory_failure_reports_but_does_not_block(capsys):
-    gs = [gates.Gate(id="a", command=["false"], allow_failure=True)]
+    gs = [gates.Gate(id="a", command=FAIL, allow_failure=True)]
     assert gates.run_gates(gs, None, 1, False) == 0
     out = capsys.readouterr().out
     assert "FAIL a" in out
@@ -157,8 +163,8 @@ def test_main_default_mode_scopes_run(tmp_path, capsys, monkeypatch):
             "modes": {"all": ["a"], "also": ["b"]},
             "defaultMode": "all",
             "gates": [
-                {"id": "a", "command": ["true"]},
-                {"id": "b", "command": ["false"]},
+                {"id": "a", "command": PASS},
+                {"id": "b", "command": FAIL},
             ],
         },
     )
@@ -176,8 +182,8 @@ def test_main_mode_overrides_default_mode(tmp_path, capsys, monkeypatch):
             "modes": {"all": ["a"], "just-b": ["b"]},
             "defaultMode": "all",
             "gates": [
-                {"id": "a", "command": ["true"]},
-                {"id": "b", "command": ["true"]},
+                {"id": "a", "command": PASS},
+                {"id": "b", "command": PASS},
             ],
         },
     )
@@ -188,7 +194,7 @@ def test_main_mode_overrides_default_mode(tmp_path, capsys, monkeypatch):
 
 
 def test_load_config_parses_paths(tmp_path):
-    p = _write(tmp_path, {"gates": [{"id": "a", "command": ["true"],
+    p = _write(tmp_path, {"gates": [{"id": "a", "command": PASS,
                                      "paths": ["gov/**", "gates.json"]}]})
     modes, gs, concurrency, default_mode = gates.load_config(str(p))
     assert gs[0].paths == ["gov/**", "gates.json"]
@@ -196,7 +202,7 @@ def test_load_config_parses_paths(tmp_path):
 
 @pytest.mark.parametrize("paths", ["gov/", [""], [1]])
 def test_load_config_rejects_bad_paths(tmp_path, paths):
-    p = _write(tmp_path, {"gates": [{"id": "a", "command": ["true"], "paths": paths}]})
+    p = _write(tmp_path, {"gates": [{"id": "a", "command": PASS, "paths": paths}]})
     with pytest.raises(gates.ConfigError):
         gates.load_config(str(p))
 
@@ -211,9 +217,9 @@ def test_glob_regex_span_and_depth():
 
 def test_select_by_paths():
     gs = [
-        gates.Gate(id="unpathed", command=["true"]),
-        gates.Gate(id="docs-gate", command=["true"], paths=["docs/**"]),
-        gates.Gate(id="off", command=["true"], enabled=False, paths=["docs/**"]),
+        gates.Gate(id="unpathed", command=PASS),
+        gates.Gate(id="docs-gate", command=PASS, paths=["docs/**"]),
+        gates.Gate(id="off", command=PASS, enabled=False, paths=["docs/**"]),
     ]
     selected, out = gates._select_by_paths(gs, ["docs/a.md", "README.md"])
     assert selected == ["unpathed", "docs-gate"]
@@ -227,9 +233,9 @@ def test_main_base_scopes_run(tmp_path, capsys, monkeypatch):
         tmp_path,
         {
             "gates": [
-                {"id": "docs-gate", "command": ["true"], "paths": ["docs/**"]},
-                {"id": "code-gate", "command": ["true"], "paths": ["src/**"]},
-                {"id": "unpathed", "command": ["true"]},
+                {"id": "docs-gate", "command": PASS, "paths": ["docs/**"]},
+                {"id": "code-gate", "command": PASS, "paths": ["src/**"]},
+                {"id": "unpathed", "command": PASS},
             ]
         },
     )
@@ -247,8 +253,8 @@ def test_main_gate_flag_runs_one(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write(
         tmp_path,
-        {"gates": [{"id": "a", "command": ["true"]},
-                   {"id": "b", "command": ["true"]}]},
+        {"gates": [{"id": "a", "command": PASS},
+                   {"id": "b", "command": PASS}]},
     )
     assert gates.main(["--gate", "b"]) == 0
     out = capsys.readouterr().out
@@ -259,20 +265,21 @@ def test_main_gate_flag_runs_one(tmp_path, capsys, monkeypatch):
 def test_main_rejects_gate_and_mode_combo(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write(tmp_path, {"modes": {"all": ["a"]},
-                      "gates": [{"id": "a", "command": ["true"]}]})
+                      "gates": [{"id": "a", "command": PASS}]})
     assert gates.main(["--gate", "a", "--mode", "all"]) == 2
 
 
 def test_main_rejects_unknown_gate(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"]}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
     assert gates.main(["--gate", "ghost"]) == 2
 
 
 def test_failure_summary_names_gate_and_rerun(capsys):
     gs = [
-        gates.Gate(id="boom", command=["sh", "-c", "echo boom >&2; exit 3"]),
-        gates.Gate(id="ok", command=["true"]),
+        gates.Gate(id="boom", command=[sys.executable, "-c",
+                                       "import sys; print('boom', file=sys.stderr); raise SystemExit(3)"]),
+        gates.Gate(id="ok", command=PASS),
     ]
     assert gates.run_gates(gs, None, 1, False) == 1
     out = capsys.readouterr().out
@@ -293,11 +300,16 @@ def test_failed_gate_output_is_failure_first_uncapped(capsys):
     gs = [
         # earlier-stream passing gate with output → stays capped
         gates.Gate(id="chatty-ok", command=[
-            "sh", "-c", "echo w1; echo w2; echo w3; echo w4; echo tail; exit 0"
+            sys.executable, "-c",
+            "print('w1'); print('w2'); print('w3'); print('w4'); print('tail')"
         ]),
         # late-stream failing gate with output far beyond any tail budget
         gates.Gate(id="late-boom", command=[
-            "sh", "-c", f"echo '{long_text}'; exit 1"
+            sys.executable, "-c",
+            "import sys\n"
+            "for i in range(300):\n"
+            "    print(f'evidence line {i}')\n"
+            "raise SystemExit(1)"
         ]),
     ]
     assert gates.run_gates(gs, None, 1, False) == 1
@@ -323,7 +335,9 @@ def test_usage_prog_names_the_subcommand(tmp_path, capsys, monkeypatch):
 
 def test_pass_with_output_stays_visible(capsys):
     """A passing gate that printed a warning must not be silenced (P1-2)."""
-    gs = [gates.Gate(id="warny", command=["sh", "-c", "echo line1; echo line2; echo line3; echo heads up; echo last warning; exit 0"])]
+    gs = [gates.Gate(id="warny", command=[sys.executable, "-c",
+                                          "print('line1'); print('line2'); print('line3'); "
+                                          "print('heads up'); print('last warning')"])]
     assert gates.run_gates(gs, None, 1, False) == 0
     out = capsys.readouterr().out
     assert "PASS warny" in out
@@ -339,8 +353,8 @@ def test_load_config_rejects_gate_in_no_mode(tmp_path):
     """D24: mode omission is not a parking mechanism — it silently never runs."""
     p = _write(tmp_path, {
         "modes": {"all": ["a"]},
-        "gates": [{"id": "a", "command": ["true"]},
-                  {"id": "ghost-gate", "command": ["true"]}],
+        "gates": [{"id": "a", "command": PASS},
+                  {"id": "ghost-gate", "command": PASS}],
     })
     with pytest.raises(gates.ConfigError) as e:
         gates.load_config(str(p))
@@ -351,8 +365,8 @@ def test_load_config_rejects_gate_in_no_mode(tmp_path):
 def test_disabled_gate_may_omit_modes(tmp_path):
     p = _write(tmp_path, {
         "modes": {"all": ["a"]},
-        "gates": [{"id": "a", "command": ["true"]},
-                  {"id": "parked", "command": ["true"], "enabled": False}],
+        "gates": [{"id": "a", "command": PASS},
+                  {"id": "parked", "command": PASS, "enabled": False}],
     })
     modes, gs, concurrency, default_mode = gates.load_config(str(p))
     assert [g.id for g in gs] == ["a", "parked"]
@@ -361,7 +375,7 @@ def test_disabled_gate_may_omit_modes(tmp_path):
 def test_gate_on_disabled_gate_fails_loud(tmp_path, capsys, monkeypatch):
     """N4: naming a parked gate is operator error, not a silent green."""
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"], "enabled": False}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS, "enabled": False}]})
     assert gates.main(["--gate", "a"]) == 2
     assert "disabled" in capsys.readouterr().err
 
@@ -372,8 +386,8 @@ def test_every_gate_ignores_default_mode(tmp_path, capsys, monkeypatch):
     _write(tmp_path, {
         "modes": {"all": ["a"], "also": ["b"]},
         "defaultMode": "all",
-        "gates": [{"id": "a", "command": ["true"]},
-                  {"id": "b", "command": ["true"]}],
+        "gates": [{"id": "a", "command": PASS},
+                  {"id": "b", "command": PASS}],
     })
     assert gates.main(["--every-gate"]) == 0
     out = capsys.readouterr().out
@@ -386,8 +400,8 @@ def test_every_gate_ignores_default_mode(tmp_path, capsys, monkeypatch):
 
 def test_json_mode_pure_stdout(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"]},
-                                {"id": "off", "command": ["false"], "enabled": False}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS},
+                                {"id": "off", "command": FAIL, "enabled": False}]})
     assert gates.main(["--json", "--every-gate"]) == 0
     import json as _json
     captured = capsys.readouterr()
@@ -411,8 +425,8 @@ def test_json_mode_names_unselected_and_scoped_out(tmp_path, capsys, monkeypatch
     monkeypatch.chdir(tmp_path)
     _write(tmp_path, {
         "modes": {"quick": ["a"], "slow": ["a", "b"]},
-        "gates": [{"id": "a", "command": ["true"]},
-                  {"id": "b", "command": ["true"], "paths": ["docs/**"]}],
+        "gates": [{"id": "a", "command": PASS},
+                  {"id": "b", "command": PASS, "paths": ["docs/**"]}],
     })
     assert gates.main(["--json", "--mode", "quick"]) == 0
     import json as _json
@@ -451,8 +465,8 @@ def test_json_stdout_is_pure_for_every_selector(tmp_path, capsys, monkeypatch, s
     _write(tmp_path, {
         "modes": {"quick": ["notes"], "all": ["notes", "scope-gate"]},
         "defaultMode": "quick",
-        "gates": [{"id": "notes", "command": ["true"], "paths": ["docs/**"]},
-                  {"id": "scope-gate", "command": ["true"], "paths": ["other/**"]}],
+        "gates": [{"id": "notes", "command": PASS, "paths": ["docs/**"]},
+                  {"id": "scope-gate", "command": PASS, "paths": ["other/**"]}],
     })
     rc = gates.main(["--json", *selector])
     assert rc == 0
@@ -468,14 +482,14 @@ def test_json_stdout_is_pure_for_every_selector(tmp_path, capsys, monkeypatch, s
 def test_unknown_gate_key_rejects_loud(tmp_path, monkeypatch, capsys):
     """D29: "enable": false is a typo'd park that silently parks nothing."""
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"], "enable": False}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS, "enable": False}]})
     assert gates.main([]) == 2
     assert "unknown key(s): enable" in capsys.readouterr().err
 
 
 def test_unknown_top_level_key_rejects_loud(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"concurrencyy": 4, "gates": [{"id": "a", "command": ["true"]}]})
+    _write(tmp_path, {"concurrencyy": 4, "gates": [{"id": "a", "command": PASS}]})
     assert gates.main([]) == 2
     assert "unknown top-level key(s): concurrencyy" in capsys.readouterr().err
 
@@ -484,7 +498,7 @@ def test_record_writes_history_by_default(tmp_path, monkeypatch):
     """D29: recording is the default; --no-record opts out."""
     import json as _json
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"]}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
     assert gates.main([]) == 0
     hist = tmp_path / ".gov" / "history" / "gates.jsonl"
     lines = hist.read_text().strip().splitlines()
@@ -499,7 +513,7 @@ def test_caller_tag_recorded_when_given(tmp_path, monkeypatch):
     keeps the record byte-shaped exactly as before (no caller key)."""
     import json as _json
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"]}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
     assert gates.main([]) == 0
     assert gates.main(["--tag", "subagent-3"]) == 0
     monkeypatch.setenv("GOV_CALLER", "supervisor")
@@ -522,7 +536,7 @@ def test_cost_recorded_alongside_caller(tmp_path, monkeypatch):
     coexisting with D42's caller key; absent = record shape unchanged."""
     import json as _json
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"]}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
     assert gates.main(["--tag", "bridge", "--cost", "tokens=1200,calls=4"]) == 0
     monkeypatch.setenv("GOV_COST", "tokens=10.5")
     assert gates.main([]) == 0  # env fallback, no flag
@@ -540,7 +554,7 @@ def test_cost_malformed_fails_loud_before_any_gate(tmp_path, monkeypatch, capsys
     """#126/D43: bad cost input exits 2 naming the fragment — and a run
     that would otherwise be green must not run, so nothing lands uncosted."""
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path, {"gates": [{"id": "a", "command": ["true"]}]})
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
     monkeypatch.setenv("GOV_COST", "tokens=lots")
     assert gates.main([]) == 2
     assert "tokens=lots" in capsys.readouterr().err

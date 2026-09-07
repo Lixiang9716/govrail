@@ -9,6 +9,10 @@ import pytest
 
 from gov import task
 
+# Portable gate command (#168): the Unix `true` does not exist on
+# Windows — "a command that exits 0" must not depend on PATH.
+PASS = [sys.executable, "-c", "pass"]
+
 
 def _project(tmp_path: Path) -> Path:
     (tmp_path / ".gov" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -97,7 +101,7 @@ def test_close_runs_gates_and_records_receipt(tmp_path, monkeypatch):
     proj = _project(tmp_path)
     (proj / "gates.json").write_text(json.dumps({
         "modes": {"all": ["noop"]},
-        "gates": [{"id": "noop", "command": ["true"]}],
+        "gates": [{"id": "noop", "command": PASS}],
     }), encoding="utf-8")
     monkeypatch.chdir(proj)
     assert task.main(["new", "Close me"]) == 0
@@ -210,7 +214,7 @@ def test_claim_missing_or_closed_card_exit2(tmp_path, monkeypatch, capsys):
     # the rule-set hash, and close refuses a card whose pin has drifted
     (proj / "gates.json").write_text(json.dumps({
         "modes": {"all": ["noop"]},
-        "gates": [{"id": "noop", "command": ["true"]}],
+        "gates": [{"id": "noop", "command": PASS}],
     }), encoding="utf-8")
     monkeypatch.chdir(proj)
     monkeypatch.setenv("GOV_CALLER", "w1")
@@ -373,7 +377,7 @@ def test_close_clears_own_card_lease(tmp_path, monkeypatch, capsys):
     proj = _git_project(tmp_path)
     (proj / "gates.json").write_text(json.dumps({
         "modes": {"all": ["noop"]},
-        "gates": [{"id": "noop", "command": ["true"]}],
+        "gates": [{"id": "noop", "command": PASS}],
     }), encoding="utf-8")
     monkeypatch.chdir(proj)
     monkeypatch.setenv("GOV_CALLER", "w1")

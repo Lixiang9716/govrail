@@ -570,7 +570,11 @@ def _git_repo(root: Path, env: dict) -> None:
 
 def _gov_env(root: Path) -> dict:
     """Hermetic env whose PATH carries a `gov` shim running THIS tree —
-    the scratch's gates invoke `gov ...` commands (D33's fixture walls)."""
+    the scratch's gates invoke `gov ...` commands (D33's fixture walls).
+
+    The shim is a POSIX shebang script: these acceptance tests are the
+    POSIX side of the #168 portability story (a Windows equivalent would
+    need a .bat shim — deferred with the rule-6 decision)."""
     bin_dir = root / "bin"
     bin_dir.mkdir(exist_ok=True)
     gov_shim = bin_dir / "gov"
@@ -585,6 +589,12 @@ def _gov_env(root: Path) -> dict:
     return env
 
 
+posix_shim = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="the PATH `gov` shim is a POSIX shebang script")
+
+
+@posix_shim
 def test_acceptance_init_preset_then_every_gate_green(tmp_path):
     scratch = tmp_path / "scratch"
     scratch.mkdir()
@@ -634,6 +644,7 @@ def _build_available() -> bool:
 @pytest.mark.skipif(not _build_available(),
                     reason="the python-lib build gate needs the 'build' "
                            "package (pip install build)")
+@posix_shim
 def test_acceptance_python_lib_scratch_green(tmp_path):
     """Minimal python project → plain init → apply python-lib → the full
     matrix is green with pytest and build actually executing."""
@@ -678,6 +689,7 @@ def test_acceptance_python_lib_scratch_green(tmp_path):
     assert "PASS build" in run.stdout
 
 
+@posix_shim
 def test_acceptance_docs_bilingual_scratch_green_then_fail_loud(tmp_path):
     """Minimal bilingual docs repo (CHANGELOG.md + the HIGHLIGHTS file
     verify-doc-sync reads, each carrying the same version section) →

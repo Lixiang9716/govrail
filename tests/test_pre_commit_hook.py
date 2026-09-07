@@ -19,8 +19,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def _env(root: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     env["PYTHONPATH"] = str(REPO_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
-    # Deterministic hook resolution (the hook honors GOV_BIN first).
-    env["GOV_BIN"] = f"{sys.executable} -m gov"
+    # Deterministic hook resolution (the hook honors GOV_BIN first). The
+    # hook runs under the shell git provides, so the interpreter path is
+    # given with forward slashes — backslashes would be eaten as escapes
+    # in unquoted shell context (Windows/git-bash, #168).
+    env["GOV_BIN"] = f"{Path(sys.executable).as_posix()} -m gov"
     return env
 
 
