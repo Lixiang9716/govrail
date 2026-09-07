@@ -13,7 +13,7 @@ def _main_repo_with_worktree(tmp_path):
                 ["git", "config", "user.email", "real@x"],
                 ["git", "config", "user.name", "real"]):
         subprocess.run(cmd, cwd=main, check=True)
-    (main / "f.txt").write_text("x\n")
+    (main / "f.txt").write_text("x\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=main, check=True)
     subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "base"],
                    cwd=main, check=True)

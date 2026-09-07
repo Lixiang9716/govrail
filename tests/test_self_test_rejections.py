@@ -21,7 +21,7 @@ def _rejection(root, name, body, executable=True):
     d = root / ".gov" / "rejections"
     d.mkdir(parents=True, exist_ok=True)
     p = d / name
-    p.write_text(body)
+    p.write_text(body, encoding="utf-8")
     if executable:
         p.chmod(0o755)
     return p
@@ -42,7 +42,7 @@ def test_project_rejection_failure_names_the_case(tmp_path, monkeypatch, capsys)
 def test_project_rejection_pass_and_scope(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _rejection(tmp_path, "case-good.sh", "#!/bin/sh\nexit 0\n")
-    (tmp_path / ".gov" / "rejections" / "README.md").write_text("docs\n")
+    (tmp_path / ".gov" / "rejections" / "README.md").write_text("docs\n", encoding="utf-8")
     assert st.main([]) == 0
     out = capsys.readouterr().out
     assert "PASS .gov/rejections/case-good.sh" in out
@@ -102,14 +102,14 @@ def test_coverage_ledger_and_bad_shebang(tmp_path, monkeypatch, capsys):
     (tmp_path / "gates.json").write_text(_json.dumps(
         {"modes": {"all": ["alpha", "beta"]},
          "gates": [{"id": "alpha", "command": ["true"]},
-                   {"id": "beta", "command": ["true"]}]}))
+                   {"id": "beta", "command": ["true"]}]}), encoding="utf-8")
     rej = tmp_path / ".gov" / "rejections"
     rej.mkdir()
     good = rej / "case-alpha.sh"
-    good.write_text("#!/bin/sh\n# gate: alpha\nexit 0\n")
+    good.write_text("#!/bin/sh\n# gate: alpha\nexit 0\n", encoding="utf-8")
     good.chmod(0o755)
     bad = rej / "case-noshebang.sh"
-    bad.write_text("# gate: ghost\nexit 0\n")  # no shebang, unknown gate
+    bad.write_text("# gate: ghost\nexit 0\n", encoding="utf-8")  # no shebang, unknown gate
     bad.chmod(0o755)
     assert st.main(["--scope", "project"]) == 1  # the bad case fails, named
     out = capsys.readouterr().out
@@ -123,7 +123,7 @@ def test_coverage_pointer_when_uncovered(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".gov").mkdir()
     (tmp_path / "gates.json").write_text(_json.dumps(
-        {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}))
+        {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}), encoding="utf-8")
     assert st.main(["--scope", "project"]) == 0  # no cases at all
     out = capsys.readouterr().out
     assert "x(NONE — rule 6)" in out

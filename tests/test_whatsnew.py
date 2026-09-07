@@ -9,7 +9,7 @@ def test_whatsnew_since_manifest(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".gov").mkdir()
     (tmp_path / ".gov" / "manifest.json").write_text(
-        json.dumps({"version": "0.10.0"}))
+        json.dumps({"version": "0.10.0"}), encoding="utf-8")
     assert wn.main([]) == 0
     out = capsys.readouterr().out
     assert "since 0.10.0" in out

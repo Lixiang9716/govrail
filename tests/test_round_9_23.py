@@ -22,7 +22,7 @@ def _repo(root, commit=True):
                 ["git", "config", "user.name", "t"]):
         subprocess.run(cmd, cwd=root, check=True)
     if commit:
-        (root / "seed.txt").write_text("x\n")
+        (root / "seed.txt").write_text("x\n", encoding="utf-8")
         subprocess.run(["git", "add", "-A"], cwd=root, check=True)
         subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "base"],
                        cwd=root, check=True)
@@ -33,7 +33,7 @@ def test_15_doctor_worktree_hook(tmp_path, monkeypatch, capsys):
     main.mkdir()
     _repo(main)
     hooks = main / ".git" / "hooks"
-    (hooks / "pre-push").write_text("#!/bin/sh\n")
+    (hooks / "pre-push").write_text("#!/bin/sh\n", encoding="utf-8")
     (hooks / "pre-push").chmod(0o755)
     wt = tmp_path / "wt"
     subprocess.run(["git", "worktree", "add", "-q", str(wt)], cwd=main, check=True)
@@ -51,11 +51,11 @@ def test_16_bare_write_touches_only_stale(tmp_path, monkeypatch, capsys):
     docs = tmp_path / "docs"
     docs.mkdir()
     for name in ("m2-plan.md", "m2-plan.zh.md", "ok.md", "ok.zh.md"):
-        (docs / name).write_text(f"# {name}\n")
+        (docs / name).write_text(f"# {name}\n", encoding="utf-8")
     assert vtp.main(["--write", "m2-plan"]) == 0   # baseline both explicitly
     assert vtp.main(["--write", "ok"]) == 0
     green_before = (docs / "ok.i18n.yaml").read_bytes()
-    (docs / "m2-plan.md").write_text("# m2-plan EDITED\n")  # one goes stale
+    (docs / "m2-plan.md").write_text("# m2-plan EDITED\n", encoding="utf-8")  # one goes stale
     assert vtp.main([]) == 1                           # exactly it is red
     assert vtp.main(["--write"]) == 0                  # bare form fixes it...
     assert (docs / "ok.i18n.yaml").read_bytes() == green_before  # ...only it
@@ -68,11 +68,11 @@ def test_18_ledger_credits_executed_undeclared(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".gov").mkdir()
     (tmp_path / "gates.json").write_text(json.dumps(
-        {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}))
+        {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}), encoding="utf-8")
     rej = tmp_path / ".gov" / "rejections"
     rej.mkdir()
     legacy = rej / "source-limits-rejects.py"  # predates the convention
-    legacy.write_text("#!/bin/sh\nexit 0\n")
+    legacy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     legacy.chmod(0o755)
     from gov import self_test as st
     assert st.main(["--scope", "project"]) == 0
@@ -86,7 +86,7 @@ def test_19_doctor_names_version_drift(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     gov_dir = tmp_path / ".gov"
     gov_dir.mkdir()
-    (gov_dir / "manifest.json").write_text(json.dumps({"version": "0.6.5"}))
+    (gov_dir / "manifest.json").write_text(json.dumps({"version": "0.6.5"}), encoding="utf-8")
     from gov import __version__, doctor
     doctor.main([])
     out = capsys.readouterr().out
@@ -94,7 +94,7 @@ def test_19_doctor_names_version_drift(tmp_path, monkeypatch, capsys):
     assert f"this package is {__version__}" in out
     assert "gov init --upgrade" in out
     # match -> silent
-    (gov_dir / "manifest.json").write_text(json.dumps({"version": __version__}))
+    (gov_dir / "manifest.json").write_text(json.dumps({"version": __version__}), encoding="utf-8")
     doctor.main([])
     assert "manifest initialized" not in capsys.readouterr().out
 
@@ -113,7 +113,7 @@ def test_20_self_test_scrubs_hook_environment(tmp_path, monkeypatch, capsys):
 
 @needs_posix_exec
 def test_22_hook_selects_by_push_range():
-    hook = (HERE / "templates" / "pre-push").read_text()
+    hook = (HERE / "templates" / "pre-push").read_text(encoding="utf-8")
     assert 'run --base "$base"' in hook
     assert "unset GIT_DIR" in hook
     # functional: feed push stdin, expect scoped invocation (dry: sh -n ok)
@@ -125,13 +125,13 @@ def test_21_scope_annotation(tmp_path, monkeypatch, capsys):
     _repo(tmp_path)
     (tmp_path / "gates.json").write_text(json.dumps(
         {"modes": {"all": ["a"]},
-         "gates": [{"id": "a", "command": ["true"], "paths": ["src/**"]}]}))
+         "gates": [{"id": "a", "command": ["true"], "paths": ["src/**"]}]}), encoding="utf-8")
     from gov import gates
     assert gates.main([]) == 0
     out = capsys.readouterr().out
     assert "0 in change scope — nothing changed matches" in out  # clean tree
     (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "x.py").write_text("x = 1\n")
+    (tmp_path / "src" / "x.py").write_text("x = 1\n", encoding="utf-8")
     assert gates.main([]) == 0
     assert "1 in change scope" in capsys.readouterr().out
 
@@ -144,7 +144,7 @@ def test_23_history_lands_in_main_checkout(tmp_path, monkeypatch):
                    cwd=main, check=True)
     wt = tmp_path / "wt"
     (wt / "gates.json").write_text(json.dumps(
-        {"gates": [{"id": "a", "command": ["true"]}]}))
+        {"gates": [{"id": "a", "command": ["true"]}]}), encoding="utf-8")
     monkeypatch.chdir(wt)
     from gov import gates
     assert gates.main([]) == 0
@@ -164,7 +164,7 @@ def test_17_table_format_and_refusal(tmp_path, monkeypatch, capsys):
     notes.mkdir(parents=True)
     (notes / "x.md").write_text(
         "# Agent Note: x\n\nStatus: implemented\n\n## Problem\np\n\n"
-        "## Decision\nd\n\n## Alternatives considered\na\n\nLocked by D1.\n")
+        "## Decision\nd\n\n## Alternatives considered\na\n\nLocked by D1.\n", encoding="utf-8")
     assert vd.main([]) == 1
     assert "REFUSED" in capsys.readouterr().out
     # configure a table source
@@ -172,10 +172,10 @@ def test_17_table_format_and_refusal(tmp_path, monkeypatch, capsys):
     design.write_text(
         "# design\n\n| D | choice | alternatives |\n|---|---|---|\n"
         "| D1 | use tabs | spaces rejected: indent drift |\n"
-        "| D2 | keep py39 | py310+: no need yet |\n")
+        "| D2 | keep py39 | py310+: no need yet |\n", encoding="utf-8")
     (tmp_path / ".gov").mkdir(exist_ok=True)
     (tmp_path / ".gov" / "decisions.json").write_text(
-        json.dumps({"path": "DESIGN.md", "format": "table"}))
+        json.dumps({"path": "DESIGN.md", "format": "table"}), encoding="utf-8")
     assert vd.main([]) == 0  # header alternatives column covers rows
     out = capsys.readouterr().out
     assert "2 decision(s) ok" in out

@@ -42,6 +42,30 @@ true for a contributor on Windows.
 - **test_pre_commit_hook's `GOV_BIN`** is built with
   `Path(sys.executable).as_posix()` — the hook runs under the shell git
   provides, where backslashes in unquoted shell context are escapes.
+- **What the first Windows pytest run exposed, fixed for real:**
+  - `os.execv` does not propagate the child's exit code on Windows — the
+    locks/task race wrappers read `[0, 0]` because the loser's exit 3
+    was lost. Wrappers now `subprocess.call` + `SystemExit` (the race
+    proofs are unchanged on POSIX).
+  - The takeover race's wording assert over-claimed: a plain O_EXCL
+    create legally slips into the other's guarded unlink→recreate window
+    (the fresh-create path never takes the guard, D52), so the winner's
+    message may not say "took over". The assert now pins the actual
+    guarantee — exactly one holder, loser REFUSED — and the takeover
+    race test itself skips on Windows, where fcntl-less guards degrade
+    by design (the double-takeover [0, 0] run there was the documented
+    race window, empirically demonstrated).
+  - Two separator defects in the product, found by the suite:
+    `archive_notes` sealed relative paths with OS separators (a seal was
+    not byte-stable across OSes — now `as_posix()`), and pairing
+    `--staged` matched git's forward-slash paths against `str(Path)`
+    (backslashes on Windows), silently checking nothing — both sides are
+    now `as_posix()`-normalized.
+  - Every test-side `write_text`/`read_text`/`open` is now pinned to
+    `encoding="utf-8"` (315 call sites, AST-positioned): Windows defaults
+    them to the locale codec, so non-ASCII fixtures crashed the fixtures
+    themselves. The pinning is semantic (files are UTF-8 by convention),
+    not cosmetic.
 - **CI**: the windows job now installs `-e ".[dev]"`, runs
   `python -m pytest -q` before the smoke, and keeps the tools-family
   self-test. Ubuntu's job is unchanged (full self-test including this

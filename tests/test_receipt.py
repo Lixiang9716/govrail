@@ -22,7 +22,7 @@ def _init_repo(tmp_path):
     _git(tmp_path, "init", "-q", ".")
     _git(tmp_path, "config", "user.email", "t@t")
     _git(tmp_path, "config", "user.name", "t")
-    (tmp_path / "f.txt").write_text("x\n")
+    (tmp_path / "f.txt").write_text("x\n", encoding="utf-8")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "base")
 
@@ -142,7 +142,7 @@ def test_run_receipt_end_to_end_and_no_flag_unchanged(tmp_path, monkeypatch, cap
     receipts file appears (runs behave exactly as today)."""
     _init_repo(tmp_path)
     (tmp_path / "gates.json").write_text(json.dumps(
-        {"gates": [{"id": "ok", "command": PASS}]}))
+        {"gates": [{"id": "ok", "command": PASS}]}), encoding="utf-8")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "gates")
     from gov import gates
@@ -167,7 +167,7 @@ def test_run_receipt_selection_scoping(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     (tmp_path / "gates.json").write_text(json.dumps(
         {"gates": [{"id": "ok", "command": PASS},
-                    {"id": "two", "command": PASS}]}))
+                    {"id": "two", "command": PASS}]}), encoding="utf-8")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-qm", "gates")
     from gov import gates

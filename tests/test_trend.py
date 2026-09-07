@@ -6,7 +6,7 @@ from gov import trend
 def _history(root, runs):
     h = root / ".gov" / "history"
     h.mkdir(parents=True)
-    with (h / "gates.jsonl").open("w") as f:
+    with (h / "gates.jsonl").open("w", encoding="utf-8") as f:
         for gates in runs:
             f.write(json.dumps({"ts": "2026-09-01T00:00:00+00:00", "gates": gates}) + "\n")
 
@@ -43,7 +43,7 @@ def test_trend_gate_filter_and_base_split(tmp_path, monkeypatch, capsys):
                 ["git", "config", "user.email", "t@t"],
                 ["git", "config", "user.name", "t"]):
         subprocess.run(cmd, cwd=tmp_path, check=True)
-    (tmp_path / "seed.txt").write_text("x\n")
+    (tmp_path / "seed.txt").write_text("x\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
     subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "base"],
                    cwd=tmp_path, check=True)
@@ -63,7 +63,7 @@ def test_trend_gate_filter_and_base_split(tmp_path, monkeypatch, capsys):
 def _history_tagged(root, runs):
     h = root / ".gov" / "history"
     h.mkdir(parents=True)
-    with (h / "gates.jsonl").open("w") as f:
+    with (h / "gates.jsonl").open("w", encoding="utf-8") as f:
         for caller, gates in runs:
             rec = {"ts": "2026-09-01T00:00:00+00:00", "gates": gates}
             if caller:
@@ -123,7 +123,7 @@ def test_trend_cost_splits_by_caller(tmp_path, monkeypatch, capsys):
         {"ts": "2026-09-01T04:00:00+00:00", "cost": {"calls": 3},
          "gates": []},                                       # untagged bucket
     ]
-    with (h / "gates.jsonl").open("w") as f:
+    with (h / "gates.jsonl").open("w", encoding="utf-8") as f:
         for l in lines:
             f.write(json.dumps(l) + "\n")
     assert trend.main(["--cost"]) == 0
@@ -151,7 +151,7 @@ def test_trend_cost_absent_and_malformed(tmp_path, monkeypatch, capsys):
     assert trend.main(["--cost"]) == 0
     out = capsys.readouterr().out
     assert "no cost reported" in out and "GOV_COST" in out
-    with (tmp_path / ".gov/history/gates.jsonl").open("a") as f:
+    with (tmp_path / ".gov/history/gates.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps({"ts": "2026-09-02T00:00:00+00:00",
                             "caller": "bad", "cost": "1200",
                             "gates": []}) + "\n")

@@ -37,7 +37,7 @@ def test_next_empty_table_starts_at_d0(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text("# 决策\n")
+    (docs / "decisions.md").write_text("# 决策\n", encoding="utf-8")
     assert decision.main(["next"]) == 0
     assert capsys.readouterr().out.strip() == "D0"
 
@@ -47,7 +47,7 @@ def test_next_returns_max_plus_one_and_counts(tmp_path, monkeypatch, capsys):
     docs = tmp_path / "docs"
     docs.mkdir()
     (docs / "decisions.md").write_text(
-        "# 决策\n\n## D0 — a\n\n- **选项**: x\n\n## D1 — b\n\n- **选项**: x\n")
+        "# 决策\n\n## D0 — a\n\n- **选项**: x\n\n## D1 — b\n\n- **选项**: x\n", encoding="utf-8")
     assert decision.main(["next"]) == 0
     assert capsys.readouterr().out.strip() == "D2"
     assert decision.main(["next", "--count", "3"]) == 0
@@ -60,11 +60,11 @@ def test_next_base_unions_landed_numbers(tmp_path, monkeypatch, capsys):
     _git_repo(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     _commit(tmp_path, "base")
     # the "sibling" branch lands D2 on master while we sit on the fork
     (docs / "decisions.md").write_text(
-        SECTIONS_TABLE + "\n## D2 — two\n\n- **选项**: a\n- **被否**: b\n")
+        SECTIONS_TABLE + "\n## D2 — two\n\n- **选项**: a\n- **被否**: b\n", encoding="utf-8")
     _commit(tmp_path, "sibling lands D2")
     # our branch resets to the fork point: locally D2 is free, on master it
     # is not — --base must say D3, plain next would say D2
@@ -84,11 +84,11 @@ def test_next_against_is_an_alias_and_warns_stale_base(tmp_path, monkeypatch,
     _git_repo(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     _commit(tmp_path, "base")
     (docs / "decisions.md").write_text(
         SECTIONS_TABLE + "\n## D2 — two\n\n- **选项**: a\n- **被否**: b\n"
-        "\n## D3 — three\n\n- **选项**: a\n- **被否**: b\n")
+        "\n## D3 — three\n\n- **选项**: a\n- **被否**: b\n", encoding="utf-8")
     _commit(tmp_path, "sibling lands D2+D3")
     subprocess.run(["git", "checkout", "-q", "HEAD~1", "--", "docs"],
                    cwd=tmp_path, check=True)
@@ -107,7 +107,7 @@ def test_next_in_sync_base_is_not_warned(tmp_path, monkeypatch, capsys):
     _git_repo(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     _commit(tmp_path, "base")
     assert decision.main(["next", "--base", "master"]) == 0
     captured = capsys.readouterr()
@@ -123,10 +123,10 @@ def test_add_against_warns_stale_base_and_still_writes(tmp_path, monkeypatch,
     _git_repo(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     _commit(tmp_path, "base")
     (docs / "decisions.md").write_text(
-        SECTIONS_TABLE + "\n## D2 — two\n\n- **选项**: a\n- **被否**: b\n")
+        SECTIONS_TABLE + "\n## D2 — two\n\n- **选项**: a\n- **被否**: b\n", encoding="utf-8")
     _commit(tmp_path, "sibling lands D2")
     subprocess.run(["git", "checkout", "-q", "HEAD~1", "--", "docs"],
                    cwd=tmp_path, check=True)
@@ -150,7 +150,7 @@ def test_next_bad_base_fails_loud(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     try:
         decision.main(["next", "--base", "no-such-ref"])
         raise AssertionError("unknown --base must exit 2")
@@ -164,7 +164,7 @@ def test_add_sections_appends_validated_row(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     draft = _draft(tmp_path, "two", "- **选项**: a\n- **被否**: b")
     assert decision.main(["add", "--from", draft]) == 0
     text = (docs / "decisions.md").read_text(encoding="utf-8")
@@ -178,7 +178,7 @@ def test_add_refuses_duplicate_and_gap_and_altless(tmp_path, monkeypatch, capsys
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     dup = _draft(tmp_path, "x", "- **选项**: a\n- **被否**: b")
     try:
         decision.main(["add", "--from", dup, "--id", "D1"])
@@ -208,7 +208,7 @@ def test_add_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     before = (docs / "decisions.md").read_text(encoding="utf-8")
     draft = _draft(tmp_path, "two", "- **选项**: a\n- **被否**: b")
     assert decision.main(["add", "--from", draft, "--dry-run"]) == 0
@@ -291,7 +291,7 @@ def test_add_help_describes_the_enforced_shape(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     try:  # default (sections): title+body is the truth
         decision.main(["add", "--help"])
     except SystemExit as e:
@@ -397,18 +397,18 @@ def test_verify_decisions_base_names_collision(tmp_path, monkeypatch,
                    check=True)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     _commit(tmp_path, "fork point")
     subprocess.run(["git", "checkout", "-q", "-b", "topic"], cwd=tmp_path,
                    check=True)
     (docs / "decisions.md").write_text(
-        SECTIONS_TABLE + "\n## D2 — mine\n\n- **选项**: a\n- **被否**: b\n")
+        SECTIONS_TABLE + "\n## D2 — mine\n\n- **选项**: a\n- **被否**: b\n", encoding="utf-8")
     _commit(tmp_path, "branch adds D2")
     subprocess.run(["git", "checkout", "-q", "main"], cwd=tmp_path,
                    check=True)
     (docs / "decisions.md").write_text(
         SECTIONS_TABLE + "\n## D2 — theirs\n\n- **选项**: a\n- **被否**: b\n"
-        "\n## D3 — fill\n\n- **选项**: a\n- **被否**: b\n")
+        "\n## D3 — fill\n\n- **选项**: a\n- **被否**: b\n", encoding="utf-8")
     _commit(tmp_path, "sibling adds D2+D3")
     subprocess.run(["git", "checkout", "-q", "topic"], cwd=tmp_path,
                    check=True)
@@ -428,14 +428,14 @@ def test_verify_decisions_base_gap_is_informational(tmp_path, monkeypatch,
                    check=True)
     docs = tmp_path / "docs"
     docs.mkdir()
-    (docs / "decisions.md").write_text(SECTIONS_TABLE)
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
     _commit(tmp_path, "fork")
     subprocess.run(["git", "checkout", "-q", "-b", "topic"], cwd=tmp_path,
                    check=True)
     # branch pre-partitions: takes D3 (D2 lands on a sibling)
     (docs / "decisions.md").write_text(
         "# 决策\n\n## D1 — one\n\n- **选项**: a\n- **被否**: b\n"
-        "\n## D3 — mine\n\n- **选项**: a\n- **被否**: b\n")
+        "\n## D3 — mine\n\n- **选项**: a\n- **被否**: b\n", encoding="utf-8")
     _commit(tmp_path, "branch takes D3")
     # contiguity alone still flags the gap (merged history must be whole)
     assert vd.main([]) == 1
@@ -445,7 +445,7 @@ def test_verify_decisions_base_gap_is_informational(tmp_path, monkeypatch,
                    check=True)
     (docs / "decisions.md").write_text(
         "# 决策\n\n## D1 — one\n\n- **选项**: a\n- **被否**: b\n"
-        "\n## D2 — theirs\n\n- **选项**: a\n- **被否**: b\n")
+        "\n## D2 — theirs\n\n- **选项**: a\n- **被否**: b\n", encoding="utf-8")
     _commit(tmp_path, "sibling lands D2")
     subprocess.run(["git", "checkout", "-q", "topic"], cwd=tmp_path,
                    check=True)

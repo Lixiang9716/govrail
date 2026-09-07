@@ -328,7 +328,10 @@ def _staged_sources(staged: list[str], cfg: dict[str, list[str]]) -> list[Path]:
     """In-scope pair sources a staged path belongs to (source side,
     counterpart side, or the ``.i18n.yaml`` record — editing any of the
     three is touching the pair)."""
-    by_path = {str(s): s for s in _sources(cfg)}
+    # as_posix on both sides (#168): git lists staged paths with forward
+    # slashes on every OS, while str(Path) is backslashed on Windows —
+    # matching them raw made --staged silently check nothing there.
+    by_path = {s.as_posix(): s for s in _sources(cfg)}
     involved: dict[Path, None] = {}
     for path in staged:
         p = Path(path)
@@ -337,12 +340,12 @@ def _staged_sources(staged: list[str], cfg: dict[str, list[str]]) -> list[Path]:
             hit = by_path[path]
         elif p.name.endswith(".i18n.yaml"):
             stem = p.name[: -len(".i18n.yaml")]
-            hit = by_path.get(str(p.with_name(stem + ".md")))
+            hit = by_path.get(p.with_name(stem + ".md").as_posix())
         else:
             for lit in _literals(cfg):
                 if p.name.endswith(lit):
                     stem = p.name[: -len(lit)]
-                    hit = by_path.get(str(p.with_name(stem + ".md")))
+                    hit = by_path.get(p.with_name(stem + ".md").as_posix())
                     break
         if hit is not None:
             involved[hit] = None

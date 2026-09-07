@@ -15,7 +15,7 @@ GOOD = "## Problem\np\n\n## Decision\nd\n\n## Alternatives considered\na\n"
 def _put(root, rel, text):
     p = root / ".agents" / "notes" / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
+    p.write_text(text, encoding="utf-8")
     return p
 
 

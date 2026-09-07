@@ -16,7 +16,7 @@ FAIL = [sys.executable, "-c", "raise SystemExit(1)"]
 
 def _write(tmp_path: Path, data) -> Path:
     p = tmp_path / "gates.json"
-    p.write_text(json.dumps(data))
+    p.write_text(json.dumps(data), encoding="utf-8")
     return p
 
 
@@ -27,7 +27,7 @@ def _git_repo(tmp_path: Path) -> None:
         ["git", "config", "user.name", "t"],
     ):
         subprocess.run(cmd, cwd=tmp_path, check=True)
-    (tmp_path / "seed.txt").write_text("seed\n")
+    (tmp_path / "seed.txt").write_text("seed\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
     subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "init"],
                    cwd=tmp_path, check=True)
@@ -240,7 +240,7 @@ def test_main_base_scopes_run(tmp_path, capsys, monkeypatch):
         },
     )
     (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "a.md").write_text("x\n")
+    (tmp_path / "docs" / "a.md").write_text("x\n", encoding="utf-8")
     assert gates.main(["--base", "HEAD"]) == 0
     out = capsys.readouterr().out
     assert "out of scope: code-gate" in out
@@ -461,7 +461,7 @@ def test_json_stdout_is_pure_for_every_selector(tmp_path, capsys, monkeypatch, s
     monkeypatch.chdir(tmp_path)
     _git_repo(tmp_path)
     (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "a.md").write_text("x\n")  # gives --base something
+    (tmp_path / "docs" / "a.md").write_text("x\n", encoding="utf-8")  # gives --base something
     _write(tmp_path, {
         "modes": {"quick": ["notes"], "all": ["notes", "scope-gate"]},
         "defaultMode": "quick",
@@ -501,11 +501,11 @@ def test_record_writes_history_by_default(tmp_path, monkeypatch):
     _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
     assert gates.main([]) == 0
     hist = tmp_path / ".gov" / "history" / "gates.jsonl"
-    lines = hist.read_text().strip().splitlines()
+    lines = hist.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     assert _json.loads(lines[0])["gates"][0]["gate"] == "a"
     assert gates.main(["--no-record"]) == 0
-    assert len(hist.read_text().strip().splitlines()) == 1  # unchanged
+    assert len(hist.read_text(encoding="utf-8").strip().splitlines()) == 1  # unchanged
 
 
 def test_caller_tag_recorded_when_given(tmp_path, monkeypatch):
@@ -522,7 +522,7 @@ def test_caller_tag_recorded_when_given(tmp_path, monkeypatch):
     monkeypatch.setenv("GOV_CALLER", "   ")  # whitespace-only = absent
     assert gates.main([]) == 0
     hist = tmp_path / ".gov" / "history" / "gates.jsonl"
-    recs = [_json.loads(l) for l in hist.read_text().splitlines()]
+    recs = [_json.loads(l) for l in hist.read_text(encoding="utf-8").splitlines()]
     assert len(recs) == 5
     assert "caller" not in recs[0]            # untagged: anonymous, as before
     assert recs[1]["caller"] == "subagent-3"  # --tag
@@ -543,7 +543,7 @@ def test_cost_recorded_alongside_caller(tmp_path, monkeypatch):
     monkeypatch.delenv("GOV_COST")
     assert gates.main([]) == 0
     recs = [_json.loads(l)
-            for l in (tmp_path / ".gov/history/gates.jsonl").read_text().splitlines()]
+            for l in (tmp_path / ".gov/history/gates.jsonl").read_text(encoding="utf-8").splitlines()]
     assert recs[0]["cost"] == {"tokens": 1200, "calls": 4}
     assert recs[0]["caller"] == "bridge"  # one line carries both dimensions
     assert recs[1]["cost"] == {"tokens": 10.5}

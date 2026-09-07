@@ -109,7 +109,7 @@ def test_close_runs_gates_and_records_receipt(tmp_path, monkeypatch):
     rc = task.main(["close", "T-0001", "--mode", "all", "--timeout", "60"])
     assert rc == 0
     card = json.loads(
-        next((proj / ".gov/tasks").glob("T-0001-*.json")).read_text("utf-8"))
+        next((proj / ".gov/tasks").glob("T-0001-*.json")).read_text(encoding="utf-8"))
     assert card["status"] == "done"
     assert card["receipt"]["green"] is True
     assert all(g["outcome"] == "PASS" for g in card["receipt"]["gates"])
@@ -192,19 +192,19 @@ def test_claim_leases_open_card_and_announces(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("GOV_CALLER", "w1")
     assert task.main(["new", "Shared card"]) == 0
     before = json.loads(next(proj.joinpath(".gov/tasks").glob("T-0001-*.json"))
-                        .read_text("utf-8"))
+                        .read_text(encoding="utf-8"))
     capsys.readouterr()
     assert task.main(["claim", "T-0001", "--ttl", "120"]) == 0
     err = capsys.readouterr().err
     assert "w1" in err and "until" in err            # holder + expiry instant
     assert "task/T-0001" in err                      # the lease resource named
-    data = json.loads(_task_lease(proj).read_text("utf-8"))
+    data = json.loads(_task_lease(proj).read_text(encoding="utf-8"))
     assert data["resource"] == "task/T-0001"
     assert data["holder"] == "w1"
     # D43 boundary: the card JSON is byte-identical — the claim lives only
     # in the runtime domain
     after = json.loads(next(proj.joinpath(".gov/tasks").glob("T-0001-*.json"))
-                       .read_text("utf-8"))
+                       .read_text(encoding="utf-8"))
     assert after == before
 
 
@@ -244,7 +244,7 @@ def test_second_claim_busy_exit3_names_holder(tmp_path, monkeypatch, capsys):
     assert task.main(["claim", "T-0001"]) == 3
     err = capsys.readouterr().err
     assert "w1" in err and "until" in err
-    assert json.loads(_task_lease(proj).read_text("utf-8"))["holder"] == "w1"
+    assert json.loads(_task_lease(proj).read_text(encoding="utf-8"))["holder"] == "w1"
 
 
 def test_release_non_holder_exit2_names_actual(tmp_path, monkeypatch, capsys):
@@ -279,7 +279,7 @@ def test_expired_claim_is_taken_over(tmp_path, monkeypatch):
         "expires_at": "2020-01-01T00:01:00+00:00",
     }), encoding="utf-8")
     assert task.main(["claim", "T-0001", "--ttl", "300"]) == 0
-    data = json.loads(_task_lease(proj).read_text("utf-8"))
+    data = json.loads(_task_lease(proj).read_text(encoding="utf-8"))
     assert data["holder"] == "w2"
 
 
@@ -299,24 +299,26 @@ def test_two_processes_claim_same_card_exactly_one_wins(tmp_path):
     for agent in ("race-a", "race-b"):
         procs.append(subprocess.Popen(
             [sys.executable, "-c",
-             "import os, sys, time\n"
+             "import os, subprocess, sys, time\n"
              "go, cid, agent = sys.argv[1:4]\n"
              "while not os.path.exists(go):\n"
              "    time.sleep(0.005)\n"
-             "os.execv(sys.executable,\n"
-             "         [sys.executable, '-m', 'gov', 'task', 'claim', cid,\n"
-             "          '--agent', agent, '--ttl', '300'])\n",
+             "# subprocess.call propagates the exit code on every OS;\n"
+             "# os.execv loses it on Windows (#168 windows CI).\n"
+             "raise SystemExit(subprocess.call(\n"
+             "    [sys.executable, '-m', 'gov', 'task', 'claim', cid,\n"
+             "      '--agent', agent, '--ttl', '300']))\n",
              str(go), "T-0001", agent],
             cwd=proj, env=env, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True))
-    go.write_text("go")
+    go.write_text("go", encoding="utf-8")
     t0 = time.monotonic()
     outs = [p.communicate(timeout=30) for p in procs]
     elapsed = time.monotonic() - t0
     codes = [p.returncode for p in procs]
     assert sorted(codes) == [0, 3], (codes, outs)
     winner_out, loser_err = outs[codes.index(0)], outs[codes.index(3)]
-    holder = json.loads(_task_lease(proj).read_text("utf-8"))["holder"]
+    holder = json.loads(_task_lease(proj).read_text(encoding="utf-8"))["holder"]
     assert holder in ("race-a", "race-b")
     assert holder in loser_err[1]          # the loser names the actual holder
     assert "claimed by" in winner_out[1]   # the winner announces on stderr
@@ -387,7 +389,7 @@ def test_close_clears_own_card_lease(tmp_path, monkeypatch, capsys):
     assert task.main(["close", "T-0001", "--timeout", "60"]) == 0
     assert not _task_lease(proj).exists()
     card = json.loads(next(proj.joinpath(".gov/tasks").glob("T-0001-*.json"))
-                      .read_text("utf-8"))
+                      .read_text(encoding="utf-8"))
     assert card["status"] == "done"
 
 
