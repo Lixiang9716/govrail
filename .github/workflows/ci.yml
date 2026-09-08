@@ -142,8 +142,11 @@ jobs:
         run: pip install -e ".[dev]"
       - name: The locale must really decode GBK — fail loud otherwise
         # A green run without a hostile locale proves nothing (rule 6).
-        # Children speak UTF-8 by design (#168); an UNPINNED text decode
-        # must turn that into mojibake here, or the simulation is vacuous.
+        # Children speak UTF-8 by design (#168); an UNPINNED GBK decode of
+        # that output must either crash or mojibake — either proves the
+        # locale bites. (The probe itself decodes BYTES by hand: the first
+        # draft used text=True and was killed by the exact reader-thread
+        # crash it demonstrates.)
         run: |
           python - <<'PY'
           import locale, os, subprocess, sys
@@ -153,12 +156,22 @@ jobs:
                   f"expected a GBK-family preferred encoding, got {enc!r} "
                   "— the locale did not build")
           r = subprocess.run([sys.executable, "-c", "print('中文')"],
-                             capture_output=True, text=True,
+                             capture_output=True,
                              env={**os.environ, "PYTHONIOENCODING": "utf-8"})
-          if r.stdout == "中文\n":
-              raise SystemExit("child UTF-8 survived the decode — the "
-                               "locale is not hostile, this job is vacuous")
-          print("hostile locale OK: preferred encoding =", enc)
+          if not r.stdout:
+              raise SystemExit("child produced no output — probe is vacuous")
+          try:
+              text = r.stdout.decode(enc)
+          except UnicodeDecodeError:
+              print("hostile locale OK: unpinned GBK decode crashes on "
+                    "child UTF-8; encoding =", enc)
+          else:
+              if text.strip() == "中文":
+                  raise SystemExit("child UTF-8 survived the decode — the "
+                                   "locale is not hostile, this job is "
+                                   "vacuous")
+              print("hostile locale OK: unpinned decode mojibake'd child "
+                    "UTF-8; encoding =", enc)
           PY
       - name: Unit tests under GBK
         run: pytest -q
