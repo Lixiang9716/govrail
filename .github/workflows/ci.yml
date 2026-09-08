@@ -122,7 +122,7 @@ jobs:
     # defects those PRs fixed, so the locale genuinely bites.
     runs-on: ubuntu-latest
     env:
-      LOCPATH: ${{ runner.temp }}/locales
+      LOCPATH: ${{ github.workspace }}/locales
       LC_ALL: zh_CN.GBK
     steps:
       - uses: actions/checkout@v4
