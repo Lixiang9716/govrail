@@ -109,3 +109,73 @@ jobs:
         # on Windows (or teaching self-test a named SKIP for them) is a
         # rule-6 semantics decision, deliberately not taken in #168.
         run: gov self-test --scope tools
+
+  gbk-locale:
+    # Issue #172: the decode wall must hold on a host that does NOT speak
+    # UTF-8. The reporter's zh-CN Windows (ANSI = GBK) is exactly that, and
+    # this job rebuilds it on Linux with a user-space GBK locale (no sudo,
+    # LOCPATH) — every subprocess text read that forgets encoding= decodes
+    # GBK there, and the first non-ASCII byte in a child's output crashes
+    # the reader thread (#168/#173's crash class). Empirical check: the
+    # pre-#168/#173 tooling under this locale failed doc-sync (encode) and
+    # test_verify_decisions_rejects_base_collision (decode) — the same two
+    # defects those PRs fixed, so the locale genuinely bites.
+    runs-on: ubuntu-latest
+    env:
+      LOCPATH: ${{ github.workspace }}/locales
+      LC_ALL: zh_CN.GBK
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the user-space GBK locale
+        run: |
+          command -v localedef >/dev/null || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq locales; }
+          mkdir -p "$LOCPATH"
+          localedef -i zh_CN -f GBK "$LOCPATH/zh_CN.GBK"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: The locale must really decode GBK — fail loud otherwise
+        # A green run without a hostile locale proves nothing (rule 6).
+        # Children speak UTF-8 by design (#168); an UNPINNED GBK decode of
+        # that output must either crash or mojibake — either proves the
+        # locale bites. (The probe itself decodes BYTES by hand: the first
+        # draft used text=True and was killed by the exact reader-thread
+        # crash it demonstrates.)
+        run: |
+          python - <<'PY'
+          import locale, os, subprocess, sys
+          enc = locale.getpreferredencoding(False)
+          if enc.lower() not in ("gbk", "cp936", "gb2312"):
+              raise SystemExit(
+                  f"expected a GBK-family preferred encoding, got {enc!r} "
+                  "— the locale did not build")
+          r = subprocess.run([sys.executable, "-c", "print('中文')"],
+                             capture_output=True,
+                             env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+          if not r.stdout:
+              raise SystemExit("child produced no output — probe is vacuous")
+          try:
+              text = r.stdout.decode(enc)
+          except UnicodeDecodeError:
+              print("hostile locale OK: unpinned GBK decode crashes on "
+                    "child UTF-8; encoding =", enc)
+          else:
+              if text.strip() == "中文":
+                  raise SystemExit("child UTF-8 survived the decode — the "
+                                   "locale is not hostile, this job is "
+                                   "vacuous")
+              print("hostile locale OK: unpinned decode mojibake'd child "
+                    "UTF-8; encoding =", enc)
+          PY
+      - name: Unit tests under GBK
+        run: pytest -q
+      - name: Rejection cases under GBK
+        run: gov self-test
+      - name: Full gate DAG under GBK
+        run: gov run --mode all
