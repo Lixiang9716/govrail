@@ -26,7 +26,7 @@ in the config instead of deleting the definition. A gate with
 without affecting the exit code. Blocking failures end with a summary block
 naming each failed gate, its first output line, and how to rerun it alone.
 
-The only third-party dependency is Python 3.
+The runtime is Python 3 plus the tree-sitter parse layer (D54).
 """
 from __future__ import annotations
 
@@ -464,21 +464,12 @@ def parse_cost(raw: str) -> dict[str, float]:
 
 
 def _history_path() -> Path:
-    """#23/D32: history belongs to the repository, not the checkout —
-    linked worktrees record into the main checkout's .gov/history (the
-    git common dir's parent), so ledgers do not fragment per worktree."""
+    """#23/D32 — see gov/anchor.py (shared with `gov stats --record`)."""
     try:
-        proc = subprocess.run(["git", "rev-parse", "--git-common-dir"],
-                              capture_output=True, text=True,
-                              encoding="utf-8", errors="replace")
-        if proc.returncode == 0:
-            common = Path(proc.stdout.strip()).resolve()
-            root = common.parent
-            if root != Path.cwd():
-                return root / ".gov" / "history" / "gates.jsonl"
-    except OSError:
-        pass
-    return Path(".gov/history/gates.jsonl")
+        from .anchor import history_path
+    except ImportError:  # direct-script execution (self-test scratch dirs)
+        from anchor import history_path
+    return history_path("gates.jsonl")
 
 
 def _run_one(gate: Gate) -> tuple[Gate, str, str, bool]:

@@ -1,0 +1,45 @@
+{
+  "classes": [
+    "struct_item",
+    "enum_item",
+    "trait_item",
+    "impl_item"
+  ],
+  "comment": [
+    "line_comment",
+    "block_comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv"
+  ],
+  "functions": [
+    "function_item"
+  ],
+  "globs": [
+    "*.rs"
+  ],
+  "grammar": "tree_sitter_rust",
+  "nesting": [
+    "if_expression",
+    "for_expression",
+    "while_expression",
+    "loop_expression",
+    "match_expression"
+  ],
+  "string": [
+    "string_literal",
+    "raw_string_literal"
+  ]
+}

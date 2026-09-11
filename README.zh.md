@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/govrail.svg)](https://pypi.org/project/govrail/)
 [![GitHub Repo stars](https://img.shields.io/github/stars/Lixiang9716/govrail)](https://github.com/Lixiang9716/govrail/stargazers)
 
-一个语言无关的、面向 agent 驱动开发的治理平面：让 coding agent 快速并行工作，同时由机器——而非人的警惕——守住质量线。唯一运行时依赖是 Python 3。
+一个语言无关的、面向 agent 驱动开发的治理平面：让 coding agent 快速并行工作，同时由机器——而非人的警惕——守住质量线。运行时是 Python 3（>= 3.10）加上为代码统计层提供解析的 tree-sitter——全部由 `pip install govrail` 安装，无需其他工具。
 
 平面提供两个机制：**门禁**（任何能被命令检查的承诺都变成机械检查）和**笔记**（每个非平凡改动记录决策、被打败的方案与后果）。双语配对让对外展示文档保持同步。
 
@@ -33,7 +33,7 @@ pip install govrail        # 或：uv tool install govrail / pipx install govrai
 （JSON API 先于 simple index 更新）；此时改用官方源安装：
 `pip install govrail --index-url https://pypi.org/simple`。
 
-这把 `gov` CLI 放到你的 PATH 上（纯标准库，无第三方依赖）。每个动作一个子命令：
+这把 `gov` CLI 放到你的 PATH 上（Python + tree-sitter，仅此而已）。每个动作一个子命令：
 
 ```sh
 gov init --project <path>      # 把平面注入现有项目
@@ -46,7 +46,7 @@ gov preset show python-lib     # 只读：preset 将落地的一切
 gov preset apply docs-bilingual --project <path>  # 落地其门 + 技能 + manifest 提示，
                                #  增量且幂等（绝不覆盖已有）
 gov init --project <path> --preset agent-heavy  # init 后立即 apply，一条命令起步
-gov doctor                     # 环境自检（PATH、python、钩子、schema、未采用的门）
+gov doctor                     # 环境自检（PATH、python、解析层、钩子、schema、未采用的门）
 gov doctor --json             # 机器可读：{status, checks, problems}
 gov note new --class process --ref D6 "标题"  # 笔记脚手架（预校验）
 gov init --project <path> --hooks --ci  # 同时安装 pre-push 钩子与 CI

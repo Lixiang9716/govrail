@@ -152,10 +152,12 @@ signatures are future work.
   to a mode — parking is `"enabled": false`, the one loud mechanism
   (a `DISABLED` line); `gov run --every-gate` is the explicit full
   matrix. Every FAIL is classified (#139/D47): the case is replayed in
-  a minimal clean environment (a temp copy of the stdlib-only package,
-  no host `PYTHON*`), and the FAIL line is labeled `environment-suspect`
-  (replay passes) or `tool-defect` (replay fails too) — a diagnosis,
-  never a pass; `--case NAME` reruns a single case by name.
+  a minimal clean environment (a temp copy of the package alone, no host
+  `PYTHON*`; the compiled tree-sitter dependency resolves from this
+  interpreter's site-packages in both, D54), and the FAIL line is
+  labeled `environment-suspect` (replay passes) or `tool-defect`
+  (replay fails too) — a diagnosis, never a pass; `--case NAME` reruns
+  a single case by name.
 - **Task cards** carry the subagent hand-off (`gov task`, #125/D43):
   `gov task new "Title" --check "criterion"` writes `.gov/tasks/T-0001-*.json`
   pinning the current rule set (`.gov/rules.md` + `gates.json`) by content

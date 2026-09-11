@@ -27,7 +27,7 @@ from typing import Any
 
 from . import archive_notes, audit_notes, change_scope, gates, locks, recall, review
 from . import doctor, note, presets, receipt, self_test, trend, whatsnew
-from . import decision, task, verify_archive, verify_decisions, verify_doc_sync
+from . import decision, stats, task, verify_archive, verify_decisions, verify_doc_sync
 from . import verify_conflict_markers
 from . import verify_note_presence
 from . import verify_notes, verify_rubric
@@ -799,6 +799,7 @@ _COMMANDS = {
     "verify-conflict-markers": "fail when changed files carry git conflict markers (e.g. --base <ref>, --staged)",
     "review": "assemble the review dossier for a diff (scope, notes, recall, rubric)",
     "trend": "gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)",
+    "stats": "structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger",
     "doctor": "environment self-check (PATH, python, hooks, gates schema)",
     "note": "note scaffold and pre-commit check (new/check)",
     "whatsnew": "usage-oriented highlights since a version",
@@ -1073,6 +1074,8 @@ def main(argv: list[str] | None = None) -> int:
         return review.main(rest)
     if cmd == "trend":
         return trend.main(rest)
+    if cmd == "stats":
+        return stats.main(rest)
     if cmd == "doctor":
         return doctor.main(rest)
     if cmd == "note":
