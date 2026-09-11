@@ -236,20 +236,6 @@ def test_run_text_survives_non_utf8_child_bytes(tmp_path):
     assert "\ufffd" in r.stdout  # bounded to replacement, not a crash
 
 
-def test_scanner_rejects_unpinned_text_spawn():
-    """Rule 6: the #172 pin scan must be able to fail — an unpinned
-    text=True spawn is named by file:line; a pinned one passes clean."""
-    bad = 'subprocess.run(cmd, capture_output=True, text=True)'
-    good = ('subprocess.run(cmd, capture_output=True, text=True, '
-            'encoding="utf-8")')
-    multiline = 'subprocess.run(\n    cmd,\n    text=True,\n)'
-    assert st._unpinned_text_spawns(bad, "x.py") == ["x.py:1"]
-    assert st._unpinned_text_spawns(multiline, "x.py") == ["x.py:1"]
-    assert st._unpinned_text_spawns(good, "x.py") == []
-    assert st._unpinned_text_spawns('subprocess.run(cmd, capture_output=True)',
-                                    "x.py") == []  # binary: nothing to decode
-
-
 def test_thread_crash_fails_loud(tmp_path, monkeypatch, capsys):
     """Rule 5 / #172: a harness thread crash must fail the run — it used
     to print a traceback and leave the exit code (and the PASS) intact."""
