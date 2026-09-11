@@ -759,6 +759,94 @@ def decision_parallel(base):
     gov("verify-decisions", cwd=p)
 
 
+
+def trend_base_split(base):
+    """--base cuts the trend window at the base ref's COMMIT date
+    (#119). Deterministic via a hand-crafted ledger (metrics, not
+    evidence — D44's line says crafting it is legitimate) and a
+    backdated commit: two runs 3 days old, two now, base dated 2 days
+    ago — the split must be 100ms early -> 300ms late, x3.0 mover."""
+    from datetime import datetime, timedelta, timezone
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "feature.txt").write_text("work\n", encoding="utf-8")
+    git("add", "-A", cwd=p)
+    # a BACKDATED commit: committer/author dates are what %cI reports,
+    # and they are the line trend's --base split cuts at
+    past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    env = dict(os.environ)
+    env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = past
+    subprocess.run(["git", "commit", "--amend", "--no-edit",
+                    "--date=" + past],
+                   cwd=p, env=env, capture_output=True, check=True)
+    base_ref = "HEAD"
+
+    now = datetime.now(timezone.utc)
+    early_ts = (now - timedelta(days=3)).isoformat(timespec="seconds")
+    late_ts = now.isoformat(timespec="seconds")
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    gate = {"gate": "g", "outcome": "PASS", "blocking": False,
+            "duration_ms": 100, "detail": "", "selected_by": "e2e",
+            "scoped_out": False}
+    late_gate = dict(gate, duration_ms=300)
+    lines = [
+        {"ts": early_ts, "gates": [gate]},
+        {"ts": early_ts, "gates": [dict(gate, duration_ms=100)]},
+        {"ts": late_ts, "gates": [late_gate]},
+        {"ts": late_ts, "gates": [dict(late_gate)]},
+    ]
+    with history.open("a", encoding="utf-8") as f:
+        for rec in lines:
+            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+
+    r = gov("trend", "--base", base_ref, cwd=p)
+    # the split is at the base commit's date: the 3-day-old runs are
+    # early, the now-runs late — 100ms -> 300ms is a x3.0 mover
+    assert "p50 100ms → 300ms" in r.stdout, r.stdout
+    assert "×3.0 ↑" in r.stdout, r.stdout
+    # without --base the window halves of the same 4 runs give the same
+    # answer (first half early, second half late) — the two split paths
+    # agree on this fixture
+    r = gov("trend", cwd=p)
+    assert "p50 100ms → 300ms" in r.stdout, r.stdout
+
+
+def manifest_drift(base):
+    """The version-drift chain: a stale manifest version is a doctor
+    NOTE (never a crash), it retunes whatsnew's default `since`, it
+    names itself in upgrade --json, and aligning it silences all three."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    manifest = p / ".gov" / "manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    current = data["version"]
+    stale = "0.1.0"
+    data["version"] = stale
+    manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+    r = gov("doctor", cwd=p)  # a note, not a problem: exit stays 0
+    assert f"manifest initialized with govrail {stale}" in r.stdout
+    assert "gov init --upgrade" in r.stdout
+
+    # whatsnew's default `since` follows the manifest: an old manifest
+    # means the operator sees everything since
+    r = gov("whatsnew", cwd=p)
+    assert f"since {stale}" in r.stdout
+    assert f"## {current}" in r.stdout
+
+    r = gov("init", "--upgrade", "--json", cwd=p)
+    value = json.loads(r.stdout)
+    assert value["initialized_with"] == stale
+    assert value["package"] == current
+
+    # aligning the manifest silences the drift note
+    data["version"] = current
+    manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    r = gov("doctor", cwd=p)
+    assert f"manifest initialized with govrail {stale}" not in r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -776,6 +864,8 @@ SCENARIOS = {
     "postmortem_recall": postmortem_recall,
     "review_grade": review_grade,
     "archive_closure": archive_closure,
+    "trend_base_split": trend_base_split,
+    "manifest_drift": manifest_drift,
     "surfaces_custom": surfaces_custom,
     "decision_parallel": decision_parallel,
     "cost_attribution": cost_attribution,
