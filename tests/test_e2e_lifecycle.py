@@ -43,7 +43,7 @@ def _gov_env() -> dict:
 
 def gov(*args, cwd=None, expect=0, timeout=300):
     """One CLI invocation, asserted against its expected exit code."""
-    cwd = cwd or Path("/tmp")
+    cwd = cwd or REPO  # a real directory on every platform
     r = subprocess.run(
         [sys.executable, "-m", "gov", *args], cwd=cwd,
         capture_output=True, text=True, encoding="utf-8", errors="replace",
