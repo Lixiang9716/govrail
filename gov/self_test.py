@@ -161,34 +161,6 @@ def _run_text(cmd: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, **kw)
 
 
-def _unpinned_text_spawns(src: str, where: str) -> list[str]:
-    """``file:line`` of every text-mode subprocess call missing an encoding.
-
-    The scanner behind ``test_text_subprocess_decodes_are_pinned``: a
-    ``text=True``/``universal_newlines`` spawn without ``encoding=``
-    decodes with the locale codec — the #172 crash class. Call bodies are
-    captured by balanced-paren scan so multiline invocations read whole.
-    """
-    bad: list[str] = []
-    for m in re.finditer(r"subprocess\.(?:run|Popen|check_output)\s*\(", src):
-        start = m.end() - 1
-        depth = 0
-        i = start
-        while i < len(src):
-            if src[i] == "(":
-                depth += 1
-            elif src[i] == ")":
-                depth -= 1
-                if depth == 0:
-                    break
-            i += 1
-        call = src[start:i + 1]
-        is_text = "text=True" in call or "universal_newlines" in call
-        if is_text and "encoding=" not in call:
-            bad.append(f"{where}:{src[:m.start()].count(chr(10)) + 1}")
-    return bad
-
-
 def test_verify_notes_rejects_missing_section() -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -1676,11 +1648,22 @@ def test_text_subprocess_decodes_are_pinned() -> None:
     a case's output crashed the reader thread while the case still PASSED.
     The package itself must stay on the wall #168 built for the runner's
     git decodes: this case re-runs that proof on every ``gov self-test``,
-    wheel included.
+    wheel included — now through the check engine's shipped rule (D54),
+    which was proven equivalent to the original regex scanner by the
+    differential in tests/test_encoding_differential.py. Only the shipped
+    rules run here: a host project's .gov/checks must never perturb the
+    product's own rejection cases.
     """
-    bad: list[str] = []
-    for p in sorted(HERE.rglob("*.py")):
-        bad += _unpinned_text_spawns(p.read_text(encoding="utf-8"), p.name)
+    try:
+        from . import checks as checks_mod
+    except ImportError:  # direct-script execution (python gov/self_test.py)
+        import checks as checks_mod
+    rules = [r for r in checks_mod.load_rules("python",
+                                              include_project=False)
+             if r.id == "python/subprocess-text-encoding"]
+    reports = checks_mod.run_lang(HERE, "python", rules)
+    bad = [f"{f.path}:{f.line()}"
+           for r in reports for f in r.findings if not f.suppressed]
     assert not bad, (
         "text-mode subprocess calls decode with the locale codec unless "
         "encoding is pinned — on a GBK-locale Windows the first non-ASCII "
