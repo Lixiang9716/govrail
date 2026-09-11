@@ -49,7 +49,7 @@ version = { attr = "gov.__version__" }
 include = ["gov*"]
 
 [tool.setuptools.package-data]
-"gov" = ["HIGHLIGHTS.md", "langs/*.json"]
+"gov" = ["HIGHLIGHTS.md", "langs/*.json", "checks/*.json"]
 "gov.templates" = ["*", "skills/*/SKILL.md",
                    "presets/*/preset.json", "presets/*/README.md",
                    "presets/*/skills/*/SKILL.md"]

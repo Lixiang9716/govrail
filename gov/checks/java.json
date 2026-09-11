@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "id": "java/syntax",
+      "kind": "parse-errors",
+      "severity": "error",
+      "message": "file does not parse (editor-level syntax check \u2014 a compiler verdict belongs to the language's own compiler)"
+    }
+  ]
+}
