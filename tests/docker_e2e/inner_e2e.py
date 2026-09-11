@@ -304,6 +304,74 @@ def locale_bites(base):
     gov("check", cwd=p, env_extra=env)
 
 
+def perf_kilo(base):
+    """The scale step: 1,200 files across a nested tree — parse, metrics
+    and checks must stay inside a stated budget, and the counts must be
+    EXACT (a perf test that only asserts "it finished" would swallow a
+    walker that silently skipped half the tree)."""
+    p = fresh_project(base)
+    src = p / "src" / "pkg"
+    src.mkdir(parents=True)
+    body = ("\n".join(
+        f"def fn_{i}(a, b):\n"
+        f"    total = a + b\n"
+        f"    if total > {i}:\n"
+        "        return total\n"
+        "    return 0\n" for i in range(5)))
+    for i in range(1200):
+        d = src / f"pack{i % 12}"
+        d.mkdir(exist_ok=True)
+        (d / f"mod_{i}.py").write_text(body, encoding="utf-8")
+    gov("init", cwd=p)
+    t0 = time.monotonic()
+    r = gov("stats", "--json", "--lang", "python", cwd=p, timeout=300)
+    stats_dt = time.monotonic() - t0
+    value = json.loads(r.stdout)
+    py = value["languages"]["python"]
+    assert py["files"] == 1200, f"walker lost files: {py['files']}"
+    assert py["symbols"]["functions"] == 6000
+    # exact, because the walker is not allowed to lose or invent lines:
+    # 5 functions x (5 code lines + 1 blank from the join) = 29 per file
+    assert py["lines"]["total"] == 1200 * 29
+    t0 = time.monotonic()
+    gov("check", cwd=p, timeout=300)
+    check_dt = time.monotonic() - t0
+    assert stats_dt < 120, f"stats took {stats_dt:.1f}s at 1.2k files"
+    assert check_dt < 120, f"check took {check_dt:.1f}s at 1.2k files"
+
+
+def drift_chaos(base):
+    """The adoption surface under stress: customization, loss, adoption,
+    and the uninstall warning — every transition of the drift machine
+    (D34) walked through the CLI."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    # 1. a customized file: upgrade names the drift honestly
+    rules = p / ".gov" / "rules.md"
+    rules.write_text(rules.read_text(encoding="utf-8")
+                     + "\n## 9. house rule\n", encoding="utf-8")
+    r = gov("init", "--upgrade", cwd=p)
+    assert "DIFFERS" in r.stdout
+    # 2. a lost file: upgrade reports MISSING as adoptable, adopt restores
+    lost = p / ".gov" / "rejections" / "README.md"
+    lost.unlink()
+    r = gov("init", "--upgrade", cwd=p)
+    assert "MISSING" in r.stdout
+    gov("init", "--adopt", cwd=p)
+    assert lost.exists(), "--adopt must land the missing file"
+    r = gov("init", "--upgrade", cwd=p)
+    assert "MISSING" not in r.stdout
+    # 3. --json is exactly one value even mid-chaos
+    r = gov("init", "--upgrade", "--json", cwd=p)
+    value = json.loads(r.stdout)
+    assert "files" in value
+    # 4. uninstall must NOT go quietly over the customized tree
+    r = gov("uninstall", cwd=p, expect=1)  # warns, names the files, exits 1
+    gov("uninstall", "--force", cwd=p)
+    assert not (p / ".gov").exists()
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -314,6 +382,8 @@ SCENARIOS = {
     "prepush_hook": prepush_hook,
     "worktree_history": worktree_history,
     "perf_smoke": perf_smoke,
+    "perf_kilo": perf_kilo,
+    "drift_chaos": drift_chaos,
 }
 
 
