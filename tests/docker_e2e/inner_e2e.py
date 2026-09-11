@@ -624,6 +624,51 @@ def archive_closure(base):
     gov("verify-archive", cwd=p)
 
 
+
+def cost_attribution(base):
+    """The cost ledger's read-side (D45) with a hand-checkable design:
+    seven runs whose per-caller sums and early/late window split are
+    known by construction — alpha jumps 100,100 -> 300,300, beta stays
+    flat at 50, one run carries cost with no tag at all. Attributing
+    spend across callers is exactly what the ledger shape exists for;
+    the assertions read the ROLL-UP, not the raw history."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    # 8 runs, interleaved so the window's GLOBAL halves (first 4 vs last
+    # 4) give every caller an exact, hand-checkable split: alpha triples
+    # 200 -> 600 across the halves, beta drains 100 -> 0, the untagged
+    # runs are attributed rather than dropped (0 -> 160)
+    plan = [("alpha", "100"), ("beta", "50"),
+            ("alpha", "100"), ("beta", "50"),
+            ("alpha", "300"), (None, "80"),
+            ("alpha", "300"), (None, "80")]
+    for tag, tokens in plan:
+        if tag:
+            gov("run", "--tag", tag, "--cost", f"tokens={tokens}", cwd=p)
+        else:
+            gov("run", "--cost", f"tokens={tokens}", cwd=p)
+
+    r = gov("trend", "--cost", cwd=p)
+    out = r.stdout
+    assert "8 run(s) in" in out and "8 reporting cost" in out, out
+    # sums are hand-computed: alpha 800 (200 early -> 600 late, the 3x
+    # jump the plan builds), beta flat 100 (50 -> 50), and the untagged
+    # runs are attributed to "(untagged)" rather than dropped
+    assert "caller alpha: 4 run(s): tokens 800 " \
+           "(200 early → 600 late)" in out, out
+    assert "caller beta: 2 run(s): tokens 100 (100 early → 0 late)" in out, \
+        out
+    assert "caller (untagged): 2 run(s): tokens 160 (0 early → 160 late)" \
+        in out, out
+
+    # the documented refusal: --cost already groups by caller
+    r = gov("trend", "--cost", "--by-tag", cwd=p, expect=2)
+    assert "cannot be combined" in r.stderr
+    r = gov("trend", "--cost", "--gate", "self-test", cwd=p, expect=2)
+    assert "--gate filters durations only" in r.stderr
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -641,6 +686,7 @@ SCENARIOS = {
     "postmortem_recall": postmortem_recall,
     "review_grade": review_grade,
     "archive_closure": archive_closure,
+    "cost_attribution": cost_attribution,
     "perf_night": perf_night,
 }
 
