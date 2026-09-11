@@ -51,6 +51,15 @@ images, which is a deliberate act, not a default test. Wiring it into
 CI (ubuntu runners have Docker) is a one-line workflow step and a
 maintainer decision.
 
+## Runtime-variant evaluation (Kata/gVisor)
+
+Evaluated and DEFERRED: both need a runtime plugin this environment does
+not ship (runc only), and the plane is stdlib-Python — no cgroups,
+networking, or userns syscalls where an OCI runtime boundary would
+change behavior. The stdlib wall (#168/#172's) is the compatibility
+surface, and it is covered by the GBK cell. Revisit on a
+runtime-specific incident.
+
 ## Locale-variant evaluation (zh_TW/Big5)
 
 Evaluated and DEFERRED: a Big5 cell would exercise the same

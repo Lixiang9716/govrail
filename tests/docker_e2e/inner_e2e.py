@@ -669,6 +669,96 @@ def cost_attribution(base):
     assert "--gate filters durations only" in r.stderr
 
 
+
+def surfaces_custom(base):
+    """The custom change-surface: .gov/surfaces.json maps path globs to
+    a surface name and the gates covering it — matched files suggest
+    exactly those gates (most specific first, D25); unmatched files
+    fall through to gates.json paths. A malformed mapping is refused
+    loudly (rule 5)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gates = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    gates["gates"].append(
+        {"id": "ml", "command": ["true"], "paths": ["model/**"]})
+    (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
+    (p / ".gov" / "surfaces.json").write_text(json.dumps(
+        {"experiments/**": {"surface": "experiments",
+                            "gates": ["source-limits"]}}), encoding="utf-8")
+    (p / "docs").mkdir(exist_ok=True)
+    commit_all(p, "surfaces + gates configured")
+
+    # a change OUTSIDE every custom surface: falls back to gates.json
+    # paths — the custom surface's gates are not suggested
+    (p / "docs" / "new.md").write_text("doc\n", encoding="utf-8")
+    r = gov("change-scope", "--base", "HEAD", cwd=p)
+    assert "source-limits" not in r.stdout, r.stdout
+    commit_all(p, "docs change")
+
+    # a change under the custom surface: the surface is named and its
+    # gates suggested, most specific first (D25)
+    (p / "experiments").mkdir(exist_ok=True)
+    (p / "experiments" / "probe.py").write_text("x = 1\n",
+                                                encoding="utf-8")
+    r = gov("change-scope", "--base", "HEAD", cwd=p)
+    assert "experiments" in r.stdout, r.stdout
+    assert "source-limits" in r.stdout, r.stdout
+
+    # a malformed mapping is refused loudly, naming the pattern (rule 5)
+    (p / ".gov" / "surfaces.json").write_text(
+        json.dumps({"broken/**": "not-a-mapping"}), encoding="utf-8")
+    r = gov("change-scope", "--base", "HEAD", cwd=p, expect=2)
+    both = r.stdout + r.stderr
+    assert "broken/**" in both and '"surface"' in both, both
+
+
+def decision_parallel(base):
+    """Two concurrent `decision add` calls in ONE checkout: the flock
+    must cover the whole read-modify-write, or the second writer's
+    stale view silently deletes the first writer's decision (found live
+    by this very scenario — the old lock guarded only the write)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    d = p / "docs" / "decisions.md"
+    d.parent.mkdir(parents=True, exist_ok=True)
+    d.write_text("## D1 — adopt\n\n- **选项**：gov init\n\n"
+                 "- **状态**：已决\n", encoding="utf-8")
+    commit_all(p, "seed D1")
+    draft = p / "d2.md"
+    draft.write_text("parallel plan\n\n- **选项**：a\n\n"
+                     "- **状态**：已决\n", encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    # two REAL processes race for the SAME D2: mutual exclusion means
+    # exactly one wins, and the loser's refusal must not have lost the
+    # winner's write (the read-modify-write is serialized under flock)
+    procs = [
+        subprocess.Popen(
+            ["gov", "decision", "add", "--from", str(draft), "--id", "D2"],
+            cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", env=env),
+        subprocess.Popen(
+            ["gov", "decision", "add", "--from", str(draft), "--id", "D2"],
+            cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", env=env),
+    ]
+    outs = [pr.communicate(timeout=120) for pr in procs]
+    codes = [pr.returncode for pr in procs]
+    assert sorted(codes) == [0, 1], (
+        f"exactly one winner: got {codes} ({outs})")
+    text = d.read_text(encoding="utf-8")
+    assert text.count("## D2 — parallel plan") == 1, \
+        "the winner's decision is present exactly once"
+    assert "## D1 — adopt" in text, "the seed decision was not clobbered"
+    gov("verify-decisions", cwd=p)
+    assert not list(d.parent.glob(".decision.lock")), \
+        "the lock file must not litter the tree"
+    # serialization is observable: a sequential add after the race sees
+    # the winner's D2 and allocates D3 (a concurrent D3 would refuse)
+    gov("decision", "add", "--from", str(draft), "--id", "D3", cwd=p)
+    gov("verify-decisions", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -686,6 +776,8 @@ SCENARIOS = {
     "postmortem_recall": postmortem_recall,
     "review_grade": review_grade,
     "archive_closure": archive_closure,
+    "surfaces_custom": surfaces_custom,
+    "decision_parallel": decision_parallel,
     "cost_attribution": cost_attribution,
     "perf_night": perf_night,
 }
