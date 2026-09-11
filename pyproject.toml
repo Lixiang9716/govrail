@@ -7,16 +7,28 @@ name = "govrail"
 dynamic = ["version"]
 description = "A language-agnostic governance plane for agent-driven development: gates and notes, delivered by the gov CLI."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "govrail" }]
 keywords = ["agent", "governance", "gates", "notes", "development"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
 ]
-dependencies = []
+dependencies = [
+    "tree-sitter>=0.26",
+    "tree-sitter-python",
+    "tree-sitter-go",
+    "tree-sitter-java",
+    "tree-sitter-rust",
+    "tree-sitter-javascript",
+    "tree-sitter-typescript",
+    "tree-sitter-c",
+    "tree-sitter-cpp",
+]
 
 [project.urls]
 Homepage = "https://github.com/Lixiang9716/govrail"
@@ -37,7 +49,7 @@ version = { attr = "gov.__version__" }
 include = ["gov*"]
 
 [tool.setuptools.package-data]
-"gov" = ["HIGHLIGHTS.md"]
+"gov" = ["HIGHLIGHTS.md", "langs/*.json"]
 "gov.templates" = ["*", "skills/*/SKILL.md",
                    "presets/*/preset.json", "presets/*/README.md",
                    "presets/*/skills/*/SKILL.md"]

@@ -9,7 +9,9 @@ English | [中文](README.zh.md)
 
 A language-agnostic governance plane for agent-driven development: coding
 agents work fast in parallel while machines — not vigilance — hold the quality
-line. The only runtime dependency is Python 3.
+line. The runtime is Python 3 (>= 3.10) plus the tree-sitter parsers that
+power the code-stat layer — all installed by `pip install govrail`, no
+other tooling required.
 
 The plane ships two mechanisms: **gates** (any promise a command can check
 becomes a mechanical check) and **notes** (every non-trivial change records the
@@ -37,8 +39,8 @@ On a lagging pip mirror the wheel can be missing while `pip index versions`
 already lists it (the JSON API updates before the simple index). Install
 from the official index then: `pip install govrail --index-url https://pypi.org/simple`.
 
-This puts the `gov` CLI on your PATH (stdlib only — no third-party
-dependencies). It has one subcommand per action:
+This puts the `gov` CLI on your PATH (Python + tree-sitter, nothing
+else). It has one subcommand per action:
 
 ```sh
 gov init --project <path>     # inject the plane into an existing project
@@ -51,7 +53,7 @@ gov preset show python-lib     # read-only: exactly what a preset lands
 gov preset apply docs-bilingual --project <path>  # land its gates + skills + hints,
                                #  additive and idempotent (never overwrites)
 gov init --project <path> --preset agent-heavy  # init, then apply the preset in one command
-gov doctor                     # environment self-check (PATH, python, hooks, schema, unadopted gates)
+gov doctor                     # environment self-check (PATH, python, parse layer, hooks, schema, unadopted gates)
 gov doctor --json             # machine-readable: {status, checks, problems}
 gov note new --class process --ref D6 "Title"  # scaffold a note, pre-validated
 gov init --project <path> --hooks --ci  # also install a pre-push hook and CI
