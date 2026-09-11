@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.30.0](https://github.com/Lixiang9716/govrail/compare/v0.29.4...v0.30.0) (2026-09-11)
+
+
+### Features
+
+* encoding= checks ride the check engine — differential proof retires the regex scanner ([#182](https://github.com/Lixiang9716/govrail/issues/182)) ([d8036b5](https://github.com/Lixiang9716/govrail/commit/d8036b5661af49c06b32bac1dec402a4804141e3))
+* the check engine — syntax-class rules over the parse layer (D57) ([#181](https://github.com/Lixiang9716/govrail/issues/181)) ([4b0e00f](https://github.com/Lixiang9716/govrail/commit/4b0e00f951ad596a382ffad59edbc651a835ef45))
+* tree-sitter as a base dependency — the parse layer and gov stats (D54) ([#179](https://github.com/Lixiang9716/govrail/issues/179)) ([dc7e38c](https://github.com/Lixiang9716/govrail/commit/dc7e38cd7354c7724746ab003e317862840f1484))
+
 ## [0.29.4](https://github.com/Lixiang9716/govrail/compare/v0.29.3...v0.29.4) (2026-09-11)
 
 
