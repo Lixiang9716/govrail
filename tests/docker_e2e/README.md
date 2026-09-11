@@ -12,10 +12,11 @@ dependencies, because an adopter's machine has no pytest either.
 |---|---|
 | `3.10-slim` … `3.13-slim` | the supported Python floor-to-ceiling matrix (Debian/glibc) |
 | `3.12-alpine` | musl: the wheelhouse claim (musllinux wheels for tree-sitter) is real, `apk` git included |
+| `3.10-bookworm` | the floor interpreter on the PREVIOUS Debian stable — the old-glibc corner, walked not assumed |
 | `3.12-slim-nonroot` | the lifecycle under user 1000 — permissions and ownership edges |
 | `pypi-adopter` | `pip install govrail==<version>` from the real index, then `gov --version` (network cell; a mirror outage reports SKIP, never red) |
 
-Eight scenarios run in every deterministic cell: wheel version, the full
+Thirteen-plus scenarios run in every deterministic cell: wheel version, the full
 lifecycle (init → gates → conflict → task close with receipt → verify →
 uninstall), the C-locale hostility round (#168/#172's wall on an
 ASCII-locale host with Chinese content), eight-process lease contention

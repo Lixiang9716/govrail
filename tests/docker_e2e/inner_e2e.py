@@ -338,6 +338,8 @@ def perf_kilo(base):
     check_dt = time.monotonic() - t0
     assert stats_dt < 120, f"stats took {stats_dt:.1f}s at 1.2k files"
     assert check_dt < 120, f"check took {check_dt:.1f}s at 1.2k files"
+    print(f"    perf_kilo measured: stats {stats_dt:.1f}s, "
+          f"check {check_dt:.1f}s")
 
 
 def drift_chaos(base):
@@ -447,6 +449,38 @@ def perf_night(base):
     assert stats_dt < 600 and check_dt < 600, (
         f"nightly tier overrun: stats {stats_dt:.1f}s, "
         f"check {check_dt:.1f}s")
+    print(f"    perf_night measured: stats {stats_dt:.1f}s, "
+          f"check {check_dt:.1f}s")
+
+
+def postmortem_recall(base):
+    """The memory read-side over the postmortem corpus: a hit names
+    the document, a miss states the corpus it searched (with per-term
+    counts) and exits 1 — a miss is never silent about WHAT was
+    searched (#148)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    pm = p / "docs" / "postmortem"
+    pm.mkdir(parents=True)
+    (pm / "2026-09-11-outage.md").write_text(
+        "# Postmortem: the outage\n\nroot cause: cache stampede\n",
+        encoding="utf-8")
+    r = gov("recall", "outage", cwd=p)
+    # the corpus statement is DELIBERATELY on stderr (stdout stays the
+    # ranked hit list) — assert against both streams
+    both = r.stdout + r.stderr
+    assert "2026-09-11-outage.md" in r.stdout, "the hit names the doc"
+    assert "postmortems 1" in both, "the corpus statement counts it"
+    r = gov("recall", "quantum-entangle", cwd=p, expect=1)
+    both = r.stdout + r.stderr
+    assert "corpus" in both and "postmortems 1" in both, (
+        "a miss must state what was searched")
+    assert "quantum-entangle: 0" in r.stdout, "per-term counts on a miss"
+    # a Chinese term round-trips the same read-side (the UTF-8 wall)
+    (pm / "2026-09-12-中文复盘.md").write_text(
+        "# Postmortem: 中文复盘\n\n根因：缓存雪崩\n", encoding="utf-8")
+    r = gov("recall", "缓存雪崩", cwd=p)
+    assert "中文复盘" in r.stdout
 
 
 SCENARIOS = {
@@ -463,6 +497,7 @@ SCENARIOS = {
     "perf_kilo": perf_kilo,
     "drift_chaos": drift_chaos,
     "decisions_dir": decisions_dir,
+    "postmortem_recall": postmortem_recall,
     "perf_night": perf_night,
 }
 

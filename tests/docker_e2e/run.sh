@@ -89,8 +89,12 @@ run_cell() { # $1 = tag; $2 = name; extra docker args via $3...
 }
 
 FAILED=0
-# 3.10-bookworm pins the OLD-glibc axis: the floor interpreter on the
-# previous Debian stable, not just the newest.
+# 3.10-bookworm pins the previous-Debian glibc. 3.10-bullseye (one
+# OLDER) was attempted and DROPPED: post-EOL, deb.debian.org serves a
+# stale security index and archive.debian.org's frozen set is skewed
+# against the baked base image — apt closure is broken either way. An
+# EOL-suite cell needs a pre-baked image, which is nightly territory,
+# not a per-PR cell.
 CELLS="3.10-slim 3.11-slim 3.12-slim 3.13-slim 3.12-alpine 3.10-bookworm"
 SPECIAL="gbk cross crossdir pypi nightly"
 if [ -n "$CELL" ]; then
@@ -105,6 +109,7 @@ for cell in $CELLS; do
   fi
   case "$cell" in
     3.10-bookworm) base="python:3.10-slim-bookworm" ;;
+    3.10-bullseye) base="python:3.10-slim-bullseye" ;;
     *) base="python:$cell" ;;
   esac
   build_cell "$base" "$cell" || { FAILED=1; continue; }
