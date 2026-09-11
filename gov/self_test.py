@@ -1583,6 +1583,72 @@ def test_parse_layer_metrics_mean_what_they_claim() -> None:
         assert "if_statment" in bad.stdout
 
 
+def test_check_engine_mechanisms_are_real() -> None:
+    """D57: the check engine's verdict machinery, proven in-wheel.
+
+    The shipped syntax rule goes RED on a broken file naming file:line;
+    the query difference finds the argument-less candidate and discharges
+    the one that HAS an argument; a suppression discharges exactly its
+    rule on exactly its line and lands in the ledger as a counted
+    exemption. A rule whose query names a node kind its grammar lacks
+    fails the run loudly (exit 2) even when no file would ever reach it.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        proj = root / ".gov" / "checks"
+        proj.mkdir(parents=True)
+        (proj / "python.json").write_text(json.dumps({"rules": [
+            {"id": "proof/bare-eval", "kind": "query",
+             "severity": "warning", "message": "bare eval",
+             "query": "((call function: (identifier)) @gov-node)",
+             "absent_query": "(argument_list (_))"},
+        ]}), encoding="utf-8")
+        (root / "broken.py").write_text("def f(:\n", encoding="utf-8")
+        (root / "calls.py").write_text(
+            "eval('has args')\n"
+            "eval()  # gov:ignore-check proof/bare-eval\n"
+            "eval()\n",
+            encoding="utf-8")
+        env = _pinned_env()
+        result = _run_text(
+            [sys.executable, "-m", "gov", "check", "--lang", "python",
+             "--json"],
+            cwd=root, env=env, capture_output=True, text=True,
+        )
+        assert result.returncode == 1, \
+            "a broken file plus an unsuppressed finding must block\n" \
+            + result.stdout + result.stderr
+        value = json.loads(result.stdout)
+        assert value["summary"]["blocking"] >= 1, value["summary"]
+        by_path = {f["path"]: f["findings"] for f in value["files"]}
+        # The syntax rule names the broken file with a line number.
+        syn = [f for f in by_path.get("broken.py", [])
+               if f["rule"] == "python/syntax"]
+        assert syn and all(f["line"] >= 1 for f in syn)
+        # Difference: only the argument-less eval() on line 3 stands;
+        # line 1 discharged by the absent query, line 2 by the marker.
+        bare = [f for f in by_path.get("calls.py", [])
+                if f["rule"] == "proof/bare-eval"]
+        active = [f for f in bare if not f["suppressed"]]
+        assert [f["line"] for f in active] == [3], bare
+        assert sum(1 for f in bare if f["suppressed"]) == 1
+        # A ghost node kind must fail the run loudly even though no file
+        # would ever reach the rule.
+        (proj / "python.json").write_text(json.dumps({"rules": [
+            {"id": "proof/ghost", "kind": "query", "severity": "error",
+             "message": "m", "query": "(call function: (nope))"},
+        ]}), encoding="utf-8")
+        (root / "broken.py").unlink()
+        (root / "calls.py").unlink()
+        ghost = _run_text(
+            [sys.executable, "-m", "gov", "check", "--lang", "python"],
+            cwd=root, env=env, capture_output=True, text=True,
+        )
+        assert ghost.returncode == 2 and "proof/ghost" in ghost.stderr, \
+            ghost.stdout + ghost.stderr
+
+
 def test_preset_rejects_unknown_name() -> None:
     """D53: an unknown preset name must exit 2 naming it and listing the
     available presets — never a silent empty adoption."""
@@ -1672,6 +1738,7 @@ CASES = [
     test_run_merge_rejects_text_conflict,
     test_failure_classifier_labels_tool_vs_environment,
     test_parse_layer_metrics_mean_what_they_claim,
+    test_check_engine_mechanisms_are_real,
     test_preset_rejects_unknown_name,
     test_text_subprocess_decodes_are_pinned,
 ]
