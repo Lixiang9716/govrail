@@ -3,6 +3,12 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- encoding= checks ride the check engine — differential proof retires the regex scanner
+- the check engine — syntax-class rules over the parse layer (D57)
+- tree-sitter as a base dependency — the parse layer and gov stats (D54)
+
 ## 0.29.4 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - self-test's undeclared-case warning prints the remedy inline
