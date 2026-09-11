@@ -19,11 +19,17 @@ family. All failures are reported, not just the first.
 
 Every FAIL is classified (#139/D47): a failing tools-family case is
 replayed once in a minimal clean environment — a fresh copy of the
-govrail package alone on ``PYTHONPATH`` (the package is stdlib-only by
-design) with the host's ``PYTHON*`` configuration dropped. The replay
-passes → the failure is **environment-suspect** (this host's site layer
-breaks the tool path; check site-packages shadowing / ``PYTHONPATH``).
-It fails again → **tool-defect** (the traceback stands). Project cases
+govrail package alone on ``PYTHONPATH`` with the host's ``PYTHON*``
+configuration dropped. The replay passes → the failure is
+**environment-suspect** (this host's site layer breaks the tool path;
+check site-packages shadowing / ``PYTHONPATH``). It fails again →
+**tool-defect** (the traceback stands). Boundary (D54): the package now
+carries a compiled dependency (tree-sitter); it resolves from the
+interpreter's site-packages in BOTH environments, so the replay stays
+meaningful for it — but a dependency made importable only via
+``PYTHONPATH`` promotion or user-site is NOT visible in the replay, and
+a failure of that shape will be labeled tool-defect without the clean
+run having proved much. Project cases
 are arbitrary scripts: their failures carry a "reproduce by hand" hint
 instead of an automatic replay. A classified FAIL still fails the run —
 classification is a diagnosis, never a pass. ``--case NAME`` reruns one
@@ -1491,6 +1497,92 @@ def test_failure_classifier_labels_tool_vs_environment() -> None:
     assert any("tool-defect" in l for l in tool_lines), tool_lines
 
 
+def test_parse_layer_metrics_mean_what_they_claim() -> None:
+    """D54: the stats layer's numbers are hand-countable facts.
+
+    The Go fixture's depths are human-counted (for→switch→if→for→if = 5;
+    a lone if = 1; `case` is not a level), the docstring-is-CODE rule is
+    pinned, a broken file is named instead of silently "checked", and a
+    language pack naming a node kind its grammar lacks refuses to load —
+    the wrong-kind bug class reported a plausible 0 in the prototype.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "svc.go").write_text(
+            "package svc\n"
+            "\n"
+            "func Route(mode string, depth int) error {\n"
+            "\tfor i := 0; i < depth; i++ {\n"          # 1
+            "\t\tswitch mode {\n"                       # 2
+            '\t\tcase "a":\n'                           # not a level
+            "\t\t\tif i%2 == 0 {\n"                   # 3
+            "\t\t\t\tfor j := 0; j < 3; j++ {\n"     # 4
+            "\t\t\t\t\tif j == 2 {\n"               # 5
+            "\t\t\t\t\t\tprintln(\"deep\")\n"
+            "\t\t\t\t\t}\n"
+            "\t\t\t\t}\n"
+            "\t\t\t}\n"
+            '\t\tcase "b":\n'
+            "\t\t\tprintln(\"shallow\")\n"
+            "\t\t}\n"
+            "\t}\n"
+            "\treturn nil\n"
+            "}\n"
+            "\n"
+            "func Handle(x int) int {\n"
+            "\tif x > 0 { // trailing comment, still a code line\n"  # 1
+            "\t\treturn x\n"
+            "\t}\n"
+            "\treturn -x\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        (root / "broken.go").write_text("func {\n", encoding="utf-8")
+        env = _pinned_env()
+        result = _run_text(
+            [sys.executable, "-m", "gov", "stats", "--json", "--lang", "go"],
+            cwd=root, env=env, capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        value = json.loads(result.stdout)
+        go = value["languages"]["go"]
+        assert go["parse_errors"] > 0, "a broken file must be named, not silent"
+        named = {f["path"]: f["errors"] for f in go["files_detail"]}
+        assert named.get("broken.go", 0) > 0 and named.get("svc.go", 0) == 0
+        by_name = {o["name"]: o["depth"] for o in go["depth"]["outliers"]}
+        assert by_name.get("Route") == 5, by_name
+        assert by_name.get("Handle") == 1, by_name
+        # The counting rule must ship WITH the number (an undeclared rule
+        # makes the figure unverifiable).
+        assert "outside a comment node" in go["rule"]["code_line"]
+        # A pack naming a nonexistent kind must refuse to load (rule 5).
+        bad = _run_text(
+            [sys.executable, "-c",
+             "import json, tempfile, pathlib, sys\n"
+             "sys.path.insert(0, %r)\n"
+             "from gov import parse\n"
+             "good = json.loads((pathlib.Path(%r) / 'go.json')"
+             ".read_text(encoding='utf-8'))\n"
+             "good['nesting'] = ['if_statment']\n"
+             "d = pathlib.Path(tempfile.mkdtemp())\n"
+             "(d / 'bad.json').write_text(json.dumps(good), encoding='utf-8')\n"
+             "import gov.parse as p\n"
+             "p._LANGS = d\n"
+             "try:\n"
+             "    p.load_pack('bad')\n"
+             "except p.ParseUnavailable as e:\n"
+             "    print('REFUSED:', e)\n"
+             "else:\n"
+             "    raise SystemExit('a bad pack loaded — rule 5 violated')\n"
+             % (str(HERE.parent), str(HERE / "langs"))],
+            capture_output=True, text=True, env=env,
+        )
+        assert "REFUSED:" in result.stdout or "REFUSED:" in bad.stdout, (
+            "the wrong-kind refusal did not print: " + bad.stdout + bad.stderr)
+        assert "if_statment" in bad.stdout
+
+
 def test_preset_rejects_unknown_name() -> None:
     """D53: an unknown preset name must exit 2 naming it and listing the
     available presets — never a silent empty adoption."""
@@ -1579,6 +1671,7 @@ CASES = [
     test_receipt_rejects_partial_run_as_full_evidence,
     test_run_merge_rejects_text_conflict,
     test_failure_classifier_labels_tool_vs_environment,
+    test_parse_layer_metrics_mean_what_they_claim,
     test_preset_rejects_unknown_name,
     test_text_subprocess_decodes_are_pinned,
 ]
@@ -1699,9 +1792,13 @@ def _clean_stage() -> Path:
     in the way: staging a copy lets ``PYTHONPATH`` point at a directory
     holding ONLY the package, so the stdlib resolves ahead of every
     site-packages entry and a stray backport (e.g. an ``argparse.py``
-    installed there) cannot shadow it. Stdlib-only by design (D1's
-    single-implementation decision) is what makes a package copy a
-    complete, dependency-free environment.
+    installed there) cannot shadow it. Since D54 the package also has a
+    compiled dependency (tree-sitter): it imports from the interpreter's
+    site-packages in the replay too — the staged copy is complete for
+    everything EXCEPT a dependency that was only ever importable via
+    ``PYTHONPATH`` or user-site, which the replay drops. A failure with
+    that shape is still labeled tool-defect; the label's evidence is
+    weaker there, and the module docstring says so.
     """
     global _CLEAN_STAGE
     if _CLEAN_STAGE is None:
@@ -1761,14 +1858,15 @@ def _classify_tool_failure(case) -> list[str]:
                 f"gov self-test --case {case.__name__}"]
     if proc.returncode == 0:
         return ["    clean-env replay: PASS — environment-suspect: the same "
-                "case passes with the host's site layer removed (only the "
-                "stdlib + a clean copy of govrail). Check this host's "
-                "site-packages shadowing / PYTHON* environment; the "
+                "case passes with the host's PYTHON* layer removed (a clean "
+                "copy of govrail; its compiled dependency resolves from this "
+                "interpreter's site-packages either way, D54). Check this "
+                "host's site-packages shadowing / PYTHON* environment; the "
                 "traceback in the FAIL line is the environmental evidence."]
     lines = [l for l in proc.stdout.splitlines() if l.strip()]
     why = f": {lines[0].strip()}" if lines else f"exit {proc.returncode}"
     return [f"    clean-env replay: FAIL — tool-defect: fails in the "
-            f"minimal stdlib env too ({why})"]
+            f"minimal env too ({why})"]
 
 
 def _probe_env_only_failure() -> None:

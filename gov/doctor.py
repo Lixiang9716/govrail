@@ -13,7 +13,9 @@ executability (both copies; the pre-commit hook is opt-in), gates.json
 schema (strict keys), shipped-but-unadopted gates (#147 — a gate absent
 from gates.json never runs and nothing prompts its adoption, so doctor
 names the ones this govrail version ships that the project hasn't
-wired), and — when a decisions table exists — that it parses.
+wired), the parse layer (D54 — dependency importable, per-grammar
+versions, pack validation), and — when a decisions table exists — that
+it parses.
 
 ``--json`` (#119): stdout carries exactly one JSON object —
 ``{version, status, checks, problems}`` where each check is
@@ -30,7 +32,7 @@ import sys
 
 from . import __version__
 
-MIN_PYTHON = (3, 9)
+MIN_PYTHON = (3, 10)  # tree-sitter's floor (D54); was (3, 9) pre-dependency
 
 
 def _check_gov_on_path(checks: list[dict]) -> None:
@@ -266,6 +268,35 @@ def _check_decisions(checks: list[dict]) -> None:
                                  "gov verify-decisions"})
 
 
+def _check_parse_layer(checks: list[dict]) -> None:
+    """The parse layer (D54): dependency importable + grammar versions.
+
+    Appended after the legacy checks so problems[0] keeps its meaning for
+    existing consumers. A missing/broken C extension is a named problem
+    with the reinstall remedy, never a traceback and never a silent skip.
+    """
+    try:
+        import importlib
+        from . import parse as parse_mod
+        core = importlib.import_module("tree_sitter")
+        versions = []
+        for name in parse_mod.available():
+            pack = parse_mod.load_pack(name)  # validates kinds (rule 5)
+            ver = parse_mod.grammar_version(pack)
+            versions.append(f"{name}={ver or '?'}")
+        del core
+        checks.append({"name": "parser", "state": "ok",
+                       "detail": f"parse layer ok ({', '.join(versions)})"})
+    except parse_mod.ParseUnavailable as e:
+        checks.append({"name": "parser", "state": "problem",
+                       "detail": str(e)})
+    except ImportError as e:
+        checks.append({"name": "parser", "state": "problem",
+                       "detail": f"tree-sitter is not importable ({e}) — the "
+                                 "parse layer cannot run; reinstall: "
+                                 "pip install --force-reinstall govrail"})
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         from .root import force_utf8_stdio
@@ -274,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(
         prog="gov doctor",
-        description="Environment self-check: PATH, Python, hooks, gates schema.",
+        description="Environment self-check: PATH, Python, parse layer, hooks, gates schema.",
     )
     parser.add_argument("--json", action="store_true",
                         help="machine-readable: stdout is exactly one JSON "
@@ -297,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
     _check_gates(checks)
     _check_gate_adoption(checks)
     _check_decisions(checks)
+    _check_parse_layer(checks)
     problems = [c for c in checks if c["state"] == "problem"]
 
     emit(f"gov doctor — govrail {__version__}")
