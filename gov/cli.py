@@ -512,6 +512,7 @@ def _upgrade_report(project: Path, manifest_path: Path,
         return 2
     created = set(data.get("created", []))
     init_version = data.get("version", "unknown")
+    recorded = data.get("templates", {})  # adopted hashes (D34); BOTH eras read it
 
     expected = _inventory(created)
 
@@ -580,7 +581,6 @@ def _upgrade_report(project: Path, manifest_path: Path,
     for rel in missing:
         print(f"  {rel:<40} MISSING — adoptable: gov init --adopt {rel}")
     import hashlib
-    recorded = data.get("templates", {})
     for rel, tpl in differing:
         local_b = (project / rel).read_bytes()
         local_h = hashlib.sha256(local_b).hexdigest()
