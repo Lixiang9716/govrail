@@ -32,6 +32,8 @@ tools-family case in isolation (the replay's own building block).
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import re
@@ -960,6 +962,68 @@ def test_self_test_adopts_project_rejection_cases() -> None:
         assert "case-broken.sh" in result.stdout, "the case must be named"
 
 
+def _ledger_output(root: Path) -> str:
+    """The coverage ledger's stdout, run in process against ``root``.
+
+    ``_coverage_report`` is a pure function of the tree it is run in, so
+    the cases that pin its wording drive it directly: going through a
+    self-test subprocess would add platform-dependent execution semantics
+    (a POSIX shebang case cannot execute on Windows) that those cases are
+    not about.
+    """
+    buf = io.StringIO()
+    cwd = os.getcwd()
+    os.chdir(root)
+    try:
+        with contextlib.redirect_stdout(buf):
+            _coverage_report()
+    finally:
+        os.chdir(cwd)
+    return buf.getvalue()
+
+
+def test_coverage_warning_names_the_marker_fix() -> None:
+    """#167: an undeclared case is named WITH the remedy inline.
+
+    The warning used to name the file and stop there — an adopter had to
+    reverse-engineer both the marker's syntax and its scan window (the
+    issue's reporter did, over two round-trips: the marker works inside a
+    module docstring, and the window is five lines). Both halves of that
+    discovery are pinned here: the fix line prints, and a marker inside a
+    module docstring is credited."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        rej = root / ".gov" / "rejections"
+        rej.mkdir(parents=True)
+        (root / "gates.json").write_text(
+            json.dumps({"modes": {"all": ["x"]},
+                        "gates": [{"id": "x", "command": ["true"]}]}),
+            encoding="utf-8",
+        )
+        # A case that predates the convention: it runs, it passes, and it
+        # declares nothing — #167's report, reproduced.
+        (rej / "case-legacy.sh").write_text("#!/bin/sh\nexit 0\n",
+                                            encoding="utf-8")
+        first = _ledger_output(root)
+        assert "case-legacy.sh" in first, "the case must be named"
+        assert "fix: add '# gate: <id>' within the first 5 lines" in first, (
+            "the warning must print the remedy, not just the file (#167)\n"
+            + first)
+        # Line 4 of a five-line file: the marker inside the docstring.
+        (rej / "case-docstring.py").write_text(
+            '#!/usr/bin/env python3\n"""A rejection case.\n\n# gate: x\n"""\n'
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+        second = _ledger_output(root)
+        assert "x(1)" in second, (
+            "a marker inside a module docstring must be credited (#167)\n"
+            + second)
+        assert "x(NONE — rule 6)" not in second, (
+            "the declared case covers the gate; the cell must not still "
+            "read NONE\n" + second)
+
+
 def test_verify_decisions_rejects_broken_table() -> None:
     """Wish 9: duplicate ids, gaps, and alternative-less decisions fail loud."""
     with tempfile.TemporaryDirectory() as td:
@@ -1499,6 +1563,7 @@ CASES = [
     test_archive_seal_detects_tampering_and_refuses_laundering,
     test_gates_rejects_gate_in_no_mode,
     test_self_test_adopts_project_rejection_cases,
+    test_coverage_warning_names_the_marker_fix,
     test_verify_decisions_rejects_broken_table,
     test_verify_decisions_rejects_base_collision,
     test_skills_text_command_drift_is_named,
@@ -1589,6 +1654,12 @@ def _coverage_report() -> None:
               "(first five lines):")
         for p in undeclared:
             print(f"    {p}")
+        # #167: naming the file was the whole message, and the two things
+        # an adopter needs to fix it (the marker's syntax, its scan
+        # window) had to be reverse-engineered. Print the remedy inline.
+        print("  fix: add '# gate: <id>' within the first 5 lines to link "
+              "the case to the gate it proves (a line inside the module "
+              "docstring counts; keep the shebang on line 1)")
     if any("(NONE" in l for l in lines) and not undeclared:
         print("  write one: .gov/rejections/case-<gate-id>.sh, shebang on "
               "line 1, '# gate: <id>' within the first five lines")
@@ -1801,6 +1872,14 @@ def main(argv: list[str] | None = None) -> int:
         prog="gov self-test",
         description="Run rejection cases: the tools' own plus the project's "
                     "under .gov/rejections/.",
+        # #167: the declaration's syntax and scan window live in --help
+        # too — the warning prints the fix, the help explains the ledger.
+        epilog="A project case declares the gate it proves with a "
+               "'# gate: <id>' comment within its first five lines (a line "
+               "inside a module docstring counts; the id is lowercase "
+               "letters, digits and dashes). The coverage ledger at the end "
+               "of the run reads that declaration: uncovered gates read "
+               "'NONE — rule 6'. The ledger is a reminder, never a failure.",
     )
     parser.add_argument("--scope", choices=("all", "tools", "project"),
                         default="all", help="which family of cases to run")

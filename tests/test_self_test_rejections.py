@@ -130,6 +130,25 @@ def test_coverage_pointer_when_uncovered(tmp_path, monkeypatch, capsys):
     assert "write one: .gov/rejections/case-<gate-id>.sh" in out
 
 
+@needs_posix_exec
+def test_coverage_remedy_reaches_a_full_run(tmp_path, monkeypatch, capsys):
+    """#167 end to end: a real run's ledger prints the fix beside the file
+    it names. The function-level proof — including a marker inside a
+    module docstring being credited — is the shipped tools case
+    ``test_coverage_warning_names_the_marker_fix``; this one pins the
+    wiring from ``main()`` down to it."""
+    import json as _json
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".gov").mkdir()
+    (tmp_path / "gates.json").write_text(_json.dumps(
+        {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}), encoding="utf-8")
+    _rejection(tmp_path, "case-legacy.sh", "#!/bin/sh\nexit 0\n")
+    assert st.main(["--scope", "project"]) == 0
+    out = capsys.readouterr().out
+    assert "case-legacy.sh" in out, "the undeclared case must be named"
+    assert "fix: add '# gate: <id>' within the first 5 lines" in out, out
+
+
 def test_classifier_labels_probes_by_clean_env_replay():
     """#139/D47: the verdict comes from the replay, not from a guess.
 
