@@ -847,6 +847,82 @@ def manifest_drift(base):
     assert f"manifest initialized with govrail {stale}" not in r.stdout
 
 
+
+def cost_base_split(base):
+    """--cost and --base compose: the window cut at the base commit's
+    date, the roll-up attributed per caller, both hand-computed. Two
+    100-token runs 3 days old, two 300-token runs now, base dated 2 days
+    ago: 800 total, 200 early -> 600 late — the same fixture shape the
+    duration split pins, on the cost dimension."""
+    from datetime import datetime, timedelta, timezone
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "feature.txt").write_text("work\n", encoding="utf-8")
+    git("add", "-A", cwd=p)
+    past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    env = dict(os.environ)
+    env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = past
+    subprocess.run(["git", "commit", "--amend", "--no-edit",
+                    "--date=" + past],
+                   cwd=p, env=env, capture_output=True, check=True)
+    base_ref = "HEAD"
+
+    now = datetime.now(timezone.utc)
+    early_ts = (now - timedelta(days=3)).isoformat(timespec="seconds")
+    late_ts = now.isoformat(timespec="seconds")
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    gate_pass = {"gate": "g", "outcome": "PASS", "blocking": False,
+                 "detail": "", "selected_by": "e2e", "scoped_out": False}
+    lines = []
+    for ts, tokens in ((early_ts, 100), (early_ts, 100),
+                       (late_ts, 300), (late_ts, 300)):
+        gate = dict(gate_pass, duration_ms=50)
+        lines.append({"ts": ts, "caller": "alpha",
+                      "cost": {"tokens": tokens}, "gates": [gate]})
+    with history.open("a", encoding="utf-8") as f:
+        for rec in lines:
+            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+
+    r = gov("trend", "--cost", "--base", base_ref, cwd=p)
+    out = r.stdout
+    assert "caller alpha: 4 run(s): tokens 800 " \
+           "(200 early → 600 late)" in out, out
+    assert "8 reporting cost" not in out  # exactly the 4 crafted runs
+
+
+def postmortem_pair(base):
+    """A bilingual postmortem is a docs pair like any other: the pairing
+    gate baselines it, drift goes red with the fix command inline, and
+    recall reads BOTH language sides from the same corpus."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    pm = p / "docs" / "postmortem"
+    pm.mkdir(parents=True)
+    (pm / "2026-09-11-outage.md").write_text(
+        "# Postmortem: the outage\n\nroot cause: cache stampede\n",
+        encoding="utf-8")
+    (pm / "2026-09-11-outage.zh.md").write_text(
+        "# 复盘：故障\n\n根因：缓存雪崩\n", encoding="utf-8")
+    gov("verify-pairing", "--write", cwd=p)
+    gov("verify-pairing", cwd=p)
+
+    # drift: the zh side moves without re-confirmation — red, with the
+    # scoped fix command inline
+    (pm / "2026-09-11-outage.zh.md").write_text(
+        "# 复盘：故障\n\n根因：缓存雪崩（复发风险）\n", encoding="utf-8")
+    r = gov("verify-pairing", cwd=p, expect=1)
+    assert "2026-09-11-outage" in r.stdout
+    gov("verify-pairing", "--write", cwd=p)
+
+    # recall reads both language sides from one corpus
+    r = gov("recall", "stampede", cwd=p)
+    assert "outage.md" in r.stdout
+    r = gov("recall", "缓存雪崩", cwd=p)
+    assert "outage.zh.md" in r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -868,6 +944,8 @@ SCENARIOS = {
     "manifest_drift": manifest_drift,
     "surfaces_custom": surfaces_custom,
     "decision_parallel": decision_parallel,
+    "cost_base_split": cost_base_split,
+    "postmortem_pair": postmortem_pair,
     "cost_attribution": cost_attribution,
     "perf_night": perf_night,
 }
