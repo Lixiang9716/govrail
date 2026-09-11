@@ -1,0 +1,41 @@
+{
+  "classes": [
+    "class_definition"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv"
+  ],
+  "functions": [
+    "function_definition"
+  ],
+  "globs": [
+    "*.py"
+  ],
+  "grammar": "tree_sitter_python",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "try_statement",
+    "with_statement",
+    "match_statement"
+  ],
+  "string": [
+    "string"
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "classes": [
+    "class_declaration",
+    "interface_declaration",
+    "enum_declaration",
+    "record_declaration"
+  ],
+  "comment": [
+    "line_comment",
+    "block_comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv"
+  ],
+  "functions": [
+    "method_declaration",
+    "constructor_declaration"
+  ],
+  "globs": [
+    "*.java"
+  ],
+  "grammar": "tree_sitter_java",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "do_statement",
+    "switch",
+    "try_statement",
+    "try_with_resources_statement",
+    "synchronized_statement"
+  ],
+  "string": [
+    "string_literal",
+    "_multiline_string_literal"
+  ]
+}

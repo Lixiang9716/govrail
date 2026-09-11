@@ -76,6 +76,7 @@ FLAGS: dict[str, set[str]] = {
     "verify-conflict-markers": {"--base", "--staged"},
     "review": {"--base", "--hits", "--grade"},
     "trend": {"--last", "--gate", "--base", "--by-tag", "--cost"},
+    "stats": {"--lang", "--record", "--json"},
     "doctor": {"--json"},
     "note": {"--class", "--ref"},  # on the `new` subcommand
     "whatsnew": {"--since"},

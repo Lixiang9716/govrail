@@ -1,0 +1,43 @@
+{
+  "classes": [
+    "type_declaration"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv"
+  ],
+  "functions": [
+    "function_declaration",
+    "method_declaration",
+    "func_literal"
+  ],
+  "globs": [
+    "*.go"
+  ],
+  "grammar": "tree_sitter_go",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "expression_switch_statement",
+    "type_switch_statement",
+    "select_statement"
+  ],
+  "string": [
+    "interpreted_string_literal",
+    "raw_string_literal"
+  ]
+}

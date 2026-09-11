@@ -1,0 +1,52 @@
+{
+  "classes": [
+    "class_specifier",
+    "struct_specifier"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    "*.h",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv"
+  ],
+  "functions": [
+    "function_definition"
+  ],
+  "globs": [
+    "*.cpp",
+    "*.cc",
+    "*.cxx",
+    "*.hpp",
+    "*.hh",
+    "*.hxx",
+    "*.h"
+  ],
+  "grammar": "tree_sitter_cpp",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "case_statement",
+    "try_statement"
+  ],
+  "string": [
+    "string_literal",
+    "raw_string_literal",
+    "char_literal"
+  ]
+}
