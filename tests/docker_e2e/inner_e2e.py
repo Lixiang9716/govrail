@@ -372,8 +372,86 @@ def drift_chaos(base):
     assert not (p / ".gov").exists()
 
 
+
+def decisions_dir(base):
+    """The decisions source in `dir` format: one file per decision, so
+    parallel appends are structurally conflict-free (D17/D40) — and the
+    numbering guard must still catch a hole when a file vanishes."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions", "format": "dir"}), encoding="utf-8")
+    d = p / "docs" / "decisions"
+    d.mkdir(parents=True)
+    (d / "D1-adopt.md").write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    r = gov("decision", "next", cwd=p)
+    assert "D2" in r.stdout
+    draft = p / "d2-draft.md"
+    draft.write_text("agent a plan\n\n- **选项**：a\n\n- **状态**：已决\n",
+                     encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    made = list(d.glob("D2-*.md"))
+    assert len(made) == 1 and made[0].is_file(), (
+        "dir format: one file per decision")
+    draft.write_text("agent b plan\n\n- **选项**：b\n\n- **状态**：已决\n",
+                     encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    assert list(d.glob("D3-*.md")), "the next add allocates D3"
+    gov("verify-decisions", cwd=p)
+    # a vanished MIDDLE file is a numbering hole — the gate must say so
+    # (removing the highest number would be legitimate: not created yet)
+    gone = list(d.glob("D2-*.md"))[0]
+    gone.unlink()
+    gov("verify-decisions", cwd=p, expect=1)
+    gone.write_text("## D2 — agent a plan\n\n- **选项**：a\n\n"
+                    "- **状态**：已决\n", encoding="utf-8")
+    gov("verify-decisions", cwd=p)
+
+
+def perf_night(base):
+    """The nightly scale tier: 10,000 files. Gated behind
+    GOV_E2E_NIGHTLY=1 — minutes-wide budgets are a scheduled act, not a
+    per-PR default (run.sh --nightly)."""
+    if os.environ.get("GOV_E2E_NIGHTLY") != "1":
+        print("E2E perf_night: SKIP (set GOV_E2E_NIGHTLY=1)")
+        return
+    p = fresh_project(base)
+    src = p / "src" / "pkg"
+    src.mkdir(parents=True)
+    body_template = ("\n".join(
+        f"def fn_{i}(a, b):\n"
+        f"    total = a + b\n"
+        f"    if total > {i}:\n"
+        "        return total\n"
+        "    return 0\n" for i in range(5)))
+    for i in range(10000):
+        d = src / f"pack{i % 50}"
+        d.mkdir(exist_ok=True)
+        (d / f"mod_{i}.py").write_text(body_template, encoding="utf-8")
+    t0 = time.monotonic()
+    r = gov("stats", "--json", "--lang", "python", cwd=p, timeout=600)
+    stats_dt = time.monotonic() - t0
+    py = json.loads(r.stdout)["languages"]["python"]
+    assert py["files"] == 10000, f"walker lost files: {py['files']}"
+    assert py["symbols"]["functions"] == 50000
+    # 29 lines per file (5 blocks + join blanks) — the arithmetic the
+    # kilo tier pins, at 10x the scale
+    assert py["lines"]["total"] == 10000 * 29
+    t0 = time.monotonic()
+    gov("check", cwd=p, timeout=600)
+    check_dt = time.monotonic() - t0
+    assert stats_dt < 600 and check_dt < 600, (
+        f"nightly tier overrun: stats {stats_dt:.1f}s, "
+        f"check {check_dt:.1f}s")
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
+    "wheel_version": wheel_version,
     "wheel_version": wheel_version,
     "lifecycle": lifecycle,
     "ascii_locale": ascii_locale,
@@ -384,6 +462,8 @@ SCENARIOS = {
     "perf_smoke": perf_smoke,
     "perf_kilo": perf_kilo,
     "drift_chaos": drift_chaos,
+    "decisions_dir": decisions_dir,
+    "perf_night": perf_night,
 }
 
 

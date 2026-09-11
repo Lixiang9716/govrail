@@ -19,9 +19,11 @@ IMAGE_PREFIX=${GOV_E2E_IMAGE_PREFIX:-govrail-e2e}
 VERSION=$(python3 -c 'import re;print(re.search(r"__version__ = \"([^\"]+)\"", open("gov/version.py").read()).group(1))')
 QUICK=0
 CELL=""
+NIGHTLY=0
 for arg in "$@"; do
   case "$arg" in
     --quick) QUICK=1 ;;
+    --nightly) NIGHTLY=1; CELL="nightly" ;;
     --cell) CELL="$2"; shift ;;
   esac
 done
@@ -87,8 +89,10 @@ run_cell() { # $1 = tag; $2 = name; extra docker args via $3...
 }
 
 FAILED=0
-CELLS="3.10-slim 3.11-slim 3.12-slim 3.13-slim 3.12-alpine"
-SPECIAL="gbk cross pypi"
+# 3.10-bookworm pins the OLD-glibc axis: the floor interpreter on the
+# previous Debian stable, not just the newest.
+CELLS="3.10-slim 3.11-slim 3.12-slim 3.13-slim 3.12-alpine 3.10-bookworm"
+SPECIAL="gbk cross crossdir pypi nightly"
 if [ -n "$CELL" ]; then
   case " $SPECIAL " in
     *" $CELL "*) CELLS="" ;;  # dedicated blocks below own this cell
@@ -97,9 +101,13 @@ if [ -n "$CELL" ]; then
 fi
 for cell in $CELLS; do
   if [ "$QUICK" = "1" ] && ! built_image_is_current "$cell"; then
-    echo "== skip $cell (--quick, image not built or wheel changed)"; continue
+    echo "== skip $cell (--quick, image not built or content changed)"; continue
   fi
-  build_cell "python:$cell" "$cell" || { FAILED=1; continue; }
+  case "$cell" in
+    3.10-bookworm) base="python:3.10-slim-bookworm" ;;
+    *) base="python:$cell" ;;
+  esac
+  build_cell "$base" "$cell" || { FAILED=1; continue; }
   run_cell "$cell" "$cell"
 done
 
@@ -134,6 +142,26 @@ if [ -z "$CELL" ] || [ "$CELL" = "cross" ]; then
   echo "$out" | sed 's/^/    /'
   if echo "$out" | grep -q "FAIL"; then echo "== cell cross: FAIL"; FAILED=1
   else echo "== cell cross: PASS"; fi
+fi
+
+# the cross-container dir-format drill: collision -> renumber -> absorb
+if [ -z "$CELL" ] || [ "$CELL" = "crossdir" ]; then
+  build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }
+  echo "== cell cross-container dir drill"
+  out=$(bash tests/docker_e2e/cross_dir_drill.sh "$IMAGE_PREFIX:3.12-slim" 2>&1)
+  echo "$out" | sed 's/^/    /'
+  if echo "$out" | grep -q "FAIL"; then echo "== cell crossdir: FAIL"; FAILED=1
+  else echo "== cell crossdir: PASS"; fi
+fi
+
+# the nightly scale tier: 10,000 files, one cell, explicit opt-in
+if [ "$NIGHTLY" = "1" ] || [ "$CELL" = "nightly" ]; then
+  build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }
+  echo "== cell nightly (10k files; GOV_E2E_NIGHTLY=1)"
+  out=$(docker run --rm -e GOV_E2E_NIGHTLY=1     "$IMAGE_PREFIX:3.12-slim" python /usr/local/bin/inner_e2e.py perf_night 2>&1)
+  echo "$out" | sed 's/^/    /'
+  if echo "$out" | grep -q "FAIL"; then echo "== cell nightly: FAIL"; FAILED=1
+  else echo "== cell nightly: PASS"; fi
 fi
 
 # the adopter-from-PyPI cell: real network, real published wheel.
