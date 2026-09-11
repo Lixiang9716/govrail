@@ -522,9 +522,110 @@ def memory_trend(base):
     gov("recall", "--any", "汇率风暴", "不存在的词", cwd=p)   # --any relaxes
 
 
+
+def review_grade(base):
+    """The review journey (D30): dossier, then the interactive rubric
+    grade loop with the human's stdin transcribed — approve exits 0,
+    request-changes exits 1 with the blockers named. The human decides;
+    the machine transcribes — here stdin IS the human."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    item = ("### {rid} — {title}\n\n"
+            "- **Checks:** the diff carries `{thing}`\n"
+            "- **Evidence:** the file exists and names its purpose\n"
+            "- **Anti-pattern:** silent work\n"
+            "- **Gate candidate:** no — judgment\n")
+    (docs / "review-rubric.md").write_text(
+        "# Review rubric\n\n"
+        + item.format(rid="R1", title="feature lands loudly",
+                      thing="feature.txt")
+        + "\n"
+        + item.format(rid="R2", title="cleanup is real", thing="cleanup.txt")
+        + "\n", encoding="utf-8")
+    (p / "feature.txt").write_text("the feature\n", encoding="utf-8")
+    note_dir = p / ".agents" / "notes" / "implemented" / "feature"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-feature.md").write_text(
+        "# Agent Note: feature\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "the work under review")
+    base_ref = "HEAD~1"
+
+    # approve: both items pass — the human's p keys, transcribed
+    r = subprocess.run(
+        ["gov", "review", "--base", base_ref, "--grade"],
+        cwd=p, input="p\np\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 0, f"approve journey failed: {r.stdout}{r.stderr}"
+    assert "verdict: approve" in r.stdout
+    assert "R1 — pass" in r.stdout and "R2 — pass" in r.stdout
+
+    # request changes: an f verdict demands evidence, blocks, and the
+    # verdict names the blocker with the evidence the human typed; s
+    # skips an item without blocking it
+    r = subprocess.run(
+        ["gov", "review", "--base", base_ref, "--grade"],
+        cwd=p, input="f\nfeature.txt:1 says otherwise\ns\n",
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 1, "a fail verdict must block"
+    assert "R1 — fail — feature.txt:1 says otherwise" in r.stdout, r.stdout
+    assert "blockers:" in r.stdout
+    assert "verdict: request changes" in r.stdout
+
+
+def archive_closure(base):
+    """The archive loop: implemented notes move to the frozen archive,
+    the seal covers them, recall still reads them (memory persists past
+    archiving, with the corpus statement counting the archived side),
+    tampering is caught, and re-sealing a drift is refused — restoring
+    the sealed bytes makes verify green again without any re-seal."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    note_dir = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-stays.md").write_text(
+        "# Agent Note: stays implemented\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    gone = note_dir / "2026-01-01-superseded.md"
+    gone.write_text(
+        "# Agent Note: superseded approach\n\nStatus: implemented\n\n"
+        "## Problem\ncache stampede\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "two implemented notes")
+
+    # the archive move + seal
+    arch = p / ".agents" / "notes" / "archived" / "bug-fix"
+    arch.mkdir(parents=True)
+    gone.rename(arch / gone.name)
+    gov("archive-notes", cwd=p)
+    gov("verify-archive", cwd=p)
+
+    # memory persists past archiving; the corpus statement counts it
+    r = gov("recall", "stampede", cwd=p)
+    both = r.stdout + r.stderr
+    assert "superseded" in both and "archived 1" in both, (
+        "the archived note must stay readable (corpus: " + both + ")")
+
+    # tampering is caught and re-sealing a drift is refused (no
+    # laundering); restoring the sealed bytes turns verify green again
+    sealed = arch / gone.name
+    original = sealed.read_text(encoding="utf-8")
+    sealed.write_text("tampered\n", encoding="utf-8")
+    gov("verify-archive", cwd=p, expect=1)
+    r = gov("archive-notes", cwd=p, expect=1)
+    assert "refus" in (r.stdout + r.stderr).lower(), r.stdout + r.stderr
+    sealed.write_text(original, encoding="utf-8")
+    gov("verify-archive", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
-    "wheel_version": wheel_version,
     "wheel_version": wheel_version,
     "lifecycle": lifecycle,
     "ascii_locale": ascii_locale,
@@ -538,6 +639,8 @@ SCENARIOS = {
     "decisions_dir": decisions_dir,
     "memory_trend": memory_trend,
     "postmortem_recall": postmortem_recall,
+    "review_grade": review_grade,
+    "archive_closure": archive_closure,
     "perf_night": perf_night,
 }
 
