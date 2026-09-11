@@ -38,7 +38,8 @@ def gov(*args, cwd, expect=0, env_extra=None, timeout=300):
 
 def git(*args, cwd, check=True):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True,
-                          text=True, check=check)
+                          text=True, encoding="utf-8", errors="replace",
+                          check=check)
 
 
 def commit_all(cwd, msg):
@@ -157,7 +158,7 @@ def concurrency(base):
         procs.append(subprocess.Popen(
             ["gov", "acquire", "res/race", "--agent", f"racer-{i}"],
             cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, env=env))
+            text=True, encoding="utf-8", errors="replace", env=env))
     outs = [pr.communicate() for pr in procs]
     codes = [pr.returncode for pr in procs]
     winners = [i for i, c in enumerate(codes) if c == 0]
@@ -206,7 +207,8 @@ def prepush_hook(base):
     env.setdefault("PYTHONIOENCODING", "utf-8")
     r = subprocess.run(["git", "push", "-q", "origin",
                         "HEAD:refs/heads/main"], cwd=p, env=env,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     assert r.returncode == 0, f"green push blocked: {r.stderr}"
     # now a red gate: conflict markers in a pushed file
     (p / "tangled.md").write_text("a\n<<<<<<< HEAD\nx\n=======\ny\n"
@@ -215,7 +217,8 @@ def prepush_hook(base):
     git("-c", "commit.gpgsign=false", "commit", "-qm", "tangled", cwd=p)
     r = subprocess.run(["git", "push", "-q", "origin",
                         "HEAD:refs/heads/main"], cwd=p, env=env,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
     assert r.returncode != 0, "a push carrying conflict markers must block"
 
 
@@ -259,7 +262,50 @@ def perf_smoke(base):
     assert dt < 60, f"stats took {dt:.1f}s — outside the budget"
 
 
+def locale_bites(base):
+    """The anti-vacuous probe for every cell. Under a GBK LC_ALL (the
+    gbk cell) the host MUST actually decode GBK — preferred encoding
+    GBK-family AND an unpinned decode of a UTF-8 child must mojibake —
+    else the cell proves nothing. On UTF-8 cells the same probe asserts
+    the #168 wall from the other side: Chinese round-trips every tool
+    with no crash."""
+    import locale
+    lc = os.environ.get("LC_ALL", "")
+    if "gbk" in lc.lower() or "gb2312" in lc.lower():
+        enc = locale.getpreferredencoding(False)
+        assert enc.lower() in ("gbk", "cp936", "gb2312"), (
+            f"LC_ALL={lc!r} but preferred encoding is {enc!r} — the "
+            "hostile locale did not take; this cell would be vacuous")
+        r = subprocess.run(
+            [PY, "-c", "print('中文')"], capture_output=True,
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+        try:
+            text = r.stdout.decode(enc)
+        except UnicodeDecodeError:
+            pass  # crashes on the first non-ASCII byte — hostile, good
+        else:
+            assert text.strip() != "中文", (
+                "child UTF-8 survived the unpinned GBK decode — the "
+                "locale is not hostile, this cell proves nothing")
+    # The #168 wall from the other side: Chinese survives every tool.
+    p = fresh_project(base)
+    env = dict(os.environ)
+    gov("init", cwd=p, env_extra=env)
+    note_dir = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-中文.md").write_text(
+        "# Agent Note: 中文\n\nStatus: implemented\n\n"
+        "## Problem\n中文问题\n\n## Decision\n中文决定\n\n"
+        "## Alternatives considered\n其他\n", encoding="utf-8")
+    gov("verify-notes", cwd=p, env_extra=env)
+    r = gov("stats", "--json", "--lang", "python", cwd=p, env_extra=env)
+    value = json.loads(r.stdout)
+    assert "python" in value["languages"]
+    gov("check", cwd=p, env_extra=env)
+
+
 SCENARIOS = {
+    "locale_bites": locale_bites,
     "wheel_version": wheel_version,
     "lifecycle": lifecycle,
     "ascii_locale": ascii_locale,

@@ -32,14 +32,21 @@ rm -f dist/govrail-*.whl   # never let an ancient wheel ride along
 python3 -m pip wheel --no-deps -q -w dist/ . || exit 2
 echo "== wheel: $(ls dist/govrail-*.whl | xargs -n1 basename)"
 
-STAMP=tests/docker_e2e/.wheel-sha
-WHEEL_SHA=$(sha256sum dist/govrail-*.whl | cut -d' ' -f1)
+# The stamp covers everything an image bakes: the wheel AND the inner
+# suite — and it is PER CELL, because one cell's build must never mark
+# another cell current: the gbk image derives from 3.12-slim, and a
+# global stamp let a stale base hide behind gbk's fresh build.
+baked_sha() { { sha256sum dist/govrail-*.whl | cut -d' ' -f1
+                sha256sum tests/docker_e2e/inner_e2e.py | cut -d' ' -f1; } \
+              | sha256sum | cut -d' ' -f1; }
+stamp_path() { echo "tests/docker_e2e/.stamp-$1"; }
 
 built_image_is_current() { # $1 = local tag
   docker image inspect "$IMAGE_PREFIX:$1" >/dev/null 2>&1 || return 1
-  # A stale image silently tests an old wheel: the stamp records the sha
-  # the image was built from, and a mismatch forces the rebuild.
-  [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$WHEEL_SHA" ]
+  # A stale image silently tests an old wheel: the cell's stamp records
+  # the baked-content sha, and a mismatch forces the rebuild.
+  local sp; sp=$(stamp_path "$1")
+  [ -f "$sp" ] && [ "$(cat "$sp")" = "$(baked_sha)" ]
 }
 
 build_cell() { # $1 = base repository:tag on the mirror, $2 = local tag
@@ -53,7 +60,17 @@ build_cell() { # $1 = base repository:tag on the mirror, $2 = local tag
     --build-arg "PIP_INDEX_URL=$PIP_INDEX" \
     --build-arg "EXPECTED_VERSION=$VERSION" \
     -f tests/docker_e2e/Dockerfile.e2e -t "$IMAGE_PREFIX:$name" "$REPO" \
-    && echo "$WHEEL_SHA" > "$STAMP"
+    && baked_sha > "$(stamp_path "$name")"
+}
+
+build_cell_from() { # $1 = FROM image, $2 = dockerfile, $3 = local tag
+  local from="$1" df="$2" name="$3"
+  if built_image_is_current "$name"; then
+    echo "== image $IMAGE_PREFIX:$name already built"; return 0
+  fi
+  echo "== building $IMAGE_PREFIX:$name from $from"
+  docker build --quiet --build-arg "EXPECTED_VERSION=$VERSION" -f "$df" -t "$IMAGE_PREFIX:$name" "$REPO" \
+    && baked_sha > "$(stamp_path "$name")"
 }
 
 run_cell() { # $1 = tag; $2 = name; extra docker args via $3...
@@ -71,7 +88,13 @@ run_cell() { # $1 = tag; $2 = name; extra docker args via $3...
 
 FAILED=0
 CELLS="3.10-slim 3.11-slim 3.12-slim 3.13-slim 3.12-alpine"
-[ -n "$CELL" ] && CELLS="$CELL"
+SPECIAL="gbk cross pypi"
+if [ -n "$CELL" ]; then
+  case " $SPECIAL " in
+    *" $CELL "*) CELLS="" ;;  # dedicated blocks below own this cell
+    *) CELLS="$CELL" ;;
+  esac
+fi
 for cell in $CELLS; do
   if [ "$QUICK" = "1" ] && ! built_image_is_current "$cell"; then
     echo "== skip $cell (--quick, image not built or wheel changed)"; continue
@@ -90,6 +113,27 @@ if [ -z "$CELL" ] || [ "$CELL" = "3.12-slim" ]; then
     if echo "$out" | grep -q "FAIL"; then echo "== cell nonroot: FAIL"; FAILED=1
     else echo "== cell nonroot: PASS"; fi
   }
+fi
+
+# the hostile-locale cell: zh_CN.GBK baked, every scenario under it
+if [ -z "$CELL" ] || [ "$CELL" = "gbk" ]; then
+  if [ "$QUICK" = "1" ] && ! built_image_is_current "gbk"; then
+    echo "== skip gbk (--quick)"; else
+  build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }  # gbk derives from it: the base must be current first
+  build_cell_from "govrail-e2e:3.12-slim" tests/docker_e2e/Dockerfile.gbk "gbk" \
+    || { FAILED=1; }
+  if ! [ "$FAILED" = "1" ]; then run_cell "gbk" "gbk-locale"; fi
+  fi
+fi
+
+# the cross-container drill: two REAL containers, one shared repository
+if [ -z "$CELL" ] || [ "$CELL" = "cross" ]; then
+  build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }
+  echo "== cell cross-container drill"
+  out=$(bash tests/docker_e2e/cross_container_drill.sh "$IMAGE_PREFIX:3.12-slim" 2>&1)
+  echo "$out" | sed 's/^/    /'
+  if echo "$out" | grep -q "FAIL"; then echo "== cell cross: FAIL"; FAILED=1
+  else echo "== cell cross: PASS"; fi
 fi
 
 # the adopter-from-PyPI cell: real network, real published wheel.
