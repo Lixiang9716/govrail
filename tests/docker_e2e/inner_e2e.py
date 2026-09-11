@@ -336,8 +336,11 @@ def perf_kilo(base):
     t0 = time.monotonic()
     gov("check", cwd=p, timeout=300)
     check_dt = time.monotonic() - t0
-    assert stats_dt < 120, f"stats took {stats_dt:.1f}s at 1.2k files"
-    assert check_dt < 120, f"check took {check_dt:.1f}s at 1.2k files"
+    # ceilings = measured (0.3s/0.7s at first run) x ~100 headroom:
+    # loose enough not to flake on slow runners, tight enough that a
+    # 100x walker regression cannot hide inside "it passed"
+    assert stats_dt < 30, f"stats took {stats_dt:.1f}s at 1.2k files"
+    assert check_dt < 60, f"check took {check_dt:.1f}s at 1.2k files"
     print(f"    perf_kilo measured: stats {stats_dt:.1f}s, "
           f"check {check_dt:.1f}s")
 
@@ -446,7 +449,8 @@ def perf_night(base):
     t0 = time.monotonic()
     gov("check", cwd=p, timeout=600)
     check_dt = time.monotonic() - t0
-    assert stats_dt < 600 and check_dt < 600, (
+    # ceilings = measured (2.3s/5.6s at first run) x ~20 headroom
+    assert stats_dt < 60 and check_dt < 120, (
         f"nightly tier overrun: stats {stats_dt:.1f}s, "
         f"check {check_dt:.1f}s")
     print(f"    perf_night measured: stats {stats_dt:.1f}s, "
@@ -483,6 +487,41 @@ def postmortem_recall(base):
     assert "中文复盘" in r.stdout
 
 
+def memory_trend(base):
+    """The ledgers' read-side, end to end: tagged runs with caller-
+    reported cost flow into history, and trend reads all three views
+    (window, by-tag, cost); recall's AND / --any / per-term diagnostics
+    over the notes corpus (#148)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    # three tagged runs, caller-reported cost
+    for tag, cost in (("alpha", "tokens=100"),
+                      ("alpha", "tokens=200"),
+                      ("beta", "tokens=50")):
+        gov("run", "--tag", tag, "--cost", cost, cwd=p)
+    r = gov("trend", cwd=p)
+    assert "run(s) in" in r.stdout
+    r = gov("trend", "--by-tag", cwd=p)
+    assert "alpha" in r.stdout and "beta" in r.stdout, \
+        "runs group by their caller tag"
+    r = gov("trend", "--cost", cwd=p)
+    assert "tokens" in r.stdout, "the cost ledger rolls up by caller"
+
+    # recall: AND, per-term diagnostics on a miss, --any relaxation
+    note_dir = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-汇率.md").write_text(
+        "# Agent Note: 汇率风暴\n\nStatus: implemented\n\n"
+        "## Problem\n汇率波动\n\n## Decision\n对冲\n\n"
+        "## Alternatives considered\n不作为\n", encoding="utf-8")
+    gov("recall", "汇率风暴", cwd=p)                       # exact hit
+    r = gov("recall", "汇率风暴", "不存在的词", cwd=p, expect=1)  # AND misses
+    assert "汇率风暴: 1" in r.stdout and "不存在的词: 0" in r.stdout, \
+        "the miss names which term the corpus lacks and which it has"
+    gov("recall", "--any", "汇率风暴", "不存在的词", cwd=p)   # --any relaxes
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -497,6 +536,7 @@ SCENARIOS = {
     "perf_kilo": perf_kilo,
     "drift_chaos": drift_chaos,
     "decisions_dir": decisions_dir,
+    "memory_trend": memory_trend,
     "postmortem_recall": postmortem_recall,
     "perf_night": perf_night,
 }

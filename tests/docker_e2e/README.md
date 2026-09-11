@@ -16,7 +16,7 @@ dependencies, because an adopter's machine has no pytest either.
 | `3.12-slim-nonroot` | the lifecycle under user 1000 — permissions and ownership edges |
 | `pypi-adopter` | `pip install govrail==<version>` from the real index, then `gov --version` (network cell; a mirror outage reports SKIP, never red) |
 
-Thirteen-plus scenarios run in every deterministic cell: wheel version, the full
+Fifteen scenarios run in every deterministic cell: wheel version, the full
 lifecycle (init → gates → conflict → task close with receipt → verify →
 uninstall), the C-locale hostility round (#168/#172's wall on an
 ASCII-locale host with Chinese content), eight-process lease contention
@@ -50,6 +50,15 @@ tests/docker_e2e/run.sh --cell 3.12-alpine
 images, which is a deliberate act, not a default test. Wiring it into
 CI (ubuntu runners have Docker) is a one-line workflow step and a
 maintainer decision.
+
+## Locale-variant evaluation (zh_TW/Big5)
+
+Evaluated and DEFERRED: a Big5 cell would exercise the same
+`force_utf8_stdio` wall as the GBK cell with a different legacy codec —
+one code path, near-zero marginal signal, one more image to maintain.
+The GBK cell keeps the hostility premise (a host that decodes non-UTF-8)
+with the codec whose incident actually happened (#172). Revisit only if
+a Big5-specific incident ever exists.
 
 ## Engineering notes
 
