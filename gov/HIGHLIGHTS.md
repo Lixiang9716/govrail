@@ -3,15 +3,49 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
-## 0.30.0 — (draft: copied from CHANGELOG, rewrite for usage)
+## 0.30.0 — the plane learns to read code: tree-sitter parse layer, gov stats, gov check
 
-- encoding= checks ride the check engine — differential proof retires the regex scanner
-- the check engine — syntax-class rules over the parse layer (D57)
-- tree-sitter as a base dependency — the parse layer and gov stats (D54)
+- **tree-sitter joins the base dependencies** (core + 8 official grammar
+  packs: python, go, java, rust, javascript, typescript, c, cpp) — the
+  plane can now parse the code it governs. Requires Python >= 3.10
+  (tree-sitter's floor); the OS classifiers name the supported platforms
+  explicitly. Boundary locked in D54: the syntax layer is used only
+  where the syntax answer IS the answer — types and flow stay out, and
+  compile truth stays with each language's own compiler.
+- **`gov stats`** — structural facts per language: lines (counting rule
+  echoed: a docstring is a string, so it counts as CODE), symbols,
+  nesting depth (p50/p95/max + the deepest functions). Facts, not
+  verdicts — nothing here gates. `--record` appends to the stats ledger
+  so complexity trend becomes visible over time.
+- **`gov check`** — syntax-class checks as data rules. Shipped: the
+  editor-level syntax check for all eight languages (it claims "does
+  not parse", never "does not compile"), plus the #172 scar-tissue
+  rules: subprocess / open() / read_text() / write_text() without
+  `encoding=` go red — on a GBK-locale host those decode with the
+  locale codec and crash on the first non-ASCII byte. Suppressions are
+  `# gov:ignore-check <id>` and they are COUNTED — an exemption that
+  grows is a trend someone should see. `--strict` makes warnings block.
+- Language packs are data (`gov/langs/*.json`) and every node kind they
+  name is validated against the grammar at load — a typo'd kind would
+  silently zero its metric. Parse failures are named, never silently
+  skipped. `gov doctor` reports the parse layer and per-grammar
+  versions.
+- Platform honesty: `requires-python` moves to >=3.10 and the
+  `OS Independent` classifier is retired — the dependency carries
+  compiled parts, so the supported-platform story is named per platform
+  (D54).
 
-## 0.29.4 — (draft: copied from CHANGELOG, rewrite for usage)
+## 0.29.4 — the coverage ledger's warning finally tells you how to fix it
 
-- self-test's undeclared-case warning prints the remedy inline
+- `gov self-test`'s undeclared-case warning now prints the remedy beside
+  the file it names: add `# gate: <id>` within the first five lines
+  (a line inside a module docstring counts) to link a project rejection
+  case to the gate it proves (issue #167). `gov self-test --help`
+  documents the contract, and the rejections README says the same —
+  previously both the syntax and the five-line scan window had to be
+  reverse-engineered from the source.
+- The "write one" hint keeps its guard: a case that ran and passed is
+  never nagged about being written (#18/D32).
 
 ## 0.29.3 — the pytest suite runs on Windows, its skips named
 
