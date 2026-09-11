@@ -77,6 +77,7 @@ FLAGS: dict[str, set[str]] = {
     "review": {"--base", "--hits", "--grade"},
     "trend": {"--last", "--gate", "--base", "--by-tag", "--cost"},
     "stats": {"--lang", "--record", "--json"},
+    "check": {"--lang", "--strict", "--record", "--json"},
     "doctor": {"--json"},
     "note": {"--class", "--ref"},  # on the `new` subcommand
     "whatsnew": {"--since"},
