@@ -4,7 +4,40 @@
       "id": "python/syntax",
       "kind": "parse-errors",
       "severity": "error",
-      "message": "file does not parse (editor-level syntax check \u2014 a compiler verdict belongs to the language's own compiler)"
+      "message": "file does not parse (editor-level syntax check — a compiler verdict belongs to the language's own compiler)"
+    },
+    {
+      "id": "python/subprocess-text-encoding",
+      "kind": "query",
+      "severity": "error",
+      "message": "text-mode subprocess without encoding= decodes with the HOST locale codec — on a GBK-locale Windows the first non-ASCII UTF-8 byte crashes the reader thread (#172); pass encoding='utf-8', errors='replace'",
+      "query": "((call\n   function: (attribute\n     object: (identifier) @pkg\n     attribute: (identifier) @meth)\n   arguments: (argument_list\n     (keyword_argument\n        name: (identifier) @tflag\n        value: (true))))\n @gov-node\n(#eq? @pkg \"subprocess\")\n(#match? @tflag \"^(text|universal_newlines)$\"))",
+      "absent_query": [
+        "(keyword_argument name: (identifier) @k (#eq? @k \"encoding\"))"
+      ]
+    },
+    {
+      "id": "python/open-text-encoding",
+      "kind": "query",
+      "severity": "warning",
+      "message": "open() defaults to text mode and decodes with the HOST locale codec — pass encoding='utf-8' explicitly (#172's class); binary mode users: state mode='b' via keyword",
+      "query": "((call function: (identifier) @fn) @gov-node (#eq? @fn \"open\"))",
+      "absent_query": [
+        "(keyword_argument name: (identifier) @k (#eq? @k \"encoding\"))",
+        "(keyword_argument name: (identifier) @k2 (#eq? @k2 \"mode\"))",
+        "(argument_list (string) @p1 (string) @p2)",
+        "(argument_list (identifier) @v1 (string) @p2)"
+      ]
+    },
+    {
+      "id": "python/pathlib-text-encoding",
+      "kind": "query",
+      "severity": "warning",
+      "message": "read_text()/write_text() decode with the HOST locale codec unless encoding= is passed (#172's class); pass encoding='utf-8' explicitly",
+      "query": "((call\n   function: (attribute attribute: (identifier) @meth))\n @gov-node\n (#match? @meth \"^(read_text|write_text)$\"))",
+      "absent_query": [
+        "(keyword_argument name: (identifier) @k (#eq? @k \"encoding\"))"
+      ]
     }
   ]
 }

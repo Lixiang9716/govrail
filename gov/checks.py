@@ -63,7 +63,7 @@ class Rule:
     severity: str
     message: str
     query: str | None = None
-    absent_query: str | None = None
+    absent_query: tuple[str, ...] = ()  # any match inside discharges
     node: str = "gov-node"
 
 
@@ -122,27 +122,34 @@ def _load_rule_file(path: Path, source: str) -> list[Rule]:
         if kind == "query" and not isinstance(r.get("query"), str):
             raise CheckError(
                 f"{source}: rule {rid!r}: query rules need a 'query' string")
-        if r.get("absent_query") is not None \
-                and not isinstance(r["absent_query"], str):
-            raise CheckError(
-                f"{source}: rule {rid!r}: 'absent_query' must be a string")
+        absent = r.get("absent_query")
+        if absent is not None:
+            if isinstance(absent, str):
+                absent = [absent]
+            if not isinstance(absent, list) \
+                    or not all(isinstance(qx, str) for qx in absent):
+                raise CheckError(
+                    f"{source}: rule {rid!r}: 'absent_query' must be a "
+                    "query string or an array of query strings")
         rules.append(Rule(
             id=rid, kind=kind, severity=severity,
             message=r.get("message") or f"matched {rid}",
             query=r.get("query"),
-            absent_query=r.get("absent_query"),
-            node=(r.get("node") or "gov-node").lstrip("@"),
+            absent_query=tuple(absent or ()),
+            node=(r.get("node") or "gov-node").lstrip("@."),
         ))
     return rules
 
 
-def load_rules(lang: str) -> list[Rule]:
+def load_rules(lang: str, include_project: bool = True) -> list[Rule]:
     """Shipped rules for a language, then the project's additions.
 
     Project files (``.gov/checks/<lang>.json``) may ADD rules; a project
     rule re-using a shipped id is refused rather than silently overriding
     it — an override that flips a shipped rule's meaning must be loud
-    (rule 5).
+    (rule 5). ``include_project=False`` loads the shipped set alone — the
+    self-test's shipped proofs use it so a host project's rule files can
+    never perturb the product's own rejection cases.
     """
     shipped_path = Path(_BUILTINS) / f"{lang}.json"
     rules: list[Rule] = []
@@ -151,6 +158,8 @@ def load_rules(lang: str) -> list[Rule]:
         for r in _load_rule_file(shipped_path, f"shipped checks ({lang})"):
             rules.append(r)
             ids.add(r.id)
+    if not include_project:
+        return rules
     project_path = PROJECT_DIR / f"{lang}.json"
     if project_path.exists():
         for r in _load_rule_file(project_path, f".gov/checks/{lang}.json"):
@@ -171,7 +180,7 @@ _pack_cache: dict[str, object] = {}
 def _compiled(lang: str, rule: Rule):
     """(query, absent_query | None), compiled once per (lang, rule)."""
     cache_key = (lang, rule.id, rule.query or "",
-                 rule.absent_query or "")
+                 tuple(rule.absent_query))
     cached = _query_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -189,7 +198,7 @@ def _compiled(lang: str, rule: Rule):
     language = Language(factory())
     try:
         q = Query(language, rule.query)
-        aq = Query(language, rule.absent_query) if rule.absent_query else None
+        aqs = [Query(language, qx) for qx in rule.absent_query]
     except Exception as e:
         raise CheckError(f"rule {rule.id!r}: query does not compile: {e}") from e
     # The query compiler ACCEPTS unknown node kinds — they silently match
@@ -198,17 +207,21 @@ def _compiled(lang: str, rule: Rule):
     # node symbol against the grammar's kind table; the `_` wildcard is
     # the one legal non-kind.
     kinds = pack.kind_ids
-    for token in QUERY_NODE_RX.findall(rule.query) + \
-            (QUERY_NODE_RX.findall(rule.absent_query)
-             if rule.absent_query else []):
+    # String literals are blanked first: a predicate's regex argument
+    # ("^(text|...)$") contains parens and would otherwise yield phantom
+    # node tokens.
+    def node_tokens(query: str) -> list[str]:
+        return QUERY_NODE_RX.findall(re.sub(r'"[^"]*"', '""', query))
+    for token in node_tokens(rule.query) + \
+            [tok for qx in rule.absent_query for tok in node_tokens(qx)]:
         if token == "_" or token in kinds:
             continue
         raise CheckError(
             f"rule {rule.id!r}: node kind {token!r} does not exist in "
             f"grammar {pack.grammar!r} — it would silently match nothing "
             "(rule 5)")
-    _query_cache[cache_key] = (q, aq)
-    return q, aq
+    _query_cache[cache_key] = (q, aqs)
+    return q, aqs
 
 
 def _collect_comments(root, comment_kinds: frozenset) -> list:
@@ -259,7 +272,7 @@ def check_tree(src: bytes, tree, comments: list, lang: str,
                 stack.extend(n.children)
             continue
 
-        q, aq = _compiled(lang, rule)
+        q, aqs = _compiled(lang, rule)
         cursor = QueryCursor(q)
 
         def as_list(v):
@@ -274,8 +287,8 @@ def check_tree(src: bytes, tree, comments: list, lang: str,
                 continue
             node = as_list(target)[0]
             span = (node.start_point[0], node.end_point[0])
-            if aq is not None and list(QueryCursor(aq).matches(node)):
-                continue  # the "absent" thing is present — discharged
+            if any(list(QueryCursor(aq).matches(node)) for aq in aqs):
+                continue  # an "absent" thing is present — discharged
             findings.append(Finding(
                 rule_id=rule.id, severity=rule.severity,
                 message=rule.message, path="", row=node.start_point[0],
