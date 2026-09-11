@@ -81,6 +81,31 @@ class TestKnownAnswer:
         assert lines["comment"] == 0
         assert lines["code"] == 25
 
+    def test_crlf_lines_do_not_drift(self, tmp_path):
+        """Windows text-mode writes emit CRLF; a line offset that assumes
+        one terminator byte drifts every later line into the previous
+        comment spans and misclassifies code as comment — the first
+        Windows CI run caught exactly this."""
+        body = (
+            "package main\n"
+            "\n"
+            "// a full-line comment sits before the code lines\n"
+            "func main() {\n"
+            "\tif x > 0 { // trailing comment\n"
+            "\t\tprintln(1)\n"
+            "\t}\n"
+            "}\n"
+        )
+        (tmp_path / "crlf.go").write_bytes(body.replace("\n", "\r\n")
+                                           .encode("utf-8"))
+        pack = parse.load_pack("go")
+        agg = stats.compute(tmp_path, [pack])
+        lines = _lang(agg, "go")["lines"]
+        assert lines["total"] == 8
+        assert lines["comment"] == 1  # only the full-line comment
+        assert lines["blank"] == 1
+        assert lines["code"] == 6  # the trailing-comment line is code
+
     def test_python_docstrings_are_code_not_comment(self, tmp_path):
         """The counting rule the output echoes: a multi-line string is CODE.
         A docstring-only file therefore has code > 0 and comment == 0."""

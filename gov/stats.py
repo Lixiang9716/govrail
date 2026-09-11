@@ -112,16 +112,25 @@ def _walk_metrics(src: bytes, root, pack) -> _Metrics:
     visit(root, 0)
 
     # Line classification: bisect comment spans by each line's first
-    # non-whitespace byte. A scan-per-line was O(lines x comments) and
-    # cost 2x the parse on this repo.
+    # non-whitespace byte. Line boundaries are located by FINDING the \n
+    # bytes, not by assuming one terminator byte per line — CRLF files
+    # (Windows checkouts, text-mode writes) consume two, and an assumed
+    # +1 drifts every later line's offset into the previous spans,
+    # misclassifying code lines as comments (caught by the Windows CI
+    # job on this code's first run).
     spans = sorted(m.comment_spans)
     m.comment_spans = []
     starts = [a for a, _ in spans]
     from bisect import bisect_right
-    offset = 0
-    for raw in src.splitlines():
-        start = offset
-        offset = start + len(raw) + 1
+    data = src
+    pos = 0
+    while pos < len(data):
+        nl = data.find(b"\n", pos)
+        if nl == -1:
+            raw, start, pos_next = data[pos:], pos, len(data)
+        else:
+            raw, start, pos_next = data[pos:nl], pos, nl + 1
+        pos = pos_next
         m.total += 1
         stripped = raw.strip()
         if not stripped:
