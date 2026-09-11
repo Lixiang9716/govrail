@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.4](https://github.com/Lixiang9716/govrail/compare/v0.29.3...v0.29.4) (2026-09-11)
+
+
+### Bug Fixes
+
+* self-test's undeclared-case warning prints the remedy inline ([#167](https://github.com/Lixiang9716/govrail/issues/167)) ([#177](https://github.com/Lixiang9716/govrail/issues/177)) ([5464adb](https://github.com/Lixiang9716/govrail/commit/5464adb23cff475b9bcb51c3fde39052188e7d93))
+
 ## [0.29.3](https://github.com/Lixiang9716/govrail/compare/v0.29.2...v0.29.3) (2026-09-07)
 
 

@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.29.4 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- self-test's undeclared-case warning prints the remedy inline
+
 ## 0.29.3 — the pytest suite runs on Windows, its skips named
 
 - The `windows` CI job now runs `pytest -q` alongside the fresh-project
