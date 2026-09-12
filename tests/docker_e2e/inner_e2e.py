@@ -1649,6 +1649,70 @@ def decisions_dir_parallel(base):
     gov("verify-decisions", cwd=p)
 
 
+
+
+def cost_ordering(base):
+    """trend --cost's roll-up ORDER and multi-unit cells, hand-computed:
+    callers sort alphabetically with (untagged) first (paren < letters),
+    and one caller's multiple units join a cell row sorted by unit name
+    (calls before tokens)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    for tag, cost in (("beta", "tokens=50"),
+                      ("alpha", "tokens=100,calls=2"),
+                      (None, "tokens=80")):
+        if tag:
+            gov("run", "--tag", tag, "--cost", cost, cwd=p)
+        else:
+            gov("run", "--cost", cost, cwd=p)
+    r = gov("trend", "--cost", cwd=p)
+    lines = [ln for ln in r.stdout.splitlines()
+             if ln.startswith("  caller ")]
+    assert len(lines) == 3, lines
+    # alphabetical caller order, paren first: (untagged), alpha, beta
+    assert lines[0].startswith("  caller (untagged):")
+    assert lines[1].startswith("  caller alpha:")
+    assert lines[2].startswith("  caller beta:")
+    # one caller's multi-unit row: each unit gets its OWN early/late
+    # cell, alphabetically — both counted, neither merged
+    assert "calls 2 (0 early → 2 late); " \
+           "tokens 100 (0 early → 100 late)" in lines[1], lines[1]
+
+
+def review_dossier_corpora(base):
+    """The dossier's recall section across ALL THREE corpora: a diff's
+    path tokens surface hits from an implemented note, a postmortem,
+    AND the decisions source — the reviewer reads every memory that
+    mentions the change, in one section."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    note_dir = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-hedge.md").write_text(
+        "# Agent Note: hedge rates\n\nStatus: implemented\n\n"
+        "## Problem\ncurrency swings\n\n## Decision\nhedge\n\n"
+        "## Alternatives considered\nignore\n", encoding="utf-8")
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text(
+        "## D1 — hedge the rates\n\n- **选项**：hedge now\n\n"
+        "- **状态**：已决\n", encoding="utf-8")
+    (p / "docs" / "postmortem").mkdir(exist_ok=True)
+    (p / "docs" / "postmortem" / "2026-09-01-cache.md").write_text(
+        "# Postmortem: cache stampede\n\nthe hedge saved us\n",
+        encoding="utf-8")
+    commit_all(p, "three corpora seeded")
+    (p / "fx").mkdir()
+    (p / "fx" / "hedge-rates.py").write_text("rate = 1.0\n",
+                                             encoding="utf-8")
+    r = gov("review", "--base", "HEAD~1", cwd=p)
+    block = r.stdout.split("## 3. recall", 1)[1].split("## 4.", 1)[0]
+    # all three corpora surface in one section
+    assert "hedge.md" in block, block
+    assert "decisions.md" in block, block
+    assert "2026-09-01-cache.md" in block, block
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1675,6 +1739,8 @@ SCENARIOS = {
     "manifest_drift": manifest_drift,
     "surfaces_custom": surfaces_custom,
     "decision_parallel": decision_parallel,
+    "cost_ordering": cost_ordering,
+    "review_dossier_corpora": review_dossier_corpora,
     "cost_base_split": cost_base_split,
     "postmortem_pair": postmortem_pair,
     "by_tag_split": by_tag_split,
