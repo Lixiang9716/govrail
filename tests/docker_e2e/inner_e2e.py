@@ -1289,6 +1289,111 @@ def receipt_squash(base):
     gov("receipt", "verify", "HEAD", cwd=p, expect=1)
 
 
+
+
+def by_tag_multi(base):
+    """Three callers x --base: alpha lives entirely BEFORE the cut,
+    beta entirely AFTER, gamma STRADDLES it. The composition's honest
+    answers: alpha and beta each lack a far side (named, not invented),
+    while gamma — with samples on BOTH sides — produces a real mover
+    (100ms -> 300ms, x3.0)."""
+    from datetime import datetime, timedelta, timezone
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "feature.txt").write_text("work\n", encoding="utf-8")
+    git("add", "-A", cwd=p)
+    past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    env = dict(os.environ)
+    env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = past
+    subprocess.run(["git", "commit", "--amend", "--no-edit",
+                    "--date=" + past],
+                   cwd=p, env=env, capture_output=True, check=True)
+    base_ref = "HEAD"
+
+    now = datetime.now(timezone.utc)
+    early_ts = (now - timedelta(days=3)).isoformat(timespec="seconds")
+    late_ts = now.isoformat(timespec="seconds")
+
+    def rec(ts, caller, ms):
+        return {"ts": ts, "caller": caller,
+                "gates": [{"gate": "g", "outcome": "PASS",
+                           "blocking": False, "duration_ms": ms,
+                           "detail": "", "selected_by": "e2e",
+                           "scoped_out": False}]}
+
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    lines = [rec(early_ts, "alpha", 100), rec(early_ts, "alpha", 100),
+             rec(late_ts, "beta", 300), rec(late_ts, "beta", 300),
+             rec(early_ts, "gamma", 100), rec(early_ts, "gamma", 100),
+             rec(late_ts, "gamma", 300), rec(late_ts, "gamma", 300)]
+    with history.open("a", encoding="utf-8") as f:
+        for line in lines:
+            f.write(json.dumps(line, separators=(",", ":")) + "\n")
+
+    r = gov("trend", "--by-tag", "--base", base_ref, cwd=p)
+    out = r.stdout
+    # first-appearance ordering (alpha seen first)
+    assert out.index("caller alpha") < out.index("caller beta")
+    # the straddler gets a real comparison across the cut
+    assert "p50 100ms → 300ms" in out and "×3.0 ↑" in out, out
+    # the one-sided tags say so, twice, instead of inventing a comparison
+    assert out.count("need at least 2 comparable run(s) to split") == 2
+
+
+def grade_rubric_evolution(base):
+    """The grade loop reads the rubric LIVE: a rubric that grows between
+    two grade runs changes what the loop asks — no caching, no stale
+    copy. The review stays anchored to the CURRENT standard."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    item = ("### {rid} — {title}\n\n"
+            "- **Checks:** `{thing}` reviewed\n"
+            "- **Evidence:** reviewed above\n"
+            "- **Anti-pattern:** rubber stamp\n"
+            "- **Gate candidate:** no — judgment\n")
+    (docs / "review-rubric.md").write_text(
+        "# Review rubric\n\n"
+        + item.format(rid="R1", title="feature lands loudly",
+                      thing="feature.txt")
+        + "\n", encoding="utf-8")
+    commit_all(p, "one-item rubric")
+    (p / "feature.txt").write_text("the feature\n", encoding="utf-8")
+    note_dir = p / ".agents" / "notes" / "implemented" / "feature"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-feature.md").write_text(
+        "# Agent Note: feature\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "the work")
+    # grade against the ONE-item rubric: exactly one prompt
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD~1", "--grade"],
+        cwd=p, input="p\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 0 and r.stdout.count("[p/f/s/q]") == 1, r.stdout
+
+    # the rubric GROWS: the next grade loop asks about both items
+    (docs / "review-rubric.md").write_text(
+        "# Review rubric\n\n"
+        + item.format(rid="R1", title="feature lands loudly",
+                      thing="feature.txt")
+        + "\n"
+        + item.format(rid="R2", title="cleanup is real",
+                      thing="feature.txt")
+        + "\n", encoding="utf-8")
+    commit_all(p, "rubric grows to two items")
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD~1", "--grade"],
+        cwd=p, input="p\np\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 0
+    assert r.stdout.count("[p/f/s/q]") == 2, r.stdout
+    assert "R2" in r.stdout and "verdict: approve" in r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1320,6 +1425,8 @@ SCENARIOS = {
     "by_tag_split": by_tag_split,
     "demo_specimen": demo_specimen,
     "cost_attribution": cost_attribution,
+    "by_tag_multi": by_tag_multi,
+    "grade_rubric_evolution": grade_rubric_evolution,
     "perf_night": perf_night,
 }
 
