@@ -1564,6 +1564,91 @@ def recall_corpus_boundaries(base):
     assert "decisions 1 (docs/decisions.md)" in r.stdout + r.stderr
 
 
+
+
+def next_count_base(base):
+    """`next --count` x `--base` compose: after a sibling branch lands
+    D2, the base-aware count prints D3/D4 — the numbers the merged
+    history will show — while the stale view (no --base) still says
+    D2/D3. The advice changes when the base is consulted."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    sections = docs / "decisions.md"
+    sections.write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    commit_all(p, "seed D1")
+    # the sibling branch (agent-a) lands D2 through the tool itself
+    git("checkout", "-q", "-b", "agent-a", cwd=p)
+    draft = p / "d2.md"
+    draft.write_text("sibling storage\n\n- **选项**：table\n\n"
+                     "- **状态**：已决\n", encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    commit_all(p, "a allocates D2")
+    git("checkout", "-q", "-", cwd=p)  # back to the original branch
+
+    # the STALE view (own branch only): D2/D3
+    r = gov("decision", "next", "--count", "2", cwd=p)
+    assert r.stdout.strip() == "D2\nD3", r.stdout
+    # the BASE-AWARE view: the sibling's D2 is visible through the base,
+    # so the two numbers shift to D3/D4
+    r = gov("decision", "next", "--count", "2", "--base", "agent-a", cwd=p)
+    assert r.stdout.strip() == "D3\nD4", r.stdout
+
+
+def decisions_dir_parallel(base):
+    """Dir format's structural claim (D17), raced for real: two
+    concurrent `decision add` calls in one checkout create SEPARATE
+    files — both succeed, nothing lost, verify green. The sections
+    format's same race serializes on the lock instead (batch 9's
+    fix), and both adds land sequentially."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions", "format": "dir"}), encoding="utf-8")
+    dd = p / "docs" / "decisions"
+    dd.mkdir(parents=True)
+    (dd / "D1-adopt.md").write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n", encoding="utf-8")
+    commit_all(p, "seed D1")
+    draft2 = p / "d2.md"
+    draft2.write_text("parallel plan a\n\n- **选项**：a\n",
+                      encoding="utf-8")
+    draft3 = p / "d3.md"
+    draft3.write_text("parallel plan b\n\n- **选项**：b\n",
+                      encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    # same-id race: mutual exclusion means exactly one D2 file — the
+    # loser refuses loudly (already exists), never a silent loss
+    procs = [
+        subprocess.Popen(
+            ["gov", "decision", "add", "--from", str(draft2), "--id", "D2"],
+            cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", env=env),
+        subprocess.Popen(
+            ["gov", "decision", "add", "--from", str(draft2), "--id", "D2"],
+            cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", env=env),
+    ]
+    outs = [pr.communicate(timeout=120) for pr in procs]
+    codes = sorted(pr.returncode for pr in procs)
+    assert codes == [0, 1], (
+        f"exactly one winner: {codes} {[o[0] + o[1] for o in outs]}")
+    assert list(dd.glob("D2-*.md")) != [], "the winner's file landed"
+    # the sequential D3 lands after (no structural conflict between
+    # different decisions — each is its own file)
+    draft3 = p / "d3.md"
+    draft3.write_text("sequential plan\n\n- **选项**：c\n",
+                      encoding="utf-8")
+    gov("decision", "add", "--from", str(draft3), cwd=p)
+    assert list(dd.glob("D3-*.md")), "the sequential D3 landed"
+    gov("verify-decisions", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1600,6 +1685,8 @@ SCENARIOS = {
     "grade_quit_skip": grade_quit_skip,
     "preset_on_specimen": preset_on_specimen,
     "next_count_allocation": next_count_allocation,
+    "next_count_base": next_count_base,
+    "decisions_dir_parallel": decisions_dir_parallel,
     "recall_corpus_boundaries": recall_corpus_boundaries,
     "perf_night": perf_night,
 }
