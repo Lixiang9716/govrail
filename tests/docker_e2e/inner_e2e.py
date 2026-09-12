@@ -1847,6 +1847,84 @@ def next_count_table(base):
     gov("verify-decisions", cwd=p)
 
 
+
+
+def table_edges(base):
+    """Table format's gate-time edges through the CLI: a GAP in the
+    numbering (D0/D2 with no D1) is named; adding into the gap is
+    REFUSED unless --base says the missing sibling lands elsewhere
+    (pre-partitioning); a DUPLICATE number is named."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "table"}),
+        encoding="utf-8")
+    table = p / "docs" / "decisions.md"
+    table.parent.mkdir(parents=True, exist_ok=True)
+    # a GAP: D0 and D2 with no D1 row — named loudly
+    table.write_text(
+        "| Dn | title | options |\n|---|---|---|\n"
+        "| D0 | storage | 选项：table |\n"
+        "| D2 | indexing | 选项：btree |\n", encoding="utf-8")
+    r = gov("verify-decisions", cwd=p, expect=1)
+    assert "missing: D1" in r.stdout, r.stdout
+
+    # FILLING the gap is legitimate: --id D1 lands, verify turns green
+    draft = p / "d1.md"
+    draft.write_text("| ? | the missing one | 选项：d1 |\n",
+                     encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), "--id", "D1", cwd=p)
+    gov("verify-decisions", cwd=p)
+
+    # a SKIP is what's refused: D4 with D2...D3 absent? no — D3 absent:
+    # the series is D0,D1,D2 -> next is D3; --id D4 skips D3
+    draft.write_text("| ? | skip ahead | 选项：d4 |\n", encoding="utf-8")
+    r = gov("decision", "add", "--from", str(draft), "--id", "D4", cwd=p,
+            expect=1)
+    assert "skips D3" in r.stdout + r.stderr
+
+    # a duplicate number is named
+    table.write_text(
+        "| Dn | title | options |\n|---|---|---|\n"
+        "| D0 | storage | 选项：table |\n"
+        "| D0 | duplicate | 选项：dup |\n"
+        "| D1 | the missing one | 选项：d1 |\n"
+        "| D2 | indexing | 选项：btree |\n", encoding="utf-8")
+    r = gov("verify-decisions", cwd=p, expect=1)
+    assert "duplicate" in r.stdout.lower(), r.stdout
+
+
+def recall_any_multilingual(base):
+    """--any ranks by TERMS MATCHED: an entry containing two of the
+    query terms outranks entries containing one — regardless of where
+    (title beats body within the same term count). Case-insensitive:
+    Hedge matches hedge."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    impl = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    impl.mkdir(parents=True)
+    # 2/2 terms, in the TITLE
+    (impl / "2026-01-01-full.md").write_text(
+        "# Agent Note: hedge exposure\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    # 1/2 terms, in the TITLE (case differs: Hedge)
+    (impl / "2026-01-02-half.md").write_text(
+        "# Agent Note: Hedge book\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    r = gov("recall", "--any", "hedge", "exposure", cwd=p)
+    lines = [ln for ln in r.stdout.splitlines() if " — matched " in ln]
+    two_term = [ln for ln in lines if "matched 2/2" in ln]
+    one_term = [ln for ln in lines if "matched 1/2" in ln]
+    assert len(two_term) == 1 and "full.md" in two_term[0], lines
+    assert len(one_term) == 1 and "half.md" in one_term[0], lines
+    # ordering: the 2/2 entry prints BEFORE the 1/2 entry
+    assert r.stdout.index("full.md") < r.stdout.index("half.md")
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1886,6 +1964,8 @@ SCENARIOS = {
     "postmortem_recall_any": postmortem_recall_any,
     "recall_any_ranking": recall_any_ranking,
     "next_count_table": next_count_table,
+    "table_edges": table_edges,
+    "recall_any_multilingual": recall_any_multilingual,
     "grade_quit_skip": grade_quit_skip,
     "preset_on_specimen": preset_on_specimen,
     "next_count_allocation": next_count_allocation,
