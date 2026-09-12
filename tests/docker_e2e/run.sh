@@ -133,7 +133,11 @@ if [ -z "$CELL" ] || [ "$CELL" = "gbk" ]; then
   if [ "$QUICK" = "1" ] && ! built_image_is_current "gbk"; then
     echo "== skip gbk (--quick)"; else
   build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }  # gbk derives from it: the base must be current first
-  build_cell_from "govrail-e2e:3.12-slim" tests/docker_e2e/Dockerfile.gbk "gbk" \
+  docker build --quiet \
+    --build-arg "APT_MIRROR=${GOV_APT_MIRROR:-deb.debian.org}" \
+    --build-arg "EXPECTED_VERSION=$VERSION" \
+    -f tests/docker_e2e/Dockerfile.gbk -t "$IMAGE_PREFIX:gbk" "$REPO" \
+    && baked_sha > "$(stamp_path "gbk")" \
     || { FAILED=1; }
   if ! [ "$FAILED" = "1" ]; then run_cell "gbk" "gbk-locale"; fi
   fi

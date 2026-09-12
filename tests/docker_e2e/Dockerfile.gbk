@@ -9,10 +9,11 @@
 # green while proving nothing.
 FROM govrail-e2e:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends locales \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /locales \
-    && localedef -i zh_CN -f GBK /locales/zh_CN.GBK
+# APT_MIRROR: same pattern as GOV_DOCKER_MIRROR — hosts far from the
+# Debian CDN point at a near mirror and the cell stops fighting the
+# network for the locales archive.
+ARG APT_MIRROR=deb.debian.org
+RUN sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/*.sources     && apt-get update && apt-get install -y --no-install-recommends locales     && rm -rf /var/lib/apt/lists/*     && mkdir -p /locales     && localedef -i zh_CN -f GBK /locales/zh_CN.GBK
 
 ENV LOCPATH=/locales \
     LC_ALL=zh_CN.GBK \

@@ -42,6 +42,11 @@ COPY dist/govrail-*.whl /src/dist/
 RUN pip install --no-cache-dir /src/dist/govrail-*.whl
 
 COPY tests/docker_e2e/inner_e2e.py /usr/local/bin/inner_e2e.py
+# the living specimen: the demo project rides along so every cell can
+# prove a governed project stays governed (demo_specimen)
+COPY examples/demo-project /demo
+# the non-root cell reads the specimen as user 1000
+RUN chmod -R a+rX /demo
 ARG EXPECTED_VERSION
 ENV GOV_E2E_EXPECTED_VERSION=${EXPECTED_VERSION}
 

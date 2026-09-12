@@ -923,6 +923,99 @@ def postmortem_pair(base):
     assert "outage.zh.md" in r.stdout
 
 
+
+def by_tag_split(base):
+    """--by-tag composes with --base: every caller group splits at the
+    SAME commit date (#120). The crafted ledger makes the composition
+    DISTINGUISHABLE from the own-halfway default: a tag concentrated
+    before the base date has an empty late half under --base (it cannot
+    compare), while the own-halfway split would call it stable over
+    nothing. First-appearance ordering is pinned too."""
+    from datetime import datetime, timedelta, timezone
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "feature.txt").write_text("work\n", encoding="utf-8")
+    git("add", "-A", cwd=p)
+    past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    env = dict(os.environ)
+    env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = past
+    subprocess.run(["git", "commit", "--amend", "--no-edit",
+                    "--date=" + past],
+                   cwd=p, env=env, capture_output=True, check=True)
+    base_ref = "HEAD"
+
+    now = datetime.now(timezone.utc)
+    early_ts = (now - timedelta(days=3)).isoformat(timespec="seconds")
+    late_ts = now.isoformat(timespec="seconds")
+
+    def rec(ts, caller, ms):
+        return {"ts": ts, "caller": caller,
+                "gates": [{"gate": "g", "outcome": "PASS",
+                           "blocking": False, "duration_ms": ms,
+                           "detail": "", "selected_by": "e2e",
+                           "scoped_out": False}]}
+
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    lines = [rec(early_ts, "alpha", 100), rec(early_ts, "alpha", 100),
+             rec(late_ts, "beta", 300), rec(late_ts, "beta", 300)]
+    with history.open("a", encoding="utf-8") as f:
+        for line in lines:
+            f.write(json.dumps(line, separators=(",", ":")) + "\n")
+
+    # own-halfway: each group compares against itself -> stable
+    r = gov("trend", "--by-tag", cwd=p)
+    assert "p50 100ms → 100ms" in r.stdout
+    assert "p50 300ms → 300ms" in r.stdout
+    assert "stable over 2 run(s)" in r.stdout
+    # composed with --base: alpha sits entirely before the cut, beta
+    # entirely after — each group's far side is EMPTY, and the report
+    # says so instead of inventing a comparison
+    r = gov("trend", "--by-tag", "--base", base_ref, cwd=p)
+    assert r.stdout.count("need at least 2 comparable run(s) to split") == 2
+    assert "caller alpha" in r.stdout and "caller beta" in r.stdout
+    assert "split at" in r.stdout
+    # first-appearance ordering: alpha (seen first) lists before beta
+    assert r.stdout.index("caller alpha") < r.stdout.index("caller beta")
+
+
+def demo_specimen(base):
+    """The living specimen stays a working governed project: the demo
+    copied into the workspace runs its own full gate DAG, reads as clean
+    by the parse layer's checks, and reports its structure."""
+    demo = Path("/demo")
+    if not demo.is_dir():
+        print("E2E demo_specimen: SKIP (no /demo in this image)")
+        return
+    p = Path(base) / "demo-work"
+    p.mkdir(parents=True)
+    for item in demo.iterdir():
+        target = p / item.name
+        if item.is_dir():
+            import shutil
+            shutil.copytree(item, target)
+        else:
+            import shutil
+            shutil.copy(item, target)
+    # the copy must BE a repository: the git-driven gates (note-presence,
+    # conflict-markers) diff against HEAD — without it they cannot run
+    git("init", "-q", ".", cwd=p)
+    git("config", "user.email", "t@t", cwd=p)
+    git("config", "user.name", "t", cwd=p)
+    commit_all(p, "specimen as shipped")
+    # the specimen is already initialized: its DAG runs green as shipped
+    r = gov("run", "--mode", "all", cwd=p)
+    assert "pass" in r.stdout
+    # the read-side over the specimen
+    r = gov("stats", "--json", "--lang", "python", cwd=p)
+    value = json.loads(r.stdout)
+    assert value["languages"]["python"]["files"] >= 1
+    gov("check", cwd=p)
+    # the demo's rejection cases run under self-test inside it
+    r = gov("self-test", "--scope", "project", cwd=p)
+    assert "all pass" in r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -946,6 +1039,8 @@ SCENARIOS = {
     "decision_parallel": decision_parallel,
     "cost_base_split": cost_base_split,
     "postmortem_pair": postmortem_pair,
+    "by_tag_split": by_tag_split,
+    "demo_specimen": demo_specimen,
     "cost_attribution": cost_attribution,
     "perf_night": perf_night,
 }
