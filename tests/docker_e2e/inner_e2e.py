@@ -1394,6 +1394,110 @@ def grade_rubric_evolution(base):
     assert "R2" in r.stdout and "verdict: approve" in r.stdout
 
 
+
+
+def grade_quit_skip(base):
+    """The grade loop's conservative edges: q QUITS and blocks (an
+    aborted review is never an approval, exit 1, no verdict block); an
+    unrecognized key is SKIPPED without a verdict (the human's typo is
+    never transcribed as one); an empty verdict list approves with zero
+    blockers; and input END aborts (exit 1)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    item = ("### {rid} — {title}\n\n"
+            "- **Checks:** `{thing}` reviewed\n"
+            "- **Evidence:** reviewed above\n"
+            "- **Anti-pattern:** rubber stamp\n"
+            "- **Gate candidate:** no — judgment\n")
+    (docs / "review-rubric.md").write_text(
+        "# Review rubric\n\n"
+        + item.format(rid="R1", title="feature lands loudly",
+                      thing="feature.txt")
+        + "\n"
+        + item.format(rid="R2", title="cleanup is real",
+                      thing="feature.txt")
+        + "\n", encoding="utf-8")
+    commit_all(p, "rubric")
+    # the dossier needs a DIFF: an uncommitted change vs HEAD
+    (p / "feature.txt").write_text("the feature\n", encoding="utf-8")
+
+    # q at the FIRST prompt: quit, block, no verdict block at all
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD", "--grade"],
+        cwd=p, input="q\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 1, r.stdout
+    assert "review: grade quit" in r.stdout
+    assert "verdict:" not in r.stdout, "an aborted review never approves"
+
+    # unrecognized keys are SKIPPED — a human's typo is never transcribed
+    # as a verdict; an empty verdict list approves with zero blockers
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD", "--grade"],
+        cwd=p, input="x\ny\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 0, r.stdout
+    assert "verdict: approve" in r.stdout
+
+    # input END aborts (EOFError), same conservative shape as quit
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD", "--grade"],
+        cwd=p, input="", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 1
+    assert "input ended" in r.stdout
+
+
+def preset_on_specimen(base):
+    """The preset adoption journey against the REAL specimen: the demo
+    copy has no manifest, so preset apply must refuse (naming gov init);
+    after init, the agent-heavy preset lands ADDITIVELY (gate + skill +
+    hint), re-apply is idempotent, and the specimen's own DAG stays
+    green WITH the adopted gate."""
+    demo = Path("/demo")
+    if not demo.is_dir():
+        print("E2E preset_on_specimen: SKIP (no /demo in this image)")
+        return
+    p = Path(base) / "demo-preset"
+    p.mkdir(parents=True)
+    import shutil
+    for item in demo.iterdir():
+        target = p / item.name
+        if item.is_dir():
+            shutil.copytree(item, target)
+        else:
+            shutil.copy(item, target)
+    git("init", "-q", ".", cwd=p)
+    git("config", "user.email", "t@t", cwd=p)
+    git("config", "user.name", "t", cwd=p)
+    commit_all(p, "specimen as shipped")
+
+    # uninitialized: preset apply refuses, naming gov init (rule 5)
+    r = gov("preset", "apply", "agent-heavy", cwd=p, expect=2)
+    assert "initialized" in r.stdout + r.stderr
+
+    gov("init", cwd=p)
+    r = gov("preset", "apply", "agent-heavy", cwd=p)
+    gates = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    assert "verify-decisions" in [g["id"] for g in gates["gates"]], \
+        "the preset's gate landed additively"
+    # the specimen's own gate is named `archive` (its own naming) —
+    # preserved through the additive apply
+    assert "archive" in [g["id"] for g in gates["gates"]], \
+        "the specimen's own gates were preserved"
+    assert (p / ".agents" / "skills" / "parallel-workers" / "SKILL.md")
+    r = gov("preset", "apply", "agent-heavy", cwd=p)
+    assert "already adopted" in r.stdout
+
+    # the specimen with its adopted gate: governance mode runs green
+    gov("run", "--mode", "governance", cwd=p)
+    # and the full repaired DAG still runs WITH the adoption
+    r = gov("run", "--mode", "all", cwd=p)
+    assert "pass" in r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1427,6 +1531,8 @@ SCENARIOS = {
     "cost_attribution": cost_attribution,
     "by_tag_multi": by_tag_multi,
     "grade_rubric_evolution": grade_rubric_evolution,
+    "grade_quit_skip": grade_quit_skip,
+    "preset_on_specimen": preset_on_specimen,
     "perf_night": perf_night,
 }
 
