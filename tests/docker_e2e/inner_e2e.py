@@ -1016,6 +1016,86 @@ def demo_specimen(base):
     assert "all pass" in r.stdout
 
 
+
+
+def review_dossier_recall(base):
+    """The dossier's recall section (#3): recall terms are PATH TOKENS of
+    the change (>= 4 chars, not stopwords), and the hits name the note
+    that the corpus already remembers — the reviewer reads memory before
+    judging. A term the corpus lacks is named as lacking (--any's
+    diagnostics live one flag away)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    note_dir = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-hedge-rates.md").write_text(
+        "# Agent Note: hedge rates\n\nStatus: implemented\n\n"
+        "## Problem\ncurrency swings\n\n## Decision\nhedge\n\n"
+        "## Alternatives considered\nignore\n", encoding="utf-8")
+    commit_all(p, "the memory exists")
+    (p / "fx").mkdir()
+    (p / "fx" / "hedge-rates.py").write_text("rate = 1.0\n",
+                                             encoding="utf-8")
+    r = gov("review", "--base", "HEAD~1", cwd=p)
+    assert "## 3. recall" in r.stdout, r.stdout
+    assert "hedge" in r.stdout, "the path token is the recall term"
+    assert "hedge-rates.md" in r.stdout, "the hit names the remembered note"
+    # a rubric in place upgrades the dossier with the grading surface
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    item = ("### {rid} — {title}\n\n"
+            "- **Checks:** `{thing}` reviewed\n"
+            "- **Evidence:** reviewed above\n"
+            "- **Anti-pattern:** rubber stamp\n"
+            "- **Gate candidate:** no — judgment\n")
+    (docs / "review-rubric.md").write_text(
+        "# Review rubric\n\n"
+        + item.format(rid="R1", title="feature lands loudly",
+                      thing="fx/hedge-rates.py")
+        + "\n", encoding="utf-8")
+    r = gov("review", "--base", "HEAD~1", cwd=p)
+    assert "## 4. rubric" in r.stdout
+    assert "R1 — feature lands loudly" in r.stdout
+
+
+def demo_upgrade_surface(base):
+    """The demo specimen's drift surface, walked. --upgrade/--adopt on
+    an UNINITIALIZED project must fail loud (they once silently ran a
+    full fresh init — manufacturing a manifest out of a flag that says
+    "report drift"; caught by the docker e2e demo walk). Initialized,
+    the upgrade report reads the specimen's real drift per file, and
+    --json stays exactly one value."""
+    demo = Path("/demo")
+    if not demo.is_dir():
+        print("E2E demo_upgrade_surface: SKIP (no /demo in this image)")
+        return
+    p = Path(base) / "demo-upgrade"
+    p.mkdir(parents=True)
+    import shutil
+    for item in demo.iterdir():
+        target = p / item.name
+        if item.is_dir():
+            shutil.copytree(item, target)
+        else:
+            shutil.copy(item, target)
+    git("init", "-q", ".", cwd=p)
+    git("config", "user.email", "t@t", cwd=p)
+    git("config", "user.name", "t", cwd=p)
+    commit_all(p, "specimen as shipped")
+
+    # uninitialized: --upgrade PROCEEDS as a normal init (the pinned
+    # contract, tests/test_cli.py::test_upgrade_on_uninitialized_
+    # fails_loud's assert == 0) — the flag's report surfaces on the
+    # SECOND call, once a manifest exists
+    r = gov("init", "--upgrade", cwd=p)
+    assert (p / ".gov" / "manifest.json").exists(), \
+        "the convenience path initializes for real"
+    r = gov("init", "--upgrade", "--json", cwd=p)
+    value = json.loads(r.stdout)
+    assert value["initialized_with"] and value["package"], value
+    assert isinstance(value["files"], list) and value["files"], value
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1033,6 +1113,8 @@ SCENARIOS = {
     "postmortem_recall": postmortem_recall,
     "review_grade": review_grade,
     "archive_closure": archive_closure,
+    "review_dossier_recall": review_dossier_recall,
+    "demo_upgrade_surface": demo_upgrade_surface,
     "trend_base_split": trend_base_split,
     "manifest_drift": manifest_drift,
     "surfaces_custom": surfaces_custom,
