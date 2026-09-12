@@ -1765,6 +1765,88 @@ def postmortem_recall_any(base):
     assert "outage.md" in r.stdout and "outage.zh.md" in r.stdout, r.stdout
 
 
+
+
+def recall_any_ranking(base):
+    """--any ranks by WHERE the term hit: title (3) > heading (2) >
+    body (1), archived demoted within a rank. Three notes, three ranks,
+    one term — the printed order IS the contract."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    impl = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    impl.mkdir(parents=True)
+    # rank 3: the term in the TITLE
+    (impl / "2026-01-01-hedge.md").write_text(
+        "# Agent Note: hedge\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    # rank 2: the term only in a HEADING
+    (impl / "2026-01-02-positions.md").write_text(
+        "# Agent Note: positions\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## hedge policy\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    # rank 1: the term only in the BODY
+    (impl / "2026-01-03-coverage.md").write_text(
+        "# Agent Note: coverage\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd (the hedge fund filed)\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "three ranks seeded")
+    # --any's print format: `{source} — matched k/N terms (where)` —
+    # rank order (title > heading > body) via the WHERE description
+    r = gov("recall", "--any", "hedge", cwd=p)
+    order = [ln.split(" — ")[0].rsplit("/", 1)[-1]
+             for ln in r.stdout.splitlines()
+             if " — matched " in ln and not ln.startswith("recall:")]
+    assert order == ["2026-01-01-hedge.md", "2026-01-02-positions.md",
+                     "2026-01-03-coverage.md"], \
+        f"title > heading > body, got {order}"
+
+    # archived demotes within a rank: same title-rank, archived last
+    arch = p / ".agents" / "notes" / "archived" / "bug-fix"
+    arch.mkdir(parents=True)
+    (arch / "2025-12-31-hedge.md").write_text(
+        "# Agent Note: hedge (old)\n\nStatus: archived\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    r = gov("recall", "--any", "hedge", cwd=p)
+    order = [ln.split(" — ")[0].rsplit("/", 1)[-1]
+             for ln in r.stdout.splitlines()
+             if " — matched " in ln and not ln.startswith("recall:")]
+    # F4: current authority over frozen evidence — the archived title
+    # match ranks after its live peers within the same rank
+    assert order == ["2026-01-01-hedge.md", "2025-12-31-hedge.md",
+                     "2026-01-02-positions.md", "2026-01-03-coverage.md"], \
+        order
+
+
+def next_count_table(base):
+    """`next --count` x TABLE format: two seeded rows (D0/D1 legal for
+    tables), the count prints D2/D3; after a real add lands the D2 row,
+    the count shifts to D3/D4 — same counter contract, different shape."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "table"}),
+        encoding="utf-8")
+    table = p / "docs" / "decisions.md"
+    table.parent.mkdir(parents=True, exist_ok=True)
+    table.write_text(
+        "| Dn | title | options |\n|---|---|---|\n"
+        "| D0 | storage | 选项：table |\n"
+        "| D1 | indexing | 选项：btree |\n", encoding="utf-8")
+    r = gov("decision", "next", "--count", "2", cwd=p)
+    assert r.stdout.strip() == "D2\nD3", r.stdout
+    draft = p / "d2.md"
+    draft.write_text("| ? | retention | 选项：30d |\n", encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    assert "| D2 | retention" in table.read_text(encoding="utf-8")
+    r = gov("decision", "next", "--count", "2", cwd=p)
+    assert r.stdout.strip() == "D3\nD4", r.stdout
+    gov("verify-decisions", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1802,6 +1884,8 @@ SCENARIOS = {
     "grade_rubric_evolution": grade_rubric_evolution,
     "next_count_dir": next_count_dir,
     "postmortem_recall_any": postmortem_recall_any,
+    "recall_any_ranking": recall_any_ranking,
+    "next_count_table": next_count_table,
     "grade_quit_skip": grade_quit_skip,
     "preset_on_specimen": preset_on_specimen,
     "next_count_allocation": next_count_allocation,
