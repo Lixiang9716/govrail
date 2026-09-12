@@ -1172,6 +1172,123 @@ def decisions_formats(base):
     gov("verify-decisions", cwd=p)
 
 
+
+
+def decisions_migration(base):
+    """A project migrates its decisions source BETWEEN formats —
+    sections to table and back. The claim under test: the SAME decision
+    content survives the migration with numbering continuity intact,
+    and the allocation tool keeps counting from where the migrated
+    table ends (D17's both-formats promise)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+
+    # sections era: D1 seeded, D2 added through the CLI
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "sections"}),
+        encoding="utf-8")
+    sections = docs / "decisions.md"
+    sections.write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    draft = p / "d2.md"
+    draft.write_text("storage table\n\n- **选项**：table\n\n"
+                     "- **状态**：已决\n", encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    gov("verify-decisions", cwd=p)
+    r = gov("decision", "next", cwd=p)
+    assert "D3" in r.stdout
+
+    # MIGRATE: the same two decisions as table rows; format flips
+    table = ("| Dn | title | options |\n|---|---|---|\n"
+             "| D1 | adopt | 选项：gov init |\n"
+             "| D2 | storage table | 选项：table |\n")
+    sections.write_text(table, encoding="utf-8")
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "table"}),
+        encoding="utf-8")
+    gov("verify-decisions", cwd=p)
+    r = gov("decision", "next", cwd=p)
+    assert "D3" in r.stdout, "numbering continuity survives the migration"
+
+    # the migrated table keeps allocating: D3 added as a row
+    draft.write_text("| ? | parallel safe | 选项：dir |\n",
+                     encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    gov("verify-decisions", cwd=p)
+    assert "| D3 |" in sections.read_text(encoding="utf-8")
+
+    # reverse migration: table rows back to sections, still consistent
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "sections"}),
+        encoding="utf-8")
+    sections.write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n\n"
+        "## D2 — storage table\n\n- **选项**：table\n\n- **状态**：已决\n\n"
+        "## D3 — parallel safe\n\n- **选项**：dir\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    gov("verify-decisions", cwd=p)
+    r = gov("decision", "next", cwd=p)
+    assert "D4" in r.stdout
+
+
+def receipt_squash(base):
+    """D44's flagship promise, end to end: a receipt recorded on a
+    feature branch still verifies after a SQUASH merge — the commit sha
+    moves, the tree does not. Negative control: a different tree must
+    not verify."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    # baseline the README pair: the receipt must record a GREEN run —
+    # an unbaselined pair fails pairing (advisory for the run's exit,
+    # but the receipt records outcomes, and verify demands green)
+    gov("verify-pairing", "--write", cwd=p)
+    commit_all(p, "baseline")
+    # capture the default branch BEFORE creating the feature branch
+    default_branch = git("rev-parse", "--abbrev-ref",
+                         "HEAD", cwd=p).stdout.strip()
+    git("checkout", "-q", "-b", "feature", cwd=p)
+    (p / "feature.txt").write_text("the feature\n", encoding="utf-8")
+    (p / ".agents" / "notes" / "implemented" / "feature").mkdir(
+        parents=True, exist_ok=True)
+    (p / ".agents" / "notes" / "implemented" / "feature" /
+     "2026-01-01-feature.md").write_text(
+        "# Agent Note: feature\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "the feature")
+    gov("run", "--receipt", "--tag", "e2e-squash", cwd=p)
+    branch_head = git("rev-parse", "HEAD", cwd=p).stdout.strip()
+
+    # squash-merge into the default branch: NEW commit sha, IDENTICAL
+    # tree (default_branch was captured before the feature branch existed)
+    git("checkout", "-q", default_branch, cwd=p)
+    git("merge", "--squash", "feature", cwd=p)
+    git("-c", "commit.gpgsign=false", "commit", "-qm", "squash the feature",
+        cwd=p)
+    squash_head = git("rev-parse", "HEAD", cwd=p).stdout.strip()
+    assert squash_head != branch_head, "the squash created a new commit"
+    tree_a = git("rev-parse", f"{branch_head}^{{tree}}", cwd=p).stdout.strip()
+    tree_b = git("rev-parse", f"{squash_head}^{{tree}}", cwd=p).stdout.strip()
+    assert tree_a == tree_b, "the squash must carry the identical tree"
+
+    # the receipt recorded on the BRANCH verifies against the SQUASH
+    # commit: same tree, full clean green
+    gov("receipt", "verify", "HEAD", cwd=p)
+
+    # negative control: a DIFFERENT tree must not verify (the change is
+    # committed — verify matches trees, and an uncommitted edit changes
+    # nothing about the recorded tree)
+    (p / "feature.txt").write_text("changed\n", encoding="utf-8")
+    commit_all(p, "a different tree")
+    gov("receipt", "verify", "HEAD", cwd=p, expect=1)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1190,6 +1307,8 @@ SCENARIOS = {
     "review_grade": review_grade,
     "archive_closure": archive_closure,
     "decisions_formats": decisions_formats,
+    "decisions_migration": decisions_migration,
+    "receipt_squash": receipt_squash,
     "review_dossier_recall": review_dossier_recall,
     "demo_upgrade_surface": demo_upgrade_surface,
     "trend_base_split": trend_base_split,
