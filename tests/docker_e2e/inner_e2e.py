@@ -1713,6 +1713,58 @@ def review_dossier_corpora(base):
     assert "2026-09-01-cache.md" in block, block
 
 
+
+
+def next_count_dir(base):
+    """`next --count` x DIR format compose: D1 seeded as its own file,
+    the count prints D2/D3; after a real add lands D2-*.md, the count
+    shifts to D3/D4 — the dir scan and the counter agree."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions", "format": "dir"}), encoding="utf-8")
+    dd = p / "docs" / "decisions"
+    dd.mkdir(parents=True)
+    (dd / "D1-adopt.md").write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n", encoding="utf-8")
+    r = gov("decision", "next", "--count", "2", cwd=p)
+    assert r.stdout.strip() == "D2\nD3", r.stdout
+    draft = p / "d2.md"
+    draft.write_text("dir storage\n\n- **选项**：dir\n", encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    landed = list(dd.glob("D2-*.md"))
+    assert len(landed) == 1, "the add created exactly one file"
+    r = gov("decision", "next", "--count", "2", cwd=p)
+    assert r.stdout.strip() == "D3\nD4", r.stdout
+    gov("verify-decisions", cwd=p)
+
+
+def postmortem_recall_any(base):
+    """--any across a BILINGUAL postmortem pair: each side contains one
+    of the two terms — --any ranks BOTH entries (one term matched each),
+    while the strict AND misses both (no entry has both). One corpus,
+    two languages, two honest answers."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    pm = p / "docs" / "postmortem"
+    pm.mkdir(parents=True)
+    (pm / "2026-09-11-outage.md").write_text(
+        "# Postmortem: the outage\n\nroot cause: cache stampede\n",
+        encoding="utf-8")
+    (pm / "2026-09-11-outage.zh.md").write_text(
+        "# 复盘：故障\n\n根因：缓存雪崩\n", encoding="utf-8")
+    commit_all(p, "bilingual postmortem")
+
+    # strict AND across languages: no entry has BOTH terms -> exit 1
+    r = gov("recall", "stampede", "缓存雪崩", cwd=p, expect=1)
+    assert "no match" in r.stdout
+    # --any relaxes: BOTH entries rank (one term matched each) -> exit 0
+    r = gov("recall", "--any", "stampede", "缓存雪崩", cwd=p)
+    assert "outage.md" in r.stdout and "outage.zh.md" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1748,6 +1800,8 @@ SCENARIOS = {
     "cost_attribution": cost_attribution,
     "by_tag_multi": by_tag_multi,
     "grade_rubric_evolution": grade_rubric_evolution,
+    "next_count_dir": next_count_dir,
+    "postmortem_recall_any": postmortem_recall_any,
     "grade_quit_skip": grade_quit_skip,
     "preset_on_specimen": preset_on_specimen,
     "next_count_allocation": next_count_allocation,
