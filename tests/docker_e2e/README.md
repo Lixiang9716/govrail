@@ -36,6 +36,10 @@ tests/docker_e2e/run.sh --cell 3.12-alpine
 - Base images come from `GOV_DOCKER_MIRROR` (default
   `docker.mdaocloud`-style mirror; point it at `docker.io` where Docker
   Hub is reachable).
+- The gbk cell's apt sources take `GOV_APT_MIRROR` (default
+  `deb.debian.org`): the trixie CDN flakes on the locales archive at
+  peak hours — point it at a near mirror (e.g. `mirrors.aliyun.com`)
+  and the cell stops fighting the network.
 - The wheel is rebuilt from the checkout on every invocation; a sha
   stamp (`.wheel-sha`, gitignored… actually committed-state-free)
   forces per-cell rebuilds when it changes, so a stale image can never

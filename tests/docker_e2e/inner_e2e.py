@@ -1498,6 +1498,72 @@ def preset_on_specimen(base):
     assert "pass" in r.stdout
 
 
+
+
+def next_count_allocation(base):
+    """`decision next --count N` multi-allocation: N numbers, one per
+    line, CONTINUING from the landed end — and after a real add, the
+    count shifts (allocation follows the source, not a fixed window)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    sections = docs / "decisions.md"
+    sections.write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    commit_all(p, "seed D1")
+    r = gov("decision", "next", "--count", "3", cwd=p)
+    assert r.stdout.strip() == "D2\nD3\nD4", r.stdout
+    draft = p / "d2.md"
+    draft.write_text("landed storage\n\n- **选项**：table\n\n"
+                     "- **状态**：已决\n", encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    r = gov("decision", "next", "--count", "2", cwd=p)
+    assert r.stdout.strip() == "D3\nD4", r.stdout
+    gov("verify-decisions", cwd=p)
+
+
+def recall_corpus_boundaries(base):
+    """The corpus statement's boundaries (#148's read-side contract):
+    an EMPTY corpus declares three zeros; adding an archived-only note
+    updates the archived count; adding a decisions source updates the
+    decisions count — every invocation states what was searched, so a
+    miss is never ambiguous about the corpus it missed."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+
+    # phase 1: NO memory sources at all — exit 2 "is this a project
+    # root?" (a stricter boundary than term-miss: exit 1 means the
+    # corpus EXISTS and lacks the term)
+    r = gov("recall", "玄机", cwd=p, expect=2)
+    both = r.stdout + r.stderr
+    assert "no memory sources found" in both
+    assert "notes 0" in both and "postmortems 0" in both
+
+    # phase 2: an archived-only note joins the corpus — the corpus now
+    # EXISTS, so a miss becomes exit 1 with per-term counts
+    arch = p / ".agents" / "notes" / "archived" / "process"
+    arch.mkdir(parents=True)
+    (arch / "2026-01-01-superseded.md").write_text(
+        "# Agent Note: superseded\n\nroot cause: cache stampede\n",
+        encoding="utf-8")
+    r = gov("recall", "stampede", cwd=p)
+    assert "2026-01-01-superseded.md" in r.stdout
+    assert "archived 1" in r.stdout + r.stderr
+    r = gov("recall", "玄机", cwd=p, expect=1)
+    assert "玄机: 0" in r.stdout, "per-term counts on a corpus miss"
+
+    # phase 3: a decisions source joins; the statement counts it
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "decisions.md").write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n", encoding="utf-8")
+    r = gov("recall", "adopt", cwd=p)
+    assert "decisions 1 (docs/decisions.md)" in r.stdout + r.stderr
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1533,6 +1599,8 @@ SCENARIOS = {
     "grade_rubric_evolution": grade_rubric_evolution,
     "grade_quit_skip": grade_quit_skip,
     "preset_on_specimen": preset_on_specimen,
+    "next_count_allocation": next_count_allocation,
+    "recall_corpus_boundaries": recall_corpus_boundaries,
     "perf_night": perf_night,
 }
 
