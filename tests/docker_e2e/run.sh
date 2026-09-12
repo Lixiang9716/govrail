@@ -173,6 +173,16 @@ if [ "$NIGHTLY" = "1" ] || [ "$CELL" = "nightly" ]; then
   else echo "== cell nightly: PASS"; fi
 fi
 
+# the base-aware allocation drill: next --base across two containers
+if [ -z "$CELL" ] || [ "$CELL" = "crossalloc" ]; then
+  build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }
+  echo "== cell cross-container allocation"
+  out=$(bash tests/docker_e2e/cross_allocation_drill.sh "$IMAGE_PREFIX:3.12-slim" 2>&1)
+  echo "$out" | sed 's/^/    /'
+  if echo "$out" | grep -q "FAIL"; then echo "== cell crossalloc: FAIL"; FAILED=1
+  else echo "== cell crossalloc: PASS"; fi
+fi
+
 # the adopter-from-PyPI cell: real network, real published wheel.
 # Optional — a mirror outage reports SKIP, never a red run.
 if [ -z "$CELL" ] || [ "$CELL" = "pypi" ]; then

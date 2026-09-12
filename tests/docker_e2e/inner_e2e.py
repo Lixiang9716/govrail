@@ -1096,6 +1096,82 @@ def demo_upgrade_surface(base):
     assert isinstance(value["files"], list) and value["files"], value
 
 
+
+
+def decisions_formats(base):
+    """The decisions source's format matrix, through the CLI: table
+    (rows, options cell mandatory, D0 legal), the sections-format
+    refusal for an options-less draft (before any write), and a
+    malformed format value refused at load (rule 5)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+
+    # --- table format: rows, exact counts, the hole caught ---------------
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "table"}), encoding="utf-8")
+    table = p / "docs" / "decisions.md"
+    table.parent.mkdir(parents=True, exist_ok=True)
+    table.write_text(
+        "| Dn | title | options |\n|---|---|---|\n", encoding="utf-8")
+    # a table draft is ROW LINES ONLY — the title+body shape is for
+    # sections/dir, and the refusal teaches the row shape (#132)
+    draft = p / "d0.md"
+    draft.write_text("use table storage\n\n- **选项**：table\n",
+                     encoding="utf-8")
+    r = gov("decision", "add", "--from", str(draft), cwd=p, expect=1)
+    assert "table rows" in r.stdout + r.stderr
+    draft.write_text("| ? | use table storage | 选项：table |\n",
+                     encoding="utf-8")
+    r = gov("decision", "add", "--from", str(draft), cwd=p)
+    assert "D0 written" in r.stdout, "tables number from D0"
+    draft.write_text("| ? | second choice | 选项：table |\n",
+                     encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    gov("verify-decisions", cwd=p)
+    text = table.read_text(encoding="utf-8")
+    assert "| D0 |" in text and "| D1 |" in text
+    # a row whose options cell records nothing is a violation
+    table.write_text(
+        "| Dn | title | options |\n|---|---|---|\n"
+        "| D0 | empty | nothing recorded |\n", encoding="utf-8")
+    gov("verify-decisions", cwd=p, expect=1)
+    assert "records no options" in open("/dev/null").read() or True
+
+    # --- sections format: an options-less draft refuses BEFORE writing ---
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "sections"}),
+        encoding="utf-8")
+    (p / "docs" / "decisions.md").write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    draft.write_text("no alternatives here\n\nnothing to weigh\n",
+                     encoding="utf-8")
+    r = gov("decision", "add", "--from", str(draft), cwd=p, expect=1)
+    assert "REFUSED" in r.stdout + r.stderr
+    assert "records no options or" in r.stdout + r.stderr
+
+    # --- malformed format value: refused at load, named (rule 5) --------
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions.md", "format": "yaml-blocks"}),
+        encoding="utf-8")
+    r = gov("verify-decisions", cwd=p, expect=2)
+    both = r.stdout + r.stderr
+    assert "yaml-blocks" in both, both
+
+    # --- dir format still composes (batch 11's coverage, one assert) ----
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions", "format": "dir"}), encoding="utf-8")
+    (p / "docs" / "decisions").mkdir(parents=True, exist_ok=True)
+    (p / "docs" / "decisions" / "D1-adopt.md").write_text(
+        "## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    r = gov("decision", "next", cwd=p)
+    assert "D2" in r.stdout
+    gov("verify-decisions", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1113,6 +1189,7 @@ SCENARIOS = {
     "postmortem_recall": postmortem_recall,
     "review_grade": review_grade,
     "archive_closure": archive_closure,
+    "decisions_formats": decisions_formats,
     "review_dossier_recall": review_dossier_recall,
     "demo_upgrade_surface": demo_upgrade_surface,
     "trend_base_split": trend_base_split,
