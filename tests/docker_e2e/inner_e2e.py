@@ -1925,6 +1925,61 @@ def recall_any_multilingual(base):
     assert r.stdout.index("full.md") < r.stdout.index("half.md")
 
 
+
+
+def cost_malformed(base):
+    """The cost ledger's rule-5 edges: a malformed cost field and a
+    non-numeric unit value are NAMED and SKIPPED — never silently
+    summed; the valid line's total stays exactly 100; and a window
+    with NO cost reporting gets the opt-in pointer, not a zero
+    roll-up."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gov("run", "--tag", "alpha", "--cost", "tokens=100", cwd=p)
+    # two malformed lines crafted straight into the ledger (metrics,
+    # not evidence — D44's line makes crafting legitimate)
+    history = p / ".gov" / "history" / "gates.jsonl"
+    gate = {"gate": "g", "outcome": "PASS", "blocking": False,
+            "detail": "", "selected_by": "e2e", "scoped_out": False}
+    now = "2026-09-12T12:00:00+00:00"
+    bad = {"ts": now, "caller": "beta", "cost": "oops", "gates": [gate]}
+    nonnum = {"ts": now, "caller": "beta",
+              "cost": {"tokens": "many"}, "gates": [gate]}
+    with history.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(bad, separators=(",", ":")) + "\n")
+        f.write(json.dumps(nonnum, separators=(",", ":")) + "\n")
+    r = subprocess.run(
+        ["gov", "trend", "--cost"], cwd=p, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    both = r.stdout + r.stderr
+    # both junk lines NAMED (rule 5), never silently summed
+    assert "skipping malformed cost field" in both, both
+    assert "skipping non-numeric 'tokens'" in both, both
+    # the roll-up counts ONLY the valid line: alpha 100; beta shows its
+    # run count with EMPTY cells (junk contributed no units)
+    assert "caller alpha: 1 run(s): tokens 100" in r.stdout, r.stdout
+    beta_line = [ln for ln in r.stdout.splitlines()
+                 if ln.startswith("  caller beta")]
+    assert beta_line == ["  caller beta: 1 run(s): "], beta_line
+    assert "tokens" not in beta_line[0], "junk cost must not be summed"
+
+
+def no_record_optout(base):
+    """Recording is the DEFAULT (D29); --no-record opts out — the ledger
+    stays empty and trend says so, naming where history WOULD be."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gov("run", "--no-record", cwd=p)
+    history = p / ".gov" / "history" / "gates.jsonl"
+    assert not history.exists() or history.read_text(
+        encoding="utf-8").strip() == "", "the opt-out left no ledger line"
+    r = gov("trend", cwd=p)
+    assert "no history yet" in r.stdout, r.stdout
+    # a normal run records again
+    gov("run", cwd=p)
+    assert history.exists(), "recording resumes by default"
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -1966,6 +2021,8 @@ SCENARIOS = {
     "next_count_table": next_count_table,
     "table_edges": table_edges,
     "recall_any_multilingual": recall_any_multilingual,
+    "cost_malformed": cost_malformed,
+    "no_record_optout": no_record_optout,
     "grade_quit_skip": grade_quit_skip,
     "preset_on_specimen": preset_on_specimen,
     "next_count_allocation": next_count_allocation,
