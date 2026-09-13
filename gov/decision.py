@@ -145,7 +145,7 @@ def _parse_draft(path: Path, fmt: str) -> tuple[str | None, str]:
     ``## Dn —`` heading). table drafts: the raw row lines, first cell
     ``Dn`` (explicit) or ``?`` (allocate).
     """
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     if fmt == "table":
         if not text.strip():
             # an empty table draft would otherwise append nothing while

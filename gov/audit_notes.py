@@ -209,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     notes = 0
     for p in sorted(IMPLEMENTED.rglob("*.md")):
         notes += 1
-        text = p.read_text(encoding="utf-8")
+        text = p.read_text(encoding="utf-8-sig")
         for flag in _flags_note(text, commands, decisions):
             emit(f"{p}: {flag}")
             findings.append({"file": str(p), "signal": flag})
@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     if SKILLS_DIR.is_dir():
         for p in sorted(SKILLS_DIR.rglob("*.md")):
             skills += 1
-            for flag in _drift(p.read_text(encoding="utf-8"), commands):
+            for flag in _drift(p.read_text(encoding="utf-8-sig"), commands):
                 emit(f"{p}: {flag}")
                 findings.append({"file": str(p), "signal": flag})
     human_state = "clean" if not findings else f"{len(findings)} signal(s)"

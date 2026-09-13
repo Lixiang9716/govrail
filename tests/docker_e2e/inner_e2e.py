@@ -3390,6 +3390,34 @@ def task_claim_status_guards(base):
     assert "done  T-0001" in r.stdout, r.stdout
 
 
+def memory_plane_bom(base):
+    """The memory plane reads UTF-8 authored on any OS: a note saved
+    with a UTF-8 BOM and CRLF endings passes verify-notes and its
+    TITLE is recallable, and a BOM'd decisions.md parses — the D-row
+    is found and next allocates past it (the BOM used to fail the
+    title check with a violation its author could not see)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    n = p / ".agents" / "notes" / "implemented" / "testing"
+    n.mkdir(parents=True)
+    (n / "2026-09-14-bom.md").write_bytes(
+        "\ufeff# Agent Note: bom note\r\n\r\nStatus: implemented\r\n\r\n"
+        "## Problem\r\nwindows editor wrote this\r\n\r\n"
+        "## Decision\r\nd\r\n\r\n## Alternatives considered\r\na\r\n"
+        .encode("utf-8"))
+    gov("verify-notes", cwd=p)
+    r = gov("recall", "bom note", cwd=p)
+    assert "matched in title" in r.stdout, r.stdout
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "decisions.md").write_bytes(
+        "\ufeff## D1 — bom decision\n\n- **选项**：x\n\n"
+        "- **状态**：已决\n".encode("utf-8"))
+    gov("verify-decisions", cwd=p)
+    r = gov("decision", "next", cwd=p)
+    assert "D2" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3473,6 +3501,7 @@ SCENARIOS = {
     "decision_end_gap_legal": decision_end_gap_legal,
     "recall_literal_specials": recall_literal_specials,
     "task_claim_status_guards": task_claim_status_guards,
+    "memory_plane_bom": memory_plane_bom,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,

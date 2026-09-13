@@ -35,7 +35,7 @@ REQUIRED_SECTIONS = ("## Problem", "## Decision", "## Alternatives considered")
 
 def check_note(path: Path) -> list[str]:
     errors: list[str] = []
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     lines = text.splitlines()
     if not lines or not lines[0].startswith("# "):
         errors.append("missing title heading (first line must start with '# ')")

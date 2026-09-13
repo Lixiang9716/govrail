@@ -105,7 +105,7 @@ def _corpus() -> Corpus:
             continue
         files = sorted(root.rglob("*.md"))
         for p in files:
-            text = p.read_text(encoding="utf-8")
+            text = p.read_text(encoding="utf-8-sig")
             out.append(Entry(p.as_posix(), _title_of(text), _headings_of(text), text))
         if lifecycle == "implemented":
             implemented = len(files)
@@ -126,7 +126,7 @@ def _corpus() -> Corpus:
         files = [p for p in sorted(POSTMORTEM.glob("*.md"))
                  if not p.name.startswith("README")]
         for p in files:
-            text = p.read_text(encoding="utf-8")
+            text = p.read_text(encoding="utf-8-sig")
             out.append(Entry(p.as_posix(), _title_of(text), _headings_of(text), text))
         postmortems = len(files)
     return Corpus(implemented, archived, postmortems, decisions,
