@@ -2992,6 +2992,57 @@ def locks_listing(base):
     assert "res/x" not in r.stdout and "a1" not in r.stdout, r.stdout
 
 
+def uninstall_reinit_roundtrip(base):
+    """The adoption lifecycle's exit and re-entry (D23): a repeat init
+    says 'already initialized' and duplicates NOTHING, uninstall
+    removes the injected governance and nothing else, a second
+    uninstall is a calm 'not initialized', and re-init re-injects the
+    same gate count and runs green."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gates = p / "gates.json"
+    n0 = len(json.loads(gates.read_text(encoding="utf-8"))["gates"])
+    r = gov("init", cwd=p)
+    assert "already initialized" in r.stdout, r.stdout
+    assert len(json.loads(gates.read_text(
+        encoding="utf-8"))["gates"]) == n0, "repeat init duplicates gates"
+    gov("uninstall", cwd=p)
+    for f in ("gates.json", "AGENTS.md"):
+        assert not (p / f).exists(), f
+    assert not (p / ".gov").exists() and not (p / ".agents").exists()
+    r = gov("uninstall", cwd=p, expect=2)
+    assert "not initialized" in r.stdout + r.stderr, r.stdout + r.stderr
+    gov("init", cwd=p)
+    assert len(json.loads(gates.read_text(
+        encoding="utf-8"))["gates"]) == n0, "re-init re-injects the same set"
+    gov("run", "--mode", "quick", cwd=p)
+
+
+def custom_mode_scoping(base):
+    """A project-declared mode runs EXACTLY its gate list (the other
+    gates stay out of the receipt), an unknown mode is refused naming
+    the known ones, and the built-in 'all' still spans the union."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    ids = [g["id"] for g in cfg["gates"]]
+    cfg["modes"]["deep"] = ids[:2]
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    r = gov("run", "--mode", "deep", cwd=p)
+    for gid in ids[:2]:
+        assert f"PASS {gid}" in r.stdout, r.stdout
+    for gid in ids[2:]:
+        assert f"PASS {gid}" not in r.stdout, r.stdout
+    r = gov("run", "--mode", "all", cwd=p)
+    for gid in ids:
+        # pairing runs advisory (FAIL) until baselined — the union
+        # assert is PRESENCE of the verdict, not its color
+        assert gid in r.stdout, r.stdout
+    r = gov("run", "--mode", "no-such-mode", cwd=p, expect=2)
+    assert "unknown mode 'no-such-mode'" in r.stderr, r.stderr
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3060,6 +3111,8 @@ SCENARIOS = {
     "ledger_concurrent_writes": ledger_concurrent_writes,
     "doctor_triage": doctor_triage,
     "locks_listing": locks_listing,
+    "uninstall_reinit_roundtrip": uninstall_reinit_roundtrip,
+    "custom_mode_scoping": custom_mode_scoping,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
