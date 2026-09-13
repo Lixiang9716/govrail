@@ -2742,6 +2742,68 @@ def window_edges(base):
     assert "p50 100ms → 200ms" not in r.stdout, r.stdout
 
 
+def decision_next_base_dir(base):
+    """`next --base` over a DIR-format source: the ref's D-files are
+    read from git history, unioned with local — a sibling branch's
+    D2/D3 push the local next to D4 while the stale-base warning names
+    the rows the local tree lacks, and an in-sync base stays silent on
+    stderr."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions", "format": "dir"}), encoding="utf-8")
+    d = p / "docs" / "decisions"
+    d.mkdir(parents=True)
+    row = "## D{} — {}\n\n- **选项**：x\n\n- **状态**：已决\n"
+    (d / "D1-hedge.md").write_text(row.format(1, "hedge"), encoding="utf-8")
+    commit_all(p, "D1")
+    branch = git("rev-parse", "--abbrev-ref", "HEAD",
+                 cwd=p).stdout.strip()
+    git("checkout", "-b", "sibling", cwd=p)
+    (d / "D2-b.md").write_text(row.format(2, "b"), encoding="utf-8")
+    (d / "D3-c.md").write_text(row.format(3, "c"), encoding="utf-8")
+    git("add", "-A", cwd=p)
+    git("commit", "-m", "D2 D3", cwd=p)
+    git("checkout", branch, cwd=p)
+    # stale base: the ref carries D2/D3 the local tree lacks
+    r = gov("decision", "next", "--base", "sibling", cwd=p)
+    assert "D4" in r.stdout, r.stdout
+    assert "2 rows behind" in r.stderr and "D2" in r.stderr, r.stderr
+    # absorb the rows: the same base is in sync — next is still D4,
+    # stderr silent
+    (d / "D2-b.md").write_text(row.format(2, "b"), encoding="utf-8")
+    (d / "D3-c.md").write_text(row.format(3, "c"), encoding="utf-8")
+    commit_all(p, "absorb D2 D3")
+    r = gov("decision", "next", "--base", "sibling", cwd=p)
+    assert "D4" in r.stdout, r.stdout
+    assert "rows behind" not in r.stderr, r.stderr
+
+
+def lang_filter(base):
+    """`check --lang` / `stats --lang` narrow the scan to the named
+    language: a clean python file and a BROKEN go file share the tree —
+    the python pass stays green and never names b.go, the go pass exits
+    1 naming b.go (twice-filtered, repeatable flag), and stats --json
+    reports exactly the requested language."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    (src / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    (src / "b.go").write_text("func {\n", encoding="utf-8")
+    r = gov("check", "--lang", "python", cwd=p)
+    assert "b.go" not in r.stdout + r.stderr, r.stdout + r.stderr
+    r = gov("check", "--lang", "go", cwd=p, expect=1)
+    assert "b.go" in r.stdout + r.stderr, r.stdout + r.stderr
+    assert "a.py" not in r.stdout + r.stderr, r.stdout + r.stderr
+    r = gov("stats", "--json", "--lang", "python", cwd=p)
+    langs = json.loads(r.stdout)["languages"]
+    assert list(langs) == ["python"], langs
+    assert langs["python"]["files"] == 1
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2801,6 +2863,8 @@ SCENARIOS = {
     "audit_notes_signals": audit_notes_signals,
     "preset_adoption_bundle": preset_adoption_bundle,
     "window_edges": window_edges,
+    "decision_next_base_dir": decision_next_base_dir,
+    "lang_filter": lang_filter,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
