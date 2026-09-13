@@ -2671,6 +2671,42 @@ def audit_notes_signals(base):
     assert "2026-09-13-clean" not in r.stdout, r.stdout
 
 
+def preset_adoption_bundle(base):
+    """The preset flow (D53) end to end: list names the shipped
+    bundles, show prints a bundle and writes NOTHING, apply is
+    ADDITIVE (the project's own gate keeps its id and its mode slot;
+    the preset's gates join in preset order), a second apply is a loud
+    no-op, and an unknown preset names the available ones (rule 5)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    r = gov("preset", "list", cwd=p)
+    for name in ("agent-heavy", "docs-bilingual", "python-lib"):
+        assert name in r.stdout, r.stdout
+    gates = p / "gates.json"
+    before = gates.read_text(encoding="utf-8")
+    r = gov("preset", "show", "python-lib", cwd=p)
+    assert "pytest" in r.stdout and "read-only" in r.stdout, r.stdout
+    assert gates.read_text(encoding="utf-8") == before, "show wrote nothing"
+    # a LOCAL gate survives the apply, and the preset's gates join
+    cfg = json.loads(before)
+    cfg["gates"].append({"id": "my-gate", "command": ["true"]})
+    cfg["modes"]["all"].append("my-gate")
+    gates.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    r = gov("preset", "apply", "python-lib", cwd=p)
+    assert "added 2" in r.stdout, r.stdout
+    cfg = json.loads(gates.read_text(encoding="utf-8"))
+    ids = [g["id"] for g in cfg["gates"]]
+    assert ids[-3:] == ["my-gate", "pytest", "build"], ids
+    assert "my-gate" in cfg["modes"]["all"], "the local gate keeps its slot"
+    # second apply: a loud no-op
+    r = gov("preset", "apply", "python-lib", cwd=p)
+    assert "nothing to add" in r.stdout and "already adopted" in r.stdout, (
+        r.stdout)
+    # unknown preset names the available ones
+    r = gov("preset", "apply", "no-such-preset", cwd=p, expect=2)
+    assert "agent-heavy" in r.stderr and "python-lib" in r.stderr, r.stderr
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2728,6 +2764,7 @@ SCENARIOS = {
     "whatsnew_since_edges": whatsnew_since_edges,
     "stats_ledger_roundtrip": stats_ledger_roundtrip,
     "audit_notes_signals": audit_notes_signals,
+    "preset_adoption_bundle": preset_adoption_bundle,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
