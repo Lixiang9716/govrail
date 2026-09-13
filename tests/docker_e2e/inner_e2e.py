@@ -2319,6 +2319,91 @@ def perf_night_budgets(base):
           f"check {check_dt:.1f}s")
 
 
+
+
+def recall_rank_classes(base):
+    """Rank across ALL FOUR corpus classes with one term. A decisions
+    D-row's heading IS its title (recall loads decisions entries with
+    title=<heading text>, headings=[]), so a hit in "## D1 — the hedge
+    decision" is a CURRENT title(3) hit. Sort key (-rank, archived,
+    path): implemented title (3, current, ".agents/" < "docs/") >
+    decisions title (3, current) > archived title (3, frozen — F4
+    demotion) > postmortem body (1). Current authority outranks frozen
+    evidence ACROSS classes, not just within implemented."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    impl = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    impl.mkdir(parents=True)
+    (impl / "2026-01-01-hedge.md").write_text(
+        "# Agent Note: hedge\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    arch = p / ".agents" / "notes" / "archived" / "bug-fix"
+    arch.mkdir(parents=True)
+    (arch / "2025-12-31-hedge.md").write_text(
+        "# Agent Note: hedge (old)\n\nStatus: archived\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "decisions.md").write_text(
+        "## D1 — the hedge decision\n\n- **选项**：hedge now\n",
+        encoding="utf-8")
+    (docs / "postmortem").mkdir(exist_ok=True)
+    (docs / "postmortem" / "2025-06-01-cache.md").write_text(
+        "# Postmortem: cache stampede\n\nthe hedge fund filed\n",
+        encoding="utf-8")
+    commit_all(p, "four classes seeded")
+    r = gov("recall", "--any", "hedge", cwd=p)
+    order = [ln.split(" — ")[0].rsplit("/", 1)[-1]
+             for ln in r.stdout.splitlines()
+             if " — matched " in ln and not ln.startswith("recall:")]
+    assert order == ["2026-01-01-hedge.md", "decisions.md#D1",
+                     "2025-12-31-hedge.md", "2025-06-01-cache.md"], order
+
+
+def cost_base_boundary(base):
+    """--cost x --base: the split's boundary equality — a run whose ts
+    EXACTLY equals the base commit's date lands in EARLY. Hand-computed:
+    early = the at+before runs (150 tokens), late = the after run (400)."""
+    from datetime import datetime, timedelta, timezone
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "feature.txt").write_text("work\n", encoding="utf-8")
+    git("add", "-A", cwd=p)
+    at = datetime.now(timezone.utc).replace(microsecond=0)
+    env = dict(os.environ)
+    env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = at.isoformat()
+    subprocess.run(["git", "commit", "--amend", "--no-edit",
+                    "--date=" + at.isoformat()],
+                   cwd=p, env=env, capture_output=True, check=True)
+    base_ref = "HEAD"
+    before = (at - timedelta(days=1)).isoformat(timespec="seconds")
+    after = (at + timedelta(days=1)).isoformat(timespec="seconds")
+    gate = {"gate": "g", "outcome": "PASS", "blocking": False,
+            "detail": "", "selected_by": "e2e", "scoped_out": False}
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        {"ts": before, "caller": "alpha", "cost": {"tokens": 100},
+         "gates": [gate]},
+        {"ts": at.isoformat(timespec="seconds"), "caller": "alpha",
+         "cost": {"tokens": 50}, "gates": [gate]},
+        {"ts": after, "caller": "alpha", "cost": {"tokens": 400},
+         "gates": [gate]},
+    ]
+    with history.open("a", encoding="utf-8") as f:
+        for line in lines:
+            f.write(json.dumps(line, separators=(",", ":")) + "\n")
+    r = gov("trend", "--cost", "--base", base_ref, cwd=p)
+    # the AT run (ts == split) is EARLY: alpha early 150 (100+50),
+    # late 400 — boundary equality holds on the cost dimension. The
+    # run(s) count and token total span the WHOLE window; the split
+    # shows only in the parenthetical.
+    assert "caller alpha: 3 run(s): tokens 550 " \
+           "(150 early → 400 late)" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2366,6 +2451,8 @@ SCENARIOS = {
     "recall_any_ranking": recall_any_ranking,
     "next_count_table": next_count_table,
     "table_edges": table_edges,
+    "recall_rank_classes": recall_rank_classes,
+    "cost_base_boundary": cost_base_boundary,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
