@@ -2188,6 +2188,137 @@ def grade_rubric_contract(base):
     assert r.stdout.count("— pass") == 0 and "— fail" not in r.stdout
 
 
+
+
+def trend_split_boundary(base):
+    """The split's boundary semantics: a run whose ts EXACTLY EQUALS
+    the base commit's date lands in EARLY (the <= in the split) —
+    pinned with three runs AT/BEFORE/AFTER the line."""
+    from datetime import datetime, timedelta, timezone
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "feature.txt").write_text("work\n", encoding="utf-8")
+    git("add", "-A", cwd=p)
+    at = datetime.now(timezone.utc).replace(microsecond=0)
+    before = at - timedelta(days=1)
+    after = at + timedelta(days=1)
+    env = dict(os.environ)
+    env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = at.isoformat()
+    subprocess.run(["git", "commit", "--amend", "--no-edit",
+                    "--date=" + at.isoformat()],
+                   cwd=p, env=env, capture_output=True, check=True)
+    base_ref = "HEAD"
+
+    def rec(ts, ms):
+        return {"ts": ts, "gates": [{"gate": "g", "outcome": "PASS",
+                                     "blocking": False,
+                                     "duration_ms": ms, "detail": "",
+                                     "selected_by": "e2e",
+                                     "scoped_out": False}]}
+
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    lines = [rec(before.isoformat(timespec="seconds"), 100),
+             rec(at.isoformat(timespec="seconds"), 200),
+             rec(after.isoformat(timespec="seconds"), 400)]
+    with history.open("a", encoding="utf-8") as f:
+        for line in lines:
+            f.write(json.dumps(line, separators=(",", ":")) + "\n")
+
+    # the AT run (ts == split_at) lands in EARLY (the <= in the
+    # split): early = [before 100, at 200] -> p50 150; late = [after
+    # 400] -> p50 400. The mover line is the pinned contract.
+    r = gov("trend", "--base", base_ref, cwd=p)
+    assert "p50 150ms → 400ms" in r.stdout, r.stdout
+
+
+def grade_evidence_edges(base):
+    """The evidence prompt's edges: an EMPTY answer falls back to
+    '(no evidence given)' — still transcribed as a fail verdict — and
+    a q AFTER accumulated verdicts DISCARDS them (the verdict block
+    never appears)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    item = ("### {rid} — {title}\n\n"
+            "- **Checks:** `{thing}` reviewed\n"
+            "- **Evidence:** reviewed above\n"
+            "- **Anti-pattern:** rubber stamp\n"
+            "- **Gate candidate:** no — judgment\n")
+    (docs / "review-rubric.md").write_text(
+        "# Review rubric\n\n"
+        + item.format(rid="R1", title="feature lands loudly",
+                      thing="feature.txt")
+        + "\n"
+        + item.format(rid="R2", title="cleanup is real",
+                      thing="cleanup.txt")
+        + "\n", encoding="utf-8")
+    commit_all(p, "rubric")
+    (p / "feature.txt").write_text("the feature\n", encoding="utf-8")
+    note_dir = p / ".agents" / "notes" / "implemented" / "feature"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-feature.md").write_text(
+        "# Agent Note: feature\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "the work")
+    # f with an EMPTY evidence answer: the fallback text is transcribed
+    # (two items, so the input answers both: R1 f-empty, R2 p)
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD~1", "--grade"],
+        cwd=p, input="f\n\np\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert "(no evidence given)" in r.stdout, r.stdout
+    assert "verdict: request changes" in r.stdout
+
+    # q AFTER a verdict discards the accumulation: no verdict block.
+    # TWO rubric items so the q lands MID-LOOP (with one item the loop
+    # ends before the q is ever read)
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD~1", "--grade"],
+        cwd=p, input="p\nq\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 1, "quit blocks"
+    assert "verdict:" not in r.stdout, "quit discards the verdicts"
+
+
+def perf_night_budgets(base):
+    """The nightly tier's budgets TIGHTEN to measured x headroom: the
+    10k measured actuals (stats 2.3s, check 5.6s) vs the new 60s/120s
+    ceilings — 20x headroom, and a gross walker regression can no
+    longer hide inside a 600s formality."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    body_template = ("\n".join(
+        f"def fn_{i}(a, b):\n"
+        f"    total = a + b\n"
+        f"    if total > {i}:\n"
+        "        return total\n"
+        "    return 0\n" for i in range(5)))
+    for i in range(10000):
+        d = src / f"pack{i % 50}"
+        d.mkdir(exist_ok=True)
+        (d / f"mod_{i}.py").write_text(body_template, encoding="utf-8")
+    t0 = time.monotonic()
+    r = gov("stats", "--json", "--lang", "python", cwd=p, timeout=600)
+    stats_dt = time.monotonic() - t0
+    value = json.loads(r.stdout)
+    assert value["languages"]["python"]["files"] == 10000
+    assert value["languages"]["python"]["symbols"]["functions"] == 50000
+    t0 = time.monotonic()
+    gov("check", cwd=p, timeout=600)
+    check_dt = time.monotonic() - t0
+    # the MEASURED firsts were 2.3s/5.6s — 20x headroom over the slower
+    # of the two, and a gross regression cannot hide inside 120s
+    assert stats_dt < 60, f"nightly stats took {stats_dt:.1f}s"
+    assert check_dt < 120, f"nightly check took {check_dt:.1f}s"
+    print(f"    perf_night measured: stats {stats_dt:.1f}s, "
+          f"check {check_dt:.1f}s")
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2229,6 +2360,9 @@ SCENARIOS = {
     "merge_conflict_cross": merge_conflict_cross,
     "next_count_dir": next_count_dir,
     "postmortem_recall_any": postmortem_recall_any,
+    "trend_split_boundary": trend_split_boundary,
+    "grade_evidence_edges": grade_evidence_edges,
+    "perf_night_budgets": perf_night_budgets,
     "recall_any_ranking": recall_any_ranking,
     "next_count_table": next_count_table,
     "table_edges": table_edges,
