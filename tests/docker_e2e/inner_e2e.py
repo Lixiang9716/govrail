@@ -2608,6 +2608,69 @@ def whatsnew_since_edges(base):
     assert "## " in r.stdout, r.stdout
 
 
+def stats_ledger_roundtrip(base):
+    """The stats ledger's write side: `gov stats --record` appends one
+    line per invocation to the SAME file check --record uses — stats
+    lines carry no kind, check lines carry kind=check, the file stays
+    append-only across the interleaving — and a file that does not
+    parse is still recorded, with parse_errors counted, never silently
+    omitted (metrics, not verdicts)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    (src / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    gov("stats", "--record", cwd=p)
+    (src / "坏.py").write_text("def (:\n", encoding="utf-8")
+    gov("stats", "--record", cwd=p)
+    gov("check", "--record", cwd=p, expect=1)
+    lines = (p / ".gov" / "history" / "stats.jsonl").read_text(
+        encoding="utf-8").strip().splitlines()
+    assert len(lines) == 3, lines
+    s1, s2, c1 = (json.loads(l) for l in lines)
+    assert "languages" in s1 and "kind" not in s1
+    assert c1["kind"] == "check"
+    py2 = s2["languages"]["python"]
+    assert py2["files"] == 2, "the unparseable file is still inventoried"
+    assert py2["parse_errors"] >= 1, "and its failure is counted"
+
+
+def audit_notes_signals(base):
+    """audit-notes' mechanical staleness signals, one of each kind: a
+    backticked gov command the CLI does not know, a known command with
+    a flag it does not accept, a Dn reference with no decisions row
+    (checked because docs/decisions.md exists), and a backticked repo
+    path that does not resolve. Findings are evidence — exit 0 with or
+    without them — and a clean note stays unnamed."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "decisions.md").write_text("## D1 — real\n\n- **选项**：x\n",
+                                       encoding="utf-8")
+    n = p / ".agents" / "notes" / "implemented" / "testing"
+    n.mkdir(parents=True)
+    (n / "2026-09-13-stale.md").write_text(
+        "# Agent Note: stale signals\n\nStatus: implemented\n\n"
+        "## Problem\nuses `gov nonexist-command` and `gov recall "
+        "--bogus-flag`; see D999 and `docs/missing/file.md`.\n\n"
+        "## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    r = gov("audit-notes", cwd=p)
+    assert "nonexist-command" in r.stdout, r.stdout
+    assert "--bogus-flag" in r.stdout, r.stdout
+    assert "D999" in r.stdout, r.stdout
+    assert "docs/missing/file.md" in r.stdout, r.stdout
+    (n / "2026-09-13-stale.md").unlink()
+    (n / "2026-09-13-clean.md").write_text(
+        "# Agent Note: clean signals\n\nStatus: implemented\n\n"
+        "## Problem\n`gov recall` and D1 are real.\n\n"
+        "## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    r = gov("audit-notes", cwd=p)
+    assert "2026-09-13-clean" not in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2663,6 +2726,8 @@ SCENARIOS = {
     "doctor_parser_versions": doctor_parser_versions,
     "recall_dir_decisions": recall_dir_decisions,
     "whatsnew_since_edges": whatsnew_since_edges,
+    "stats_ledger_roundtrip": stats_ledger_roundtrip,
+    "audit_notes_signals": audit_notes_signals,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
