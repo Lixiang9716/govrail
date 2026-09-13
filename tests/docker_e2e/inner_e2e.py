@@ -3124,6 +3124,64 @@ def stats_empty_tree(base):
     assert len(v) == 8, sorted(v)
 
 
+def agent_lifecycle_receipt(base):
+    """An agent brief's whole arc through the real commands: task new
+    pins rules@H; close RUNS the gates itself and attaches the
+    all-green receipt (a red run refuses to close and the card stays
+    open); task check clears the done card; and `run --receipt`
+    verifies the closed receipts on the committed tree."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    # day-one act: baseline pairing (init leaves it advisory until then)
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "guide.md").write_text("guide\n", encoding="utf-8")
+    (docs / "guide.zh.md").write_text("指南\n", encoding="utf-8")
+    gov("verify-pairing", "--write", cwd=p)
+    gov("task", "new", "Ship the fix", "--check", "note added", cwd=p)
+    commit_all(p, "card")   # an agent commits before closing; a dirty
+    # tree makes the advisory pairing gate non-green and close refuses
+    gov("task", "close", "T-0001", cwd=p)
+    card_path = next((p / ".gov" / "tasks").glob("T-0001-*.json"))
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    assert card["status"] == "done" and card["receipt"]["gates"], card
+    gov("task", "check", cwd=p)
+    # a red gate changes the rules hash; the next brief pins the red
+    # state, its close RUNS and fails on the poison, card stays open
+    cfg = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    cfg["gates"].append({"id": "red", "command": ["false"]})
+    cfg["modes"]["all"].append("red")
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "red gate")
+    gov("task", "new", "Brief against red", cwd=p)
+    r = gov("task", "close", "T-0002", cwd=p, expect=1)
+    assert "not green" in r.stderr, r.stderr
+    card2 = json.loads(next((p / ".gov" / "tasks").glob(
+        "T-0002-*.json")).read_text(encoding="utf-8"))
+    assert card2["status"] == "open", "a refused close changes nothing"
+    # removing the gate STALES the outstanding brief: close demands a
+    # re-brief instead of running (the pin guards against governance
+    # drift, close checks it before spending the run)
+    cfg["gates"] = [g for g in cfg["gates"] if g["id"] != "red"]
+    cfg["modes"]["all"] = [g for g in cfg["modes"]["all"] if g != "red"]
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "gate fixed")
+    r = gov("task", "close", "T-0002", cwd=p, expect=1)
+    assert "re-brief" in r.stderr, r.stderr
+    # the dead brief is dismissed the only way a card file can be —
+    # removed by hand (no abandon verb: dismissing a brief is a
+    # deliberate, git-visible file act)
+    next((p / ".gov" / "tasks").glob("T-0002-*.json")).unlink()
+    # re-brief against the adopted rules: the new card reclaims the
+    # freed number and closes green
+    gov("task", "new", "Ship it again", cwd=p)
+    gov("task", "close", "T-0002", cwd=p)
+    commit_all(p, "cards closed")
+    gov("run", "--receipt", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3198,6 +3256,7 @@ SCENARIOS = {
     "acquire_wait_polling": acquire_wait_polling,
     "gates_schema_refusal": gates_schema_refusal,
     "stats_empty_tree": stats_empty_tree,
+    "agent_lifecycle_receipt": agent_lifecycle_receipt,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
