@@ -2954,6 +2954,44 @@ def ledger_concurrent_writes(base):
         assert json.loads(line)["languages"]["python"]["files"] == 1
 
 
+def doctor_triage(base):
+    """doctor is the adopter's triage entry: --json is exactly one
+    object {version, status, checks, problems} with the human report on
+    stderr; a broken gates.json is a PROBLEM (exit 1, named in
+    problems[]), and removing it falls back to the built-in defaults —
+    sound again (exit 0)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    r = gov("doctor", "--json", cwd=p)
+    v = json.loads(r.stdout)
+    assert set(v) == {"version", "status", "checks", "problems"}
+    assert v["status"] == "sound" and v["problems"] == []
+    assert "gov doctor: environment sound" in r.stderr, r.stderr
+    (p / "gates.json").write_text("{ not json", encoding="utf-8")
+    r = gov("doctor", cwd=p, expect=1)
+    assert "problem:" in r.stdout, r.stdout
+    v = json.loads(gov("doctor", "--json", cwd=p, expect=1).stdout)
+    assert v["status"] == "problems" and v["problems"], v
+    (p / "gates.json").unlink()
+    r = gov("doctor", "--json", cwd=p)
+    v = json.loads(r.stdout)
+    assert v["status"] == "sound" and v["problems"] == []
+
+
+def locks_listing(base):
+    """`gov locks` is a diagnostic mirror of the lease table — holder
+    and expiry visible, released leases gone — and never an admission
+    decision (D52: the acquire path decides, the listing only shows)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gov("acquire", "res/x", "--agent", "a1", "--ttl", "600", cwd=p)
+    r = gov("locks", cwd=p)
+    assert "res/x" in r.stdout and "a1" in r.stdout, r.stdout
+    gov("release", "res/x", "--agent", "a1", cwd=p)
+    r = gov("locks", cwd=p)
+    assert "res/x" not in r.stdout and "a1" not in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3020,6 +3058,8 @@ SCENARIOS = {
     "note_new_scaffold": note_new_scaffold,
     "task_receipt_audit": task_receipt_audit,
     "ledger_concurrent_writes": ledger_concurrent_writes,
+    "doctor_triage": doctor_triage,
+    "locks_listing": locks_listing,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
