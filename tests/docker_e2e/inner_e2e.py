@@ -3245,6 +3245,60 @@ def run_gate_rerun(base):
     assert "PASS boom" in r.stdout, r.stdout
 
 
+def init_preset_from_scratch(base):
+    """`gov init --preset python-lib` on an EMPTY repo: one command
+    lands the whole adoption — the preset's gates and modes exist from
+    birth, a repeat apply says already adopted, and once the project
+    grows its first test the wired quick mode runs green."""
+    p = fresh_project(base)
+    r = gov("init", "--preset", "python-lib", cwd=p)
+    assert "added 2" in r.stdout, r.stdout
+    cfg = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    ids = [g["id"] for g in cfg["gates"]]
+    assert "pytest" in ids and "build" in ids
+    assert cfg["modes"]["quick"][-1] == "pytest"
+    commit_all(p, "adopted with preset")
+    r = gov("preset", "apply", "python-lib", cwd=p)
+    assert "already adopted" in r.stdout, r.stdout
+    # the cells carry no pytest — the WIRING is what this scenario
+    # pins: the mode runs the preset's gate on a matching change (the
+    # preset's real command belongs to an adopter environment)
+    cfg = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    for g in cfg["gates"]:
+        if g["id"] == "pytest":
+            g["command"] = ["true"]
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    (p / "test_x.py").write_text(
+        "def test_x():\n    assert True\n", encoding="utf-8")
+    commit_all(p, "first test")
+    r = gov("run", "--mode", "quick", cwd=p)
+    assert "PASS pytest" in r.stdout, r.stdout
+
+
+def note_presence_strict(base):
+    """verify-note-presence's two gears: advisory by default (exit 0,
+    the remedy inline, '--strict to enforce') and --strict exits 1
+    with 'violation' — adding a note to the reviewed diff turns strict
+    green."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "m.py").write_text("x = 1\n", encoding="utf-8")
+    commit_all(p, "code without note")
+    r = gov("verify-note-presence", cwd=p)
+    assert "warning (advisory; --strict to enforce)" in r.stdout, r.stdout
+    r = gov("verify-note-presence", "--strict", cwd=p, expect=1)
+    assert "violation (--strict)" in r.stdout, r.stdout
+    n = p / ".agents" / "notes" / "implemented" / "feature"
+    n.mkdir(parents=True, exist_ok=True)
+    (n / "2026-09-14-m.md").write_text(
+        "# Agent Note: m\n\nStatus: implemented\n\n## Problem\np\n\n"
+        "## Decision\nd\n\n## Alternatives considered\na\n",
+        encoding="utf-8")
+    commit_all(p, "note added")
+    gov("verify-note-presence", "--strict", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3322,6 +3376,8 @@ SCENARIOS = {
     "agent_lifecycle_receipt": agent_lifecycle_receipt,
     "pairing_violation_contract": pairing_violation_contract,
     "run_gate_rerun": run_gate_rerun,
+    "init_preset_from_scratch": init_preset_from_scratch,
+    "note_presence_strict": note_presence_strict,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
