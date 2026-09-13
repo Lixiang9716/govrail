@@ -95,6 +95,13 @@ def _next_free(nums: set[int]) -> int:
 
 def _next(args: argparse.Namespace) -> int:
     anchor_to_git_root("decision next")
+    # a non-positive count silently printed NOTHING — a machine caller
+    # asking for -3 numbers reads an empty stdout as "no decisions
+    # exist" (rule 5: refuse and name the value)
+    if args.count < 1:
+        print(f"decision next: --count must be >= 1 (got {args.count})",
+              file=sys.stderr)
+        return 2
     src = dec.load()
     local = set(src.numbers()) if src is not None else set()
     ref_nums = _ref_numbers(args.base)

@@ -198,6 +198,14 @@ def main(argv: list[str] | None = None) -> int:
                              "ledger shape; the numbers stay caller-supplied")
     args = parser.parse_args(argv)
 
+    # a non-positive --last silently emptied the window (runs[-n:] with
+    # negative n slices from the front, and 0 yields []) — a machine
+    # caller reads an empty trend as "no runs exist" (rule 5)
+    if args.last < 1:
+        print(f"trend: --last must be >= 1 (got {args.last})",
+              file=sys.stderr)
+        return 2
+
     if args.by_tag and args.cost:
         print("trend: --by-tag and --cost cannot be combined — --cost "
               "already groups by caller tag", file=sys.stderr)

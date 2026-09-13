@@ -2707,6 +2707,41 @@ def preset_adoption_bundle(base):
     assert "agent-heavy" in r.stderr and "python-lib" in r.stderr, r.stderr
 
 
+def window_edges(base):
+    """Machine-facing window edges refuse loudly instead of silently
+    emptying: decision next --count 0/-2 and trend --last 0/-2 exit 2
+    naming the value — while the positive edges stay honest: count 3
+    prints three consecutive numbers, and --last 2 compares ONLY the
+    last two runs (the slice is visible in the p50s)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    r = gov("decision", "next", "--count", "3", cwd=p)
+    assert "D0" in r.stdout and "D1" in r.stdout and "D2" in r.stdout, (
+        r.stdout)
+    for bad in ("0", "-2"):
+        r = gov("decision", "next", "--count", bad, cwd=p, expect=2)
+        assert f"--count must be >= 1 (got {bad})" in r.stderr, r.stderr
+        r = gov("trend", "--last", bad, cwd=p, expect=2)
+        assert f"--last must be >= 1 (got {bad})" in r.stderr, r.stderr
+    # 4 runs: the FULL window reads 100ms → 200ms, the --last 2 slice
+    # reads 300ms → 100ms — the slice decides the verdict
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    with history.open("a", encoding="utf-8") as f:
+        for i, ms in enumerate((100, 100, 300, 100)):
+            rec = {"gate": "g", "outcome": "PASS", "blocking": False,
+                   "detail": "", "selected_by": "e2e", "scoped_out": False,
+                   "duration_ms": ms}
+            f.write(json.dumps(
+                {"ts": f"2026-09-13T00:0{i}:00+00:00",
+                 "gates": [rec]}) + "\n")
+    r = gov("trend", cwd=p)
+    assert "p50 100ms → 200ms" in r.stdout, r.stdout
+    r = gov("trend", "--last", "2", cwd=p)
+    assert "p50 300ms → 100ms" in r.stdout, r.stdout
+    assert "p50 100ms → 200ms" not in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2765,6 +2800,7 @@ SCENARIOS = {
     "stats_ledger_roundtrip": stats_ledger_roundtrip,
     "audit_notes_signals": audit_notes_signals,
     "preset_adoption_bundle": preset_adoption_bundle,
+    "window_edges": window_edges,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,

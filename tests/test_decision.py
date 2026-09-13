@@ -455,3 +455,13 @@ def test_verify_decisions_base_gap_is_informational(tmp_path, monkeypatch,
     with contextlib.redirect_stdout(out):
         assert vd.main(["--base", "main"]) == 1  # local gap still a violation
     assert "number collision" not in out.getvalue()
+
+
+def test_next_refuses_nonpositive_count(tmp_path, monkeypatch, capsys):
+    """--count < 1 refused loudly (it used to print NOTHING — an empty
+    stdout a machine caller reads as "no decisions exist")."""
+    monkeypatch.chdir(tmp_path)
+    for bad in ("0", "-2"):
+        assert decision.main(["next", "--count", bad]) == 2
+        err = capsys.readouterr().err
+        assert f"--count must be >= 1 (got {bad})" in err
