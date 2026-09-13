@@ -3299,6 +3299,57 @@ def note_presence_strict(base):
     gov("verify-note-presence", "--strict", cwd=p)
 
 
+def gate_timeout_enforced(base):
+    """A gate's timeoutMs is enforced: a command that sleeps past it is
+    killed at the deadline (measured ~1s, not the full 5s sleep), the
+    failure names the exceeded budget with the rerun hint, and the same
+    gate with a fast command passes under the same budget."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = {"gates": [{"id": "slow", "command": ["sleep", "5"],
+                      "timeoutMs": 1000}],
+           "modes": {"all": ["slow"]}}
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "slow gate")
+    t0 = time.monotonic()
+    r = gov("run", "--mode", "all", cwd=p, expect=1)
+    dt = time.monotonic() - t0
+    assert dt < 4, f"the deadline was not enforced ({dt:.1f}s)"
+    assert "slow: exceeded 1000ms" in r.stdout, r.stdout
+    assert "1 timeout" in r.stdout, r.stdout
+    cfg["gates"][0]["command"] = ["true"]
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "fast command")
+    gov("run", "--gate", "slow", cwd=p)
+
+
+def decision_end_gap_legal(base):
+    """The numbering hole has a LEGAL end: removing the HIGHEST
+    decision is just 'not created yet' (green), while the same removal
+    in the middle stays the red violation decisions_dir pins."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions", "format": "dir"}), encoding="utf-8")
+    d = p / "docs" / "decisions"
+    d.mkdir(parents=True)
+    row = "## D{} — {}\n\n- **选项**：x\n\n- **状态**：已决\n"
+    (d / "D1-a.md").write_text(row.format(1, "a"), encoding="utf-8")
+    (d / "D2-b.md").write_text(row.format(2, "b"), encoding="utf-8")
+    (d / "D3-c.md").write_text(row.format(3, "c"), encoding="utf-8")
+    commit_all(p, "three decisions")
+    (d / "D2-b.md").unlink()
+    gov("verify-decisions", cwd=p, expect=1)   # MIDDLE hole: red
+    (d / "D2-b.md").write_text(row.format(2, "b"), encoding="utf-8")
+    gov("verify-decisions", cwd=p)             # whole again: green
+    (d / "D3-c.md").unlink()                   # END gap: legal
+    gov("verify-decisions", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3378,6 +3429,8 @@ SCENARIOS = {
     "run_gate_rerun": run_gate_rerun,
     "init_preset_from_scratch": init_preset_from_scratch,
     "note_presence_strict": note_presence_strict,
+    "gate_timeout_enforced": gate_timeout_enforced,
+    "decision_end_gap_legal": decision_end_gap_legal,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
