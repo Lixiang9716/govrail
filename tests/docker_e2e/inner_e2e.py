@@ -3043,6 +3043,52 @@ def custom_mode_scoping(base):
     assert "unknown mode 'no-such-mode'" in r.stderr, r.stderr
 
 
+def change_scope_skips(base):
+    """Rule 1 at run time: a gate whose paths the change does not touch
+    is NOT SELECTED — the scope line names it and a poison command
+    proves it never ran; touch its path and the poison fires, failing
+    the run."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "docs").mkdir()
+    (p / "docs" / "a.md").write_text("x\n", encoding="utf-8")
+    cfg = {"gates": [
+        {"id": "docs-gate", "command": ["true"], "paths": ["docs/**"]},
+        {"id": "poison", "command": ["false"], "paths": ["src/**"]}]}
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "seed")
+    (p / "docs" / "b.md").write_text("y\n", encoding="utf-8")
+    commit_all(p, "docs change")
+    r = gov("run", "--base", "HEAD~1", cwd=p)
+    assert "1/2 gate(s) selected" in r.stdout, r.stdout
+    assert "out of scope: poison" in r.stdout, r.stdout
+    assert "PASS docs-gate" in r.stdout, r.stdout
+    # the poison fires when its path changes
+    (p / "src").mkdir()
+    (p / "src" / "c.py").write_text("x=1\n", encoding="utf-8")
+    commit_all(p, "src change")
+    r = gov("run", "--base", "HEAD~1", cwd=p, expect=1)
+    assert "poison" in r.stdout, r.stdout
+    assert "1 blocking failure" in r.stdout, r.stdout
+
+
+def acquire_wait_polling(base):
+    """acquire --wait POLLS instead of failing: with A holding a 3s
+    lease, B's --wait 8 takes the lease AFTER it expires (measured, not
+    instant and not at the full wait), and the lease is then B's to
+    release."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gov("acquire", "res/w", "--agent", "a", "--ttl", "3", cwd=p)
+    t0 = time.monotonic()
+    gov("acquire", "res/w", "--agent", "b", "--wait", "8", cwd=p,
+        timeout=60)
+    dt = time.monotonic() - t0
+    assert 2.5 < dt < 7.5, f"the wait returned after {dt:.1f}s"
+    gov("release", "res/w", "--agent", "b", cwd=p)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3113,6 +3159,8 @@ SCENARIOS = {
     "locks_listing": locks_listing,
     "uninstall_reinit_roundtrip": uninstall_reinit_roundtrip,
     "custom_mode_scoping": custom_mode_scoping,
+    "change_scope_skips": change_scope_skips,
+    "acquire_wait_polling": acquire_wait_polling,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
