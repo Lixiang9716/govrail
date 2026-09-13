@@ -2104,6 +2104,90 @@ def merge_conflict_cross(base):
     assert kept, "the conflicted scene is kept"
 
 
+
+
+def cost_caller_ranking(base):
+    """trend --cost's roll-up with MULTIPLE callers reporting in the
+    SAME window: per-caller run counts and unit sums are all
+    hand-computed — the roll-up is attribution, not a merged total."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    runs = [("alpha", "tokens=100,calls=2"),
+            ("alpha", "tokens=50,calls=1"),
+            ("beta", "tokens=40,calls=3"),
+            ("beta", "tokens=60,calls=1")]
+    for tag, cost in runs:
+        gov("run", "--tag", tag, "--cost", cost, cwd=p)
+    r = gov("trend", "--cost", cwd=p)
+    assert "4 run(s) in" in r.stdout and "4 reporting cost" in r.stdout
+    lines = [ln for ln in r.stdout.splitlines()
+             if ln.startswith("  caller ")]
+    assert len(lines) == 2, lines
+    # per-caller attribution, alphabetically — and the GLOBAL window
+    # halves land alpha's two runs entirely in early, beta's entirely
+    # in late: alpha 150 tokens/3 calls early, beta 100 tokens/4 calls
+    # late — both hand-computed
+    assert "caller alpha: 2 run(s): calls 3 (3 early → 0 late); " \
+           "tokens 150 (150 early → 0 late)" in lines[0], lines
+    assert "caller beta: 2 run(s): calls 4 (0 early → 4 late); " \
+           "tokens 100 (0 early → 100 late)" in lines[1], lines
+
+
+def grade_rubric_contract(base):
+    """The grade loop's output CONTRACT (D30): every graded item prints
+    one line, blockers are collected with their typed evidence, and the
+    verdict names the count — the machine transcribes exactly what the
+    human decided, nothing more."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    item = ("### {rid} — {title}\n\n"
+            "- **Checks:** `{thing}` reviewed\n"
+            "- **Evidence:** reviewed above\n"
+            "- **Anti-pattern:** rubber stamp\n"
+            "- **Gate candidate:** no — judgment\n")
+    (docs / "review-rubric.md").write_text(
+        "# Review rubric\n\n"
+        + item.format(rid="R1", title="feature lands loudly",
+                      thing="feature.txt")
+        + "\n"
+        + item.format(rid="R2", title="cleanup is real",
+                      thing="cleanup.txt")
+        + "\n", encoding="utf-8")
+    commit_all(p, "two-item rubric")
+    (p / "feature.txt").write_text("the feature\n", encoding="utf-8")
+    note_dir = p / ".agents" / "notes" / "implemented" / "feature"
+    note_dir.mkdir(parents=True)
+    (note_dir / "2026-01-01-feature.md").write_text(
+        "# Agent Note: feature\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "the work")
+
+    # p + f-with-evidence: one pass, one fail with the typed evidence
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD~1", "--grade"],
+        cwd=p, input="p\nf\nfeature.txt:1 names the purpose\n",
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 1, "a fail verdict blocks"
+    assert "R1 — pass" in r.stdout, r.stdout
+    assert "R2 — fail — feature.txt:1 names the purpose" in r.stdout
+    assert "blockers:" in r.stdout
+    assert "R2: feature.txt:1 names the purpose" in r.stdout
+    assert "verdict: request changes (1 blocker(s))" in r.stdout
+
+    # skip is silent in the verdict lines: skipped items have no line
+    r = subprocess.run(
+        ["gov", "review", "--base", "HEAD~1", "--grade"],
+        cwd=p, input="s\ns\n", capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=120)
+    assert r.returncode == 0, r.stdout
+    assert "verdict: approve" in r.stdout
+    assert r.stdout.count("— pass") == 0 and "— fail" not in r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2132,6 +2216,8 @@ SCENARIOS = {
     "decision_parallel": decision_parallel,
     "cost_ordering": cost_ordering,
     "review_dossier_corpora": review_dossier_corpora,
+    "cost_caller_ranking": cost_caller_ranking,
+    "grade_rubric_contract": grade_rubric_contract,
     "cost_base_split": cost_base_split,
     "postmortem_pair": postmortem_pair,
     "by_tag_split": by_tag_split,
