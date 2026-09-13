@@ -2583,6 +2583,31 @@ def recall_dir_decisions(base):
         r.stdout + r.stderr)
 
 
+def whatsnew_since_edges(base):
+    """whatsnew's range edges: an explicit --since overrides the
+    manifest default, a future version takes the nothing-newer branch
+    without crashing, the default in a governed project is the
+    manifest's init version, and OUTSIDE a project the newest section
+    prints with the range hint."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    r = gov("whatsnew", "--since", "99.0.0", cwd=p)
+    assert "(nothing newer than 99.0.0)" in r.stdout, r.stdout
+    r = gov("whatsnew", "--since", "0.0.1", cwd=p)
+    assert r.stdout.count("## ") >= 3, "an old floor reveals the history"
+    manifest = json.loads((p / ".gov" / "manifest.json").read_text(
+        encoding="utf-8"))
+    v = manifest["version"]
+    r = gov("whatsnew", cwd=p)
+    assert f"since {v}" in r.stdout, r.stdout
+    assert f"(nothing newer than {v})" in r.stdout, r.stdout
+    plain = p.parent / "whatsnew-plain"
+    plain.mkdir(exist_ok=True)
+    r = gov("whatsnew", cwd=plain)
+    assert "newest section" in r.stdout, r.stdout
+    assert "## " in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2637,6 +2662,7 @@ SCENARIOS = {
     "check_ledger_contract": check_ledger_contract,
     "doctor_parser_versions": doctor_parser_versions,
     "recall_dir_decisions": recall_dir_decisions,
+    "whatsnew_since_edges": whatsnew_since_edges,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
