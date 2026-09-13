@@ -2036,6 +2036,74 @@ def cost_untagged_multi(base):
     assert "caller beta: 1 run(s): tokens 50" in lines[2], lines
 
 
+
+
+def recall_any_multiling(base):
+    """--any's rank: TERMS MATCHED first (2/2 body beats 1/2 title),
+    then where (title beats body within a count). A trilingual corpus
+    with crossing terms pins both keys in one printed order."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    impl = p / ".agents" / "notes" / "implemented" / "bug-fix"
+    impl.mkdir(parents=True)
+    # 2/2 terms, in the BODY (would be rank 1 if single-term)
+    (impl / "2026-01-01-both.md").write_text(
+        "# Agent Note: storage\n\nStatus: implemented\n\n"
+        "## Problem\nhedge exposure doubled\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    # 1/2 terms, in the TITLE (rank would be 3 if terms counted equally)
+    (impl / "2026-01-02-hedge.md").write_text(
+        "# Agent Note: hedge\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    commit_all(p, "crossing terms seeded")
+    r = gov("recall", "--any", "hedge", "exposure", cwd=p)
+    lines = [ln for ln in r.stdout.splitlines() if " — matched " in ln]
+    assert len(lines) == 2, lines
+    # the 2/2 body entry FIRST, the 1/2 title entry second — terms
+    # matched is the PRIMARY key, where-it-hit the tie-break
+    assert "matched 2/2" in lines[0] and "both.md" in lines[0], lines
+    assert "matched 1/2" in lines[1] and "hedge.md" in lines[1], lines
+
+
+def merge_conflict_cross(base):
+    """`run --merge` with a CROSS conflict among three branches: a and c
+    both touch shared.txt — the preflight fails at step 3 naming the
+    collision, the scene is KEPT for inspection, and the successful
+    earlier step is visible in the summary."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    gates = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    gates["gates"].append(
+        {"id": "ok", "command": ["true"], "paths": ["src/**"]})
+    gates["modes"]["all"].append("ok")
+    (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
+    default_branch = git("rev-parse", "--abbrev-ref",
+                         "HEAD", cwd=p).stdout.strip()
+    for name, content in (("a", "aaa\n"), ("b", "bbb\n"),
+                          ("c", "ccc\n")):
+        git("checkout", "-q", "-b", name, cwd=p)
+        (p / f"{name}.txt").write_text(content, encoding="utf-8")
+        commit_all(p, f"branch {name}")
+        git("checkout", "-q", default_branch, cwd=p)
+    # a and c BOTH touch shared.txt with different content
+    git("checkout", "-q", "-b", "shared-a", default_branch, cwd=p)
+    (p / "shared.txt").write_text("from a\n", encoding="utf-8")
+    commit_all(p, "shared-a")
+    git("checkout", "-q", "-b", "shared-c", default_branch, cwd=p)
+    (p / "shared.txt").write_text("from c\n", encoding="utf-8")
+    commit_all(p, "shared-c")
+    git("checkout", "-q", default_branch, cwd=p)
+    r = gov("run", "--merge", "shared-a", "shared-c", "--base",
+            default_branch, cwd=p, expect=1)
+    assert "conflicts with already-merged set" in r.stdout, r.stdout
+    assert "shared.txt" in r.stdout, r.stdout
+    kept = [ln for ln in r.stdout.splitlines()
+            if "kept for inspection" in ln]
+    assert kept, "the conflicted scene is kept"
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2071,6 +2139,8 @@ SCENARIOS = {
     "cost_attribution": cost_attribution,
     "by_tag_multi": by_tag_multi,
     "grade_rubric_evolution": grade_rubric_evolution,
+    "recall_any_multiling": recall_any_multiling,
+    "merge_conflict_cross": merge_conflict_cross,
     "next_count_dir": next_count_dir,
     "postmortem_recall_any": postmortem_recall_any,
     "recall_any_ranking": recall_any_ranking,
