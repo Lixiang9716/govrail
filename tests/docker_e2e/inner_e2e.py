@@ -1980,6 +1980,62 @@ def no_record_optout(base):
     assert history.exists(), "recording resumes by default"
 
 
+
+
+def merge_three_branch(base):
+    """`run --merge` with THREE branches: the preflight rehearses them
+    IN ORDER, and each step's summary names the ALREADY-MERGED SET as it
+    grows ((base) -> (a) -> (a,b)) — the integration order is visible,
+    not implied."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    commit_all(p, "adopted")
+    gates = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    gates["gates"].append(
+        {"id": "ok", "command": ["true"], "paths": ["src/**"]})
+    # D24: an enabled gate in NO mode is a config error — wire it in
+    gates["modes"]["all"].append("ok")
+    (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
+    # the default branch is whatever `git init` chose — ask git
+    default_branch = git("rev-parse", "--abbrev-ref",
+                         "HEAD", cwd=p).stdout.strip()
+    for name, content in (("a", "aaa\n"), ("b", "bbb\n"), ("c", "ccc\n")):
+        git("checkout", "-q", "-b", name, cwd=p)
+        (p / f"{name}.txt").write_text(content, encoding="utf-8")
+        commit_all(p, f"branch {name}")
+        git("checkout", "-q", default_branch, cwd=p)
+    # each step names the already-merged set it builds on: <base>,
+    # then a, then "a, b" — the integration order is visible
+    r = gov("run", "--merge", "a", "b", "c", "--base", default_branch,
+            cwd=p)
+    out_lines = [ln for ln in r.stdout.splitlines()
+                 if "already-merged set" in ln]
+    assert len(out_lines) == 3, r.stdout
+    assert "already-merged set: <base>" in out_lines[0], out_lines
+    assert "already-merged set: a" in out_lines[1], out_lines
+    assert "already-merged set: a, b" in out_lines[2], out_lines
+
+
+def cost_untagged_multi(base):
+    """The cost roll-up with MIXED tagged/untagged runs: (untagged)
+    sorts FIRST (paren < letters) and its counts are honest (2 runs,
+    160 tokens); the tagged callers follow alphabetically."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gov("run", "--cost", "tokens=80", cwd=p)
+    gov("run", "--tag", "beta", "--cost", "tokens=50", cwd=p)
+    gov("run", "--tag", "alpha", "--cost", "tokens=100", cwd=p)
+    gov("run", "--cost", "tokens=80", cwd=p)
+    r = gov("trend", "--cost", cwd=p)
+    lines = [ln for ln in r.stdout.splitlines()
+             if ln.startswith("  caller ")]
+    assert len(lines) == 3, lines
+    assert lines[0].startswith("  caller (untagged):"), lines
+    assert "2 run(s): tokens 160" in lines[0], lines[0]
+    assert "caller alpha: 1 run(s): tokens 100" in lines[1], lines
+    assert "caller beta: 1 run(s): tokens 50" in lines[2], lines
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2025,6 +2081,8 @@ SCENARIOS = {
     "no_record_optout": no_record_optout,
     "grade_quit_skip": grade_quit_skip,
     "preset_on_specimen": preset_on_specimen,
+    "merge_three_branch": merge_three_branch,
+    "cost_untagged_multi": cost_untagged_multi,
     "next_count_allocation": next_count_allocation,
     "next_count_base": next_count_base,
     "decisions_dir_parallel": decisions_dir_parallel,

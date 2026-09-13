@@ -96,7 +96,7 @@ FAILED=0
 # EOL-suite cell needs a pre-baked image, which is nightly territory,
 # not a per-PR cell.
 CELLS="3.10-slim 3.11-slim 3.12-slim 3.13-slim 3.12-alpine 3.10-bookworm"
-SPECIAL="gbk cross crossdir pypi nightly"
+SPECIAL="gbk cross crossdir crossalloc pypi nightly"
 if [ -n "$CELL" ]; then
   case " $SPECIAL " in
     *" $CELL "*) CELLS="" ;;  # dedicated blocks below own this cell
