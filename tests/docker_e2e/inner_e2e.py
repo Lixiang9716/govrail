@@ -418,12 +418,17 @@ def decisions_dir(base):
 
 
 def perf_night(base):
-    """The nightly scale tier: 10,000 files. Gated behind
-    GOV_E2E_NIGHTLY=1 — minutes-wide budgets are a scheduled act, not a
-    per-PR default (run.sh --nightly)."""
-    if os.environ.get("GOV_E2E_NIGHTLY") != "1":
-        print("E2E perf_night: SKIP (set GOV_E2E_NIGHTLY=1)")
+    """The nightly scale tier: GOV_E2E_NIGHTLY=N walks N×10,000 files,
+    budgets scaling with it — run.sh --nightly walks tiers 1 and 2, so
+    the walker gets a SCALING point (2× files must stay inside 2×
+    budget), not a single point a constant-factor regression could
+    hide behind. Minutes-wide ceilings stay a scheduled act, not a
+    per-PR default."""
+    tier = int(os.environ.get("GOV_E2E_NIGHTLY") or 0)
+    if tier < 1:
+        print("E2E perf_night: SKIP (set GOV_E2E_NIGHTLY=N)")
         return
+    n = 10000 * tier
     p = fresh_project(base)
     src = p / "src" / "pkg"
     src.mkdir(parents=True)
@@ -433,7 +438,7 @@ def perf_night(base):
         f"    if total > {i}:\n"
         "        return total\n"
         "    return 0\n" for i in range(5)))
-    for i in range(10000):
+    for i in range(n):
         d = src / f"pack{i % 50}"
         d.mkdir(exist_ok=True)
         (d / f"mod_{i}.py").write_text(body_template, encoding="utf-8")
@@ -441,20 +446,20 @@ def perf_night(base):
     r = gov("stats", "--json", "--lang", "python", cwd=p, timeout=600)
     stats_dt = time.monotonic() - t0
     py = json.loads(r.stdout)["languages"]["python"]
-    assert py["files"] == 10000, f"walker lost files: {py['files']}"
-    assert py["symbols"]["functions"] == 50000
+    assert py["files"] == n, f"walker lost files: {py['files']}"
+    assert py["symbols"]["functions"] == 5 * n
     # 29 lines per file (5 blocks + join blanks) — the arithmetic the
     # kilo tier pins, at 10x the scale
-    assert py["lines"]["total"] == 10000 * 29
+    assert py["lines"]["total"] == n * 29
     t0 = time.monotonic()
     gov("check", cwd=p, timeout=600)
     check_dt = time.monotonic() - t0
-    # ceilings = measured (2.3s/5.6s at first run) x ~20 headroom
-    assert stats_dt < 60 and check_dt < 120, (
-        f"nightly tier overrun: stats {stats_dt:.1f}s, "
+    # ceilings = measured (2.3s/5.6s at 10k first run) x ~20 headroom
+    assert stats_dt < 60 * tier and check_dt < 120 * tier, (
+        f"nightly tier {tier} overrun: stats {stats_dt:.1f}s, "
         f"check {check_dt:.1f}s")
-    print(f"    perf_night measured: stats {stats_dt:.1f}s, "
-          f"check {check_dt:.1f}s")
+    print(f"    perf_night tier {tier} ({n} files) measured: "
+          f"stats {stats_dt:.1f}s, check {check_dt:.1f}s")
 
 
 def postmortem_recall(base):
@@ -2549,6 +2554,35 @@ def doctor_parser_versions(base):
     assert v["status"] == "sound" and v["problems"] == []
 
 
+def recall_dir_decisions(base):
+    """recall over a DIR-format decisions source (D40): the read side
+    honors the same .gov/decisions.json the gates write — the corpus
+    statement names the configured path, each D-file becomes one entry
+    (source <dir>#Dn, title from its `## Dn —` section heading), and a
+    miss still counts the dir rows it searched."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = p / ".gov" / "decisions.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps(
+        {"path": "docs/decisions", "format": "dir"}), encoding="utf-8")
+    d = p / "docs" / "decisions"
+    d.mkdir(parents=True)
+    (d / "D1-hedge.md").write_text(
+        "## D1 — hedge now\n\n- **选项**：hedge\n\n- **状态**：已决\n",
+        encoding="utf-8")
+    (d / "D2-rollback.md").write_text(
+        "## D2 — rollback plan\n\n- **选项**：rollback\n\n"
+        "- **状态**：已决\n", encoding="utf-8")
+    commit_all(p, "dir decisions")
+    r = gov("recall", "hedge", cwd=p)
+    assert "docs/decisions#D1 — matched in title" in r.stdout, r.stdout
+    assert "decisions 2 (docs/decisions)" in r.stderr, r.stderr
+    r = gov("recall", "不存在的词", cwd=p, expect=1)
+    assert "decisions 2 (docs/decisions)" in r.stdout + r.stderr, (
+        r.stdout + r.stderr)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2602,6 +2636,7 @@ SCENARIOS = {
     "stats_cjk_surface": stats_cjk_surface,
     "check_ledger_contract": check_ledger_contract,
     "doctor_parser_versions": doctor_parser_versions,
+    "recall_dir_decisions": recall_dir_decisions,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,

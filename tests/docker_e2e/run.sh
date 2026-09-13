@@ -163,14 +163,18 @@ if [ -z "$CELL" ] || [ "$CELL" = "crossdir" ]; then
   else echo "== cell crossdir: PASS"; fi
 fi
 
-# the nightly scale tier: 10,000 files, one cell, explicit opt-in
+# the nightly scale tier: GOV_E2E_NIGHTLY=N walks N x 10k files —
+# tiers 1 and 2 give the walker a scaling point, not just a single one
 if [ "$NIGHTLY" = "1" ] || [ "$CELL" = "nightly" ]; then
   build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }
-  echo "== cell nightly (10k files; GOV_E2E_NIGHTLY=1)"
-  out=$(docker run --rm -e GOV_E2E_NIGHTLY=1     "$IMAGE_PREFIX:3.12-slim" python /usr/local/bin/inner_e2e.py perf_night 2>&1)
-  echo "$out" | sed 's/^/    /'
-  if echo "$out" | grep -q "FAIL"; then echo "== cell nightly: FAIL"; FAILED=1
-  else echo "== cell nightly: PASS"; fi
+  for tier in 1 2; do
+    echo "== cell nightly tier $tier ($((tier * 10000)) files; GOV_E2E_NIGHTLY=$tier)"
+    out=$(docker run --rm -e GOV_E2E_NIGHTLY=$tier \
+      "$IMAGE_PREFIX:3.12-slim" python /usr/local/bin/inner_e2e.py perf_night 2>&1)
+    echo "$out" | sed 's/^/    /'
+    if echo "$out" | grep -q "FAIL"; then echo "== cell nightly tier $tier: FAIL"; FAILED=1
+    else echo "== cell nightly tier $tier: PASS"; fi
+  done
 fi
 
 # the base-aware allocation drill: next --base across two containers
