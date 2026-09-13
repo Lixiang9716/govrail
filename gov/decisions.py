@@ -111,6 +111,13 @@ def configured_path_fmt() -> tuple[Path, str]:
         if isinstance(p, str) and p:
             path = Path(p)
         f = cfg.get("format")
+        if f is not None and f not in FORMATS:
+            # rule 5: a typo'd format silently re-reads the source as
+            # sections — refusing names the value instead
+            import sys as _sys
+            print(f"decisions: unknown format {f!r} in {CONFIG} — "
+                  f"expected one of: {', '.join(FORMATS)}", file=_sys.stderr)
+            raise SystemExit(2)
         if f in FORMATS:
             fmt = f
     return path, fmt

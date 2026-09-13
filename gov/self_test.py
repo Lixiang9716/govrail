@@ -1818,11 +1818,31 @@ def _run_tool_case(case) -> tuple[str, bool]:
         # output end with the real cause (the killer exception is the
         # last line), so quote the last non-empty line, not the header
         # (#139: the operator should not have to trace a traceback to
-        # read the TypeError that killed the case).
-        lines = [l for l in str(e).strip().splitlines() if l.strip()]
+        # read the TypeError that killed the case). Quoting the last
+        # line DISCARDS the rest — a flake whose traceback lived only
+        # in the assert message is unreadable after the fact — so a
+        # multi-line message also lands WHOLE in a file the FAIL line
+        # names.
+        text = str(e)
+        lines = [l for l in text.strip().splitlines() if l.strip()]
         why = f": {lines[-1].strip()}" if lines else ""
-        return f"FAIL {case.__name__} ({type(e).__name__}{why})", False
+        dump = ""
+        if len(lines) > 1:
+            dump = f"; full output: {_dump_case_failure(case.__name__, text)}"
+        return f"FAIL {case.__name__} ({type(e).__name__}{why}){dump}", False
     return f"PASS {case.__name__}", True
+
+
+def _dump_case_failure(name: str, text: str) -> str:
+    """Persist the whole failure output; the one-line report quotes only
+    the killer exception, and the traceback above it used to vanish with
+    the print. Tempdir semantics: the OS cleans it up, the operator
+    reads it first."""
+    import tempfile
+    fd, path = tempfile.mkstemp(prefix=f"gov-selftest-{name}-", suffix=".log")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(text if text.endswith("\n") else text + "\n")
+    return path
 
 
 # --- failure classification: tool-defect vs environment-suspect (#139/D47)

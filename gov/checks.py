@@ -421,6 +421,22 @@ def main(argv: list[str] | None = None) -> int:
     suppressed_n = sum(1 for r in reports for f in r.findings if f.suppressed)
     blocking = [f for f in active if f.severity == "error"]
 
+    # --json's own help text promises "the human report moves to
+    # stderr" — stdout stays exactly one JSON value, and a human
+    # watching the terminal still gets the summary.
+    def emit(text: str) -> None:
+        print(text, file=sys.stderr if args.json else sys.stdout)
+
+    for r in reports:
+        for f in r.findings:
+            mark = " (suppressed)" if f.suppressed else ""
+            emit(f"{r.path}:{f.line()}: [{f.rule_id}] {f.message}{mark}")
+    if active or suppressed_n:
+        emit(f"gov check: {len(active)} finding(s) "
+             f"({len(blocking)} blocking), {suppressed_n} suppressed")
+    else:
+        emit("gov check: clean")
+
     if args.json:
         print(json.dumps({
             "v": LEDGER_VERSION,
@@ -437,16 +453,6 @@ def main(argv: list[str] | None = None) -> int:
                         "suppressed": suppressed_n,
                         "blocking": len(blocking)},
         }, indent=2))
-    else:
-        for r in reports:
-            for f in r.findings:
-                mark = " (suppressed)" if f.suppressed else ""
-                print(f"{r.path}:{f.line()}: [{f.rule_id}] {f.message}{mark}")
-        if active or suppressed_n:
-            print(f"gov check: {len(active)} finding(s) "
-                  f"({len(blocking)} blocking), {suppressed_n} suppressed")
-        else:
-            print("gov check: clean")
 
     if args.record:
         path = _record(reports)

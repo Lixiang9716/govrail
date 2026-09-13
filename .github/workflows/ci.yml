@@ -179,3 +179,24 @@ jobs:
         run: gov self-test
       - name: Full gate DAG under GBK
         run: gov run --mode all
+
+  docker-e2e:
+    # The Docker E2E matrix (D58): the wheel experienced as an adopter
+    # experiences it — python 3.10-3.13 (glibc) + alpine (musl) + a
+    # non-root cell + the cross-container drills, in clean containers
+    # built from the release artifact. Opt-in env (GOV_DOCKER_E2E=1)
+    # flips the pytest wrapper from SKIP to run; a mirror outage in the
+    # PyPI cell reports SKIP there, never red.
+    runs-on: ubuntu-latest
+    env:
+      GOV_DOCKER_E2E: '1'
+      GOV_DOCKER_MIRROR: docker.io  # hub is reachable from hosted runners
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Run the Docker E2E matrix
+        run: python -m pytest tests/test_docker_e2e.py -v

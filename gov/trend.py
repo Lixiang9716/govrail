@@ -52,7 +52,13 @@ def _split_by_base(runs: list[dict], base: str) -> tuple[list[dict], list[dict]]
         return None
     from datetime import datetime as _dt
 
-    split_at = _dt.fromisoformat(proc.stdout.strip())
+    # git emits UTC as a trailing Z (%cI); fromisoformat accepts Z only
+    # on Python 3.11+, and 3.10 is inside the supported floor (D54) —
+    # normalize it or `trend --base` crashes on every UTC-hosted commit
+    stamp = proc.stdout.strip()
+    if stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
+    split_at = _dt.fromisoformat(stamp)
 
     def _ts(run):
         try:
