@@ -2404,6 +2404,89 @@ def cost_base_boundary(base):
            "(150 early → 400 late)" in r.stdout, r.stdout
 
 
+def postmortem_bilingual_rank(base):
+    """Bilingual recall over the postmortem corpus, DEEPENED: a Chinese
+    term in an H1 title is a title(3) hit exactly like an English one,
+    --any's k/N line counts terms ACROSS scripts ("雪崩 in title,
+    storm in body"), and the strict AND joins a Chinese and an English
+    term. postmortem_recall pinned the body hit and the miss
+    statement; this pins the RANK dimension for CJK."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    pm = p / "docs" / "postmortem"
+    pm.mkdir(parents=True)
+    (pm / "2026-09-01-avalanche.md").write_text(
+        "# Postmortem: 缓存雪崩复盘\n\nthe retry storm amplified it\n",
+        encoding="utf-8")
+    (pm / "2026-09-02-blizzard.md").write_text(
+        "# Postmortem: the retry storm\n\n雪崩时没有一片雪花是无辜的\n",
+        encoding="utf-8")
+    (pm / "2026-09-03-cascade.md").write_text(
+        "# Postmortem: cascade failure\n\n雪崩 spread across shards\n",
+        encoding="utf-8")
+    commit_all(p, "bilingual postmortems")
+    # strict AND across scripts: only avalanche carries BOTH terms
+    # (复盘 in its title) — and the hit's where is title(3)
+    r = gov("recall", "雪崩", "复盘", cwd=p)
+    assert "2026-09-01-avalanche.md — matched in title" in r.stdout, r.stdout
+    # --any: each doc's line names its terms and WHERE each hit, in
+    # QUERY order (the where list follows args.query, not rank); two
+    # 2/2 ties split by path, cascade's 1/2 lands last
+    r = gov("recall", "--any", "雪崩", "storm", cwd=p)
+    assert ("docs/postmortem/2026-09-01-avalanche.md — matched 2/2 "
+            "terms (雪崩 in title, storm in body)") in r.stdout, r.stdout
+    assert ("docs/postmortem/2026-09-02-blizzard.md — matched 2/2 "
+            "terms (雪崩 in body, storm in title)") in r.stdout, r.stdout
+    assert ("docs/postmortem/2026-09-03-cascade.md — matched 1/2 "
+            "terms (雪崩 in body)") in r.stdout, r.stdout
+    order = [ln.split(" — ")[0].rsplit("/", 1)[-1]
+             for ln in r.stdout.splitlines() if " — matched " in ln]
+    assert order == ["2026-09-01-avalanche.md", "2026-09-02-blizzard.md",
+                     "2026-09-03-cascade.md"], order
+    # a CJK term matching nothing gets the same per-term miss line
+    r = gov("recall", "不存在的词", cwd=p, expect=1)
+    assert "不存在的词: 0" in r.stdout, r.stdout
+    assert "postmortems 3" in r.stderr, r.stderr
+
+
+def stats_cjk_surface(base):
+    """The parse layer over CJK identifiers and comments: 中文函数名 is
+    legal Python the grammar must index, whole-line comments classify
+    as comment while trailing-comment lines stay code, and a syntax
+    error AFTER Chinese content still raises an ERROR node — CJK
+    bytes are never a silent skip (rule 5)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    (src / "风控.py").write_text(
+        "# 风控模块：雪崩阈值\n"
+        "\n"
+        "def 雪崩计算(持仓, 阈值):\n"
+        "    \"\"\"回撤超过阈值时触发。\"\"\"\n"
+        "    if 持仓 < 阈值:  # 触发风控\n"
+        "        return True\n"
+        "    return False\n", encoding="utf-8")
+    r = gov("stats", "--json", "--lang", "python", cwd=p)
+    v = json.loads(r.stdout)["languages"]["python"]
+    assert v["files"] == 1
+    assert v["lines"] == {"total": 7, "code": 5, "comment": 1, "blank": 1}
+    assert v["symbols"]["functions"] == 1
+    assert v["depth"]["max"] == 1  # nesting counts if/for/…, not def
+    # a syntax error buried after Chinese content is caught and named —
+    # the parser does not skip what it cannot tokenize
+    (src / "坏的.py").write_text(
+        "# 中文注释后面埋一个语法错误\n"
+        "def 雪崩(:\n"
+        "    pass\n", encoding="utf-8")
+    r = gov("check", cwd=p, expect=1)
+    both = r.stdout + r.stderr
+    assert "坏的.py" in both, both
+    assert "python/syntax" in both, both
+    # the CLEAN CJK file stays unnamed by the check's findings
+    assert "风控.py" not in both, both
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2453,6 +2536,8 @@ SCENARIOS = {
     "table_edges": table_edges,
     "recall_rank_classes": recall_rank_classes,
     "cost_base_boundary": cost_base_boundary,
+    "postmortem_bilingual_rank": postmortem_bilingual_rank,
+    "stats_cjk_surface": stats_cjk_surface,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
