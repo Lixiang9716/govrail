@@ -2487,6 +2487,68 @@ def stats_cjk_surface(base):
     assert "风控.py" not in both, both
 
 
+def check_ledger_contract(base):
+    """The check engine's accounting: a WARNING never blocks by default
+    but blocks under --strict, a `gov:ignore-check` comment suppresses
+    WITHOUT deleting (the count stays on the report), --json keeps
+    stdout a single machine value while the human report lands on
+    stderr, and --record appends per-rule finding/suppression counts
+    to stats.jsonl — exemptions live in a ledger, not memory."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    (src / "app.py").write_text(
+        "data = open('x.txt')\n"
+        "safe = open('y.txt', encoding='utf-8')\n", encoding="utf-8")
+    # a WARNING prints and does not block; --strict flips that
+    r = gov("check", cwd=p)
+    assert "app.py:1: [python/open-text-encoding]" in r.stdout, r.stdout
+    assert "1 finding(s) (0 blocking), 0 suppressed" in r.stdout, r.stdout
+    gov("check", "--strict", cwd=p, expect=1)
+    # suppression keeps the finding VISIBLE, marked, counted
+    (src / "app.py").write_text(
+        "data = open('x.txt')  # gov:ignore-check "
+        "python/open-text-encoding\n", encoding="utf-8")
+    r = gov("check", cwd=p)
+    assert "(suppressed)" in r.stdout, r.stdout
+    assert "0 finding(s) (0 blocking), 1 suppressed" in r.stdout, r.stdout
+    # --json: one value on stdout, the human report on stderr
+    r = gov("check", "--json", cwd=p)
+    v = json.loads(r.stdout)
+    (f,) = [x for x in v["files"] if x["path"].endswith("app.py")]
+    (finding,) = f["findings"]
+    assert finding["rule"] == "python/open-text-encoding"
+    assert finding["suppressed"] is True and finding["line"] == 1
+    assert v["summary"] == {"findings": 0, "suppressed": 1, "blocking": 0}
+    assert "0 finding(s) (0 blocking), 1 suppressed" in r.stderr, r.stderr
+    assert "app.py" in r.stderr, r.stderr
+    # --record: the ledger carries the exemption count forward
+    gov("check", "--record", cwd=p)
+    line = (p / ".gov" / "history" / "stats.jsonl").read_text(
+        encoding="utf-8").strip().splitlines()[-1]
+    rec = json.loads(line)
+    assert rec["kind"] == "check"
+    assert rec["checks"]["python/open-text-encoding"] == \
+        {"findings": 0, "suppressed": 1}
+
+
+def doctor_parser_versions(base):
+    """doctor's parser check names the parse layer's dependency surface:
+    tree-sitter importable AND every shipped grammar's version, each
+    language pack kind-validated at load (rule 5) — a wheel that lost
+    its data files cannot pass here silently."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    r = gov("doctor", cwd=p)
+    assert "ok: parse layer ok (" in r.stdout, r.stdout
+    assert "python=" in r.stdout, r.stdout
+    v = json.loads(gov("doctor", "--json", cwd=p).stdout)
+    (check,) = [c for c in v["checks"] if c["name"] == "parser"]
+    assert check["state"] == "ok" and "python=" in check["detail"]
+    assert v["status"] == "sound" and v["problems"] == []
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2538,6 +2600,8 @@ SCENARIOS = {
     "cost_base_boundary": cost_base_boundary,
     "postmortem_bilingual_rank": postmortem_bilingual_rank,
     "stats_cjk_surface": stats_cjk_surface,
+    "check_ledger_contract": check_ledger_contract,
+    "doctor_parser_versions": doctor_parser_versions,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
