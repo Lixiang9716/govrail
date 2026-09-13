@@ -2854,6 +2854,44 @@ def worktree_ledgers(base):
     assert not (wt / ".gov" / "history").exists(), "no fragmentation"
 
 
+def note_new_scaffold(base):
+    """`gov note new` scaffolds the plane's own memory: the skeleton
+    passes verify-notes AS WRITTEN, a --ref is validated against the
+    decisions table BEFORE any file lands (unknown ref refused, file
+    count unchanged), a govrail:Dn reference is recorded-not-validated
+    (D34's one legal cross-project namespace), and an unknown class
+    names the closed set."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "decisions.md").write_text(
+        "## D1 — adopted\n\n- **选项**：x\n", encoding="utf-8")
+    r = gov("note", "new", "--class", "testing", "--ref", "D1",
+            "Scaffold flow", cwd=p)
+    assert "wrote " in r.stdout, r.stdout
+    made = list((p / ".agents" / "notes" / "implemented" / "testing")
+                .glob("*-scaffold-flow.md"))
+    assert len(made) == 1, made
+    gov("verify-notes", cwd=p)
+    gov("note", "check", cwd=p)
+    # an unknown D-ref is refused before any file is written
+    before = {q.name for q in made[0].parent.iterdir()}
+    r = gov("note", "new", "--class", "testing", "--ref", "D99",
+            "Bad ref", cwd=p, expect=2)
+    assert "not in" in r.stderr, r.stderr
+    assert {q.name for q in made[0].parent.iterdir()} == before, (
+        "a refused scaffold leaves no file")
+    # an external govrail:Dn reference is recorded, not validated
+    r = gov("note", "new", "--class", "process", "--ref", "govrail:D54",
+            "External ref", cwd=p)
+    assert "recorded, not validated" in r.stdout, r.stdout
+    gov("verify-notes", cwd=p)
+    # an unknown class names the closed set
+    r = gov("note", "new", "--class", "nonsense", "X", cwd=p, expect=2)
+    assert "closed set" in r.stderr, r.stderr
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2917,6 +2955,7 @@ SCENARIOS = {
     "lang_filter": lang_filter,
     "upgrade_preserves_local": upgrade_preserves_local,
     "worktree_ledgers": worktree_ledgers,
+    "note_new_scaffold": note_new_scaffold,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
