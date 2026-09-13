@@ -2892,6 +2892,68 @@ def note_new_scaffold(base):
     assert "closed set" in r.stderr, r.stderr
 
 
+def task_receipt_audit(base):
+    """`gov task check` audits both ends of a card's life: an open card
+    whose rules@hash pin went stale after a rules.md edit is named,
+    a done card without a receipt is named, a receipt taken against a
+    DIFFERENT rule set than the card pins is named, and an all-green
+    receipt against the pinned rules clears the audit."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gov("task", "new", "Do the audit", "--check", "item one", cwd=p)
+    r = gov("task", "check", cwd=p)
+    assert "open  T-0001" in r.stdout, r.stdout
+    # a rules.md edit makes the open card's pin stale (governance moved)
+    rules = p / ".gov" / "rules.md"
+    rules.write_text(
+        rules.read_text(encoding="utf-8")
+        + "\n<!-- a new rule was adopted -->\n", encoding="utf-8")
+    r = gov("task", "check", cwd=p, expect=1)
+    assert "STALE T-0001" in r.stdout, r.stdout
+    assert "stale" in r.stderr, r.stderr
+    # a done card must carry a receipt
+    card_path = list((p / ".gov" / "tasks").glob("T-0001-*.json"))[0]
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    pinned = card["rules"]["hash"]
+    card["status"] = "done"
+    card_path.write_text(json.dumps(card, indent=2) + "\n",
+                         encoding="utf-8")
+    r = gov("task", "check", cwd=p, expect=1)
+    assert "receipt is missing" in r.stderr, r.stderr
+    # a receipt against a DIFFERENT rule set is named
+    card["receipt"] = {"gates": [{"gate": "g", "outcome": "PASS"}],
+                       "rules": "deadbeef"}
+    card_path.write_text(json.dumps(card, indent=2) + "\n",
+                         encoding="utf-8")
+    r = gov("task", "check", cwd=p, expect=1)
+    assert "different rule set" in r.stderr, r.stderr
+    # all-green against the PINNED rules clears the audit
+    card["receipt"]["rules"] = pinned
+    card_path.write_text(json.dumps(card, indent=2) + "\n",
+                         encoding="utf-8")
+    gov("task", "check", cwd=p)
+
+
+def ledger_concurrent_writes(base):
+    """The stats ledger survives concurrent writers: eight simultaneous
+    `stats --record` processes each land ONE intact line — no record
+    interleaves, none vanishes (appends are the plane's spine)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "m.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    procs = [subprocess.Popen(["gov", "stats", "--record"], cwd=p,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+             for _ in range(8)]
+    for pr in procs:
+        pr.wait(timeout=120)
+    lines = (p / ".gov" / "history" / "stats.jsonl").read_text(
+        encoding="utf-8").strip().splitlines()
+    assert len(lines) == 8, lines
+    for line in lines:
+        assert json.loads(line)["languages"]["python"]["files"] == 1
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2956,6 +3018,8 @@ SCENARIOS = {
     "upgrade_preserves_local": upgrade_preserves_local,
     "worktree_ledgers": worktree_ledgers,
     "note_new_scaffold": note_new_scaffold,
+    "task_receipt_audit": task_receipt_audit,
+    "ledger_concurrent_writes": ledger_concurrent_writes,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
