@@ -3350,6 +3350,46 @@ def decision_end_gap_legal(base):
     gov("verify-decisions", cwd=p)
 
 
+def recall_literal_specials(base):
+    """recall terms are LITERAL substrings: a query of regex
+    metacharacters ("(paren)") matches the file that literally
+    contains it — no regex interpretation, no crash — and an
+    unmatched metachar term gets the ordinary per-term miss line."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    n = p / ".agents" / "notes" / "implemented" / "testing"
+    n.mkdir(parents=True)
+    (n / "2026-09-14-rx.md").write_text(
+        "# Agent Note: regex chars\n\nStatus: implemented\n\n"
+        "## Problem\nuses (paren) and [bracket] tokens\n\n"
+        "## Decision\nd\n\n## Alternatives considered\na\n",
+        encoding="utf-8")
+    r = gov("recall", "(paren)", cwd=p)
+    assert "2026-09-14-rx.md — matched in body" in r.stdout, r.stdout
+    r = gov("recall", "zz)", cwd=p, expect=1)
+    assert "zz): 0" in r.stdout, r.stdout
+
+
+def task_claim_status_guards(base):
+    """claim is guarded by card STATE: a done card cannot be claimed
+    (only an open card can), the refusal names the state, and `task
+    list` shows the card with its done verdict."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "guide.md").write_text("guide\n", encoding="utf-8")
+    (docs / "guide.zh.md").write_text("指南\n", encoding="utf-8")
+    gov("verify-pairing", "--write", cwd=p)
+    gov("task", "new", "Done work", cwd=p)
+    commit_all(p, "card")
+    gov("task", "close", "T-0001", cwd=p)
+    r = gov("task", "claim", "T-0001", "--agent", "w9", cwd=p, expect=2)
+    assert "not open" in r.stdout + r.stderr, r.stdout + r.stderr
+    r = gov("task", "list", cwd=p)
+    assert "done  T-0001" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3431,6 +3471,8 @@ SCENARIOS = {
     "note_presence_strict": note_presence_strict,
     "gate_timeout_enforced": gate_timeout_enforced,
     "decision_end_gap_legal": decision_end_gap_legal,
+    "recall_literal_specials": recall_literal_specials,
+    "task_claim_status_guards": task_claim_status_guards,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
