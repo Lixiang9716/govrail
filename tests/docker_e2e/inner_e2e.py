@@ -3418,6 +3418,30 @@ def memory_plane_bom(base):
     assert "D2" in r.stdout, r.stdout
 
 
+def preset_skills_additive(base):
+    """The preset's non-gate payloads are additive too: a NEW skill is
+    created, an EXISTING locally-modified skill stays byte-for-byte,
+    the manifest hint lands without clobbering other manifest keys,
+    and the verify-decisions gate joins governance mode."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    skill = p / ".agents" / "skills" / "recall-first" / "SKILL.md"
+    skill.write_text("# locally modified\n", encoding="utf-8")
+    manifest = p / ".gov" / "manifest.json"
+    m = json.loads(manifest.read_text(encoding="utf-8"))
+    m["custom_key"] = "keep me"
+    manifest.write_text(json.dumps(m, indent=2) + "\n",
+                        encoding="utf-8")
+    r = gov("preset", "apply", "agent-heavy", cwd=p)
+    assert "parallel-workers" in r.stdout, r.stdout
+    assert skill.read_text(encoding="utf-8") == "# locally modified\n"
+    assert "verify-decisions" in [g["id"] for g in json.loads(
+        (p / "gates.json").read_text(encoding="utf-8"))["gates"]]
+    m = json.loads(manifest.read_text(encoding="utf-8"))
+    assert m.get("custom_key") == "keep me", "hints never clobber"
+    assert m.get("note_presence_exempt") == [".gov/tasks/**"]
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3502,6 +3526,7 @@ SCENARIOS = {
     "recall_literal_specials": recall_literal_specials,
     "task_claim_status_guards": task_claim_status_guards,
     "memory_plane_bom": memory_plane_bom,
+    "preset_skills_additive": preset_skills_additive,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
