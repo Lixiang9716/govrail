@@ -3182,6 +3182,69 @@ def agent_lifecycle_receipt(base):
     gov("run", "--receipt", cwd=p)
 
 
+def pairing_violation_contract(base):
+    """The pairing gate's violation shape: an .md without its .zh.md
+    counterpart is named WITH the remedy (translate, or --write
+    register), the default gate stays advisory (allowFailure — the run
+    is green, the violation is loud), verify-pairing alone exits 0
+    with the violation counted, and flipping allowFailure makes the
+    SAME violation block (strictness is earned, D3)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "guide.md").write_text("guide\n", encoding="utf-8")
+    (docs / "guide.zh.md").write_text("指南\n", encoding="utf-8")
+    gov("verify-pairing", "--write", cwd=p)
+    commit_all(p, "baseline")
+    (docs / "missing.md").write_text("plain\n", encoding="utf-8")
+    commit_all(p, "missing")
+    r = gov("run", "--base", "HEAD~1", cwd=p)
+    assert "docs/missing.md: no counterpart found" in r.stdout, r.stdout
+    assert "translate it" in r.stdout, r.stdout
+    assert "FAIL pairing (advisory; allowFailure)" in r.stdout, r.stdout
+    r = gov("verify-pairing", cwd=p, expect=1)
+    assert "1 violation(s)" in r.stdout, r.stdout
+    cfg = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    for g in cfg["gates"]:
+        if g["id"] == "pairing":
+            g["allowFailure"] = False
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "strict pairing")
+    r = gov("run", "--base", "HEAD~2", cwd=p, expect=1)
+    assert "FAIL pairing" in r.stdout, r.stdout
+    assert "1 blocking failure" in r.stdout, r.stdout
+
+
+def run_gate_rerun(base):
+    """The failure summary's rerun hint is executable: a red run names
+    `rerun: gov run --gate <id>`, that command runs EXACTLY that gate
+    (the other gates stay out of the output) with the same red, and
+    fixing the command turns the rerun green."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = json.loads((p / "gates.json").read_text(encoding="utf-8"))
+    cfg["gates"].append({"id": "boom", "command": ["false"]})
+    cfg["modes"]["all"].append("boom")
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "boom wired")
+    r = gov("run", "--mode", "all", cwd=p, expect=1)
+    assert "rerun: gov run --gate boom" in r.stdout, r.stdout
+    r = gov("run", "--gate", "boom", cwd=p, expect=1)
+    assert "FAIL boom" in r.stdout, r.stdout
+    assert "PASS notes" not in r.stdout, "the rerun is single-gate"
+    cfg["gates"] = [g if g["id"] != "boom" else
+                    {"id": "boom", "command": ["true"]}
+                    for g in cfg["gates"]]
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    commit_all(p, "boom fixed")
+    r = gov("run", "--gate", "boom", cwd=p)
+    assert "PASS boom" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3257,6 +3320,8 @@ SCENARIOS = {
     "gates_schema_refusal": gates_schema_refusal,
     "stats_empty_tree": stats_empty_tree,
     "agent_lifecycle_receipt": agent_lifecycle_receipt,
+    "pairing_violation_contract": pairing_violation_contract,
+    "run_gate_rerun": run_gate_rerun,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
