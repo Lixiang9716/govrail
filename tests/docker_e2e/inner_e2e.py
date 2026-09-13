@@ -2804,6 +2804,56 @@ def lang_filter(base):
     assert langs["python"]["files"] == 1
 
 
+def upgrade_preserves_local(base):
+    """init --upgrade is a REPORT, never a write: the project's own
+    gate survives byte-for-byte, the customized gates.json gets the
+    BOTH-MOVED merge-by-hand diff naming the local id, and the stale
+    manifest keeps naming itself — the operator merges, the tool
+    never overwrites."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gates = p / "gates.json"
+    cfg = json.loads(gates.read_text(encoding="utf-8"))
+    cfg["gates"].append({"id": "my-gate", "command": ["true"]})
+    gates.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    manifest = p / ".gov" / "manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["version"] = "0.1.0"
+    manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    r = gov("init", "--upgrade", cwd=p)
+    assert "nothing is changed by this report" in r.stdout, r.stdout
+    assert "BOTH MOVED" in r.stdout, r.stdout
+    assert "my-gate" in r.stdout, "the diff names the local addition"
+    assert any(g["id"] == "my-gate" for g in json.loads(
+        gates.read_text(encoding="utf-8"))["gates"]), "never clobbered"
+    assert json.loads(manifest.read_text(
+        encoding="utf-8"))["version"] == "0.1.0", "report does not write"
+
+
+def worktree_ledgers(base):
+    """Every ledger writer anchors to the MAIN checkout from a linked
+    worktree — run (pinned long ago) plus stats --record and check
+    --record: three writers, one .gov/history, zero per-worktree
+    fragmentation."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    (src / "a.py").write_text("def f():\n    return 1\n", encoding="utf-8")
+    commit_all(p, "adopted")
+    git("worktree", "add", "-q", str(p.parent / "wt-ledgers"), "HEAD", cwd=p)
+    wt = p.parent / "wt-ledgers"
+    gov("stats", "--record", cwd=wt)
+    gov("check", "--record", cwd=wt)
+    main_ledger = p / ".gov" / "history" / "stats.jsonl"
+    assert main_ledger.exists(), "records land in the main checkout"
+    lines = main_ledger.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2, lines
+    assert "languages" in json.loads(lines[0])
+    assert json.loads(lines[1])["kind"] == "check"
+    assert not (wt / ".gov" / "history").exists(), "no fragmentation"
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -2865,6 +2915,8 @@ SCENARIOS = {
     "window_edges": window_edges,
     "decision_next_base_dir": decision_next_base_dir,
     "lang_filter": lang_filter,
+    "upgrade_preserves_local": upgrade_preserves_local,
+    "worktree_ledgers": worktree_ledgers,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
