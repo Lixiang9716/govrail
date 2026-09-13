@@ -3089,6 +3089,41 @@ def acquire_wait_polling(base):
     gov("release", "res/w", "--agent", "b", cwd=p)
 
 
+def gates_schema_refusal(base):
+    """A malformed gates.json refuses BEFORE any gate runs: a command
+    that is a string (never an argv array — D1) is named with the
+    remedy, the exit is 2, and no gate executes past the refusal."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    cfg = {"gates": [
+        {"id": "fine", "command": ["true"]},
+        {"id": "str-cmd", "command": "not-an-array"}]}
+    (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
+                                  encoding="utf-8")
+    r = gov("run", "--mode", "all", cwd=p, expect=2)
+    assert "str-cmd" in r.stderr and "non-empty array" in r.stderr, r.stderr
+    assert "PASS" not in r.stdout, "no gate ran past a config refusal"
+
+
+def stats_empty_tree(base):
+    """An empty tree reports HONEST zeros: every shipped language row
+    exists with files=0 and the full口径 echo (code_line rule, nesting
+    set, grammar name and version) — a plausible zero without its
+    definition is the worst lie a metrics command can tell, so the
+    zero answer carries its own口径."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    v = json.loads(gov("stats", "--json", cwd=p).stdout)["languages"]
+    assert v["python"]["files"] == 0
+    assert v["python"]["lines"] == {"total": 0, "code": 0, "comment": 0,
+                                    "blank": 0}
+    assert v["python"]["parse_errors"] == 0
+    rule = v["python"]["rule"]
+    assert rule["grammar"] == "tree_sitter_python"
+    assert "code_line" in rule and "nesting" in rule
+    assert len(v) == 8, sorted(v)
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3161,6 +3196,8 @@ SCENARIOS = {
     "custom_mode_scoping": custom_mode_scoping,
     "change_scope_skips": change_scope_skips,
     "acquire_wait_polling": acquire_wait_polling,
+    "gates_schema_refusal": gates_schema_refusal,
+    "stats_empty_tree": stats_empty_tree,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
