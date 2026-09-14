@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.2](https://github.com/Lixiang9716/govrail/compare/v0.30.1...v0.30.2) (2026-09-14)
+
+
+### Bug Fixes
+
+* leases are created by atomic hard-link — a race CI caught could double-issue a lease; plus e2e batches 53-55, 8 more scenarios ([#186](https://github.com/Lixiang9716/govrail/issues/186)) ([7650a62](https://github.com/Lixiang9716/govrail/commit/7650a6230efa7e1f3fb1771d2fc881a5d4c29cb2))
+
 ## [0.30.1](https://github.com/Lixiang9716/govrail/compare/v0.30.0...v0.30.1) (2026-09-14)
 
 
