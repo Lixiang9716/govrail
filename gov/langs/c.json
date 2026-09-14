@@ -20,7 +20,9 @@
     "dist",
     "node_modules",
     "target",
-    "venv"
+    "venv",
+    ".gov",
+    ".agents"
   ],
   "functions": [
     "function_definition"

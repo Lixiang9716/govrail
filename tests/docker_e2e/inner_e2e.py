@@ -3551,6 +3551,86 @@ def trend_ignores_non_runs(base):
     assert "p50 100ms → 300ms (×3.0 ↑)" in r.stdout, r.stdout
 
 
+def plane_dirs_not_project_code(base):
+    """The plane's own surfaces are not project code: .py files under
+    .gov/ and .agents/ are invisible to stats (the language rows count
+    only src/) and to check (a broken .gov .py stays silent, the same
+    breakage in src/ is named and red)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "src").mkdir()
+    (p / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    gov_dir = p / ".gov" / "deep"
+    gov_dir.mkdir(parents=True)
+    (gov_dir / "hidden.py").write_text("y = 2\n", encoding="utf-8")
+    ag = p / ".agents" / "tools"
+    ag.mkdir(parents=True)
+    (ag / "util.py").write_text("z = 3\n", encoding="utf-8")
+    r = gov("stats", "--json", "--lang", "python", cwd=p)
+    assert json.loads(r.stdout)["languages"]["python"]["files"] == 1
+    r = gov("check", "--lang", "python", cwd=p)
+    assert "hidden.py" not in r.stdout + r.stderr
+    (gov_dir / "hidden.py").write_text("def (:\n", encoding="utf-8")
+    r = gov("check", "--lang", "python", cwd=p)
+    assert "hidden.py" not in r.stdout + r.stderr, r.stdout + r.stderr
+    (p / "src" / "a.py").write_text("def (:\n", encoding="utf-8")
+    r = gov("check", "--lang", "python", cwd=p, expect=1)
+    assert "a.py" in r.stdout + r.stderr, r.stdout + r.stderr
+
+
+def decision_id_guards(base):
+    """Explicit numbers are guarded at the WRITE path: a draft row
+    pinning D9 against the allocated D0 is refused (naming both), and
+    `--id D9` is refused too — it would skip D1..D8, and pre-
+    partitioned siblings need every number to land. The plain ? draft
+    allocates; verify-decisions stays green throughout (holes are
+    structurally impossible, not merely flagged)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / ".gov" / "decisions.json").write_text(
+        json.dumps({"path": "docs/decisions.md", "format": "table"}),
+        encoding="utf-8")
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text(
+        "| Dn | title | options |\n|---|---|---|\n", encoding="utf-8")
+    draft = p / "d9row.md"
+    draft.write_text("| D9 | jump ahead | 选项：explicit |\n",
+                     encoding="utf-8")
+    r = gov("decision", "add", "--from", str(draft), cwd=p, expect=1)
+    assert "pins D9 but D0 was allocated" in r.stdout + r.stderr, (
+        r.stdout + r.stderr)
+    r = gov("decision", "add", "--from", str(draft), "--id", "D9",
+            cwd=p, expect=1)
+    assert "skips D0" in r.stdout + r.stderr, r.stdout + r.stderr
+    assert "next free is D0" in r.stdout + r.stderr, r.stdout + r.stderr
+    draft.write_text("| ? | fill the hole | 选项：hole |\n",
+                     encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    gov("verify-decisions", cwd=p)
+
+
+def check_strict_ignores_suppressed(base):
+    """--strict raises the bar for ACTIVE findings only: a violation
+    discharged by a `gov:ignore-check` marker keeps the strict run
+    green (0 finding(s), 1 suppressed) — the bar moves, the discharge
+    still counts."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    (src / "a.py").write_text(
+        "data = open('x.txt')  # gov:ignore-check "
+        "python/open-text-encoding\n", encoding="utf-8")
+    r = gov("check", "--strict", cwd=p)
+    assert "0 finding(s) (0 blocking), 1 suppressed" in r.stdout, r.stdout
+    (src / "a.py").write_text("data = open('x.txt')\n", encoding="utf-8")
+    r = gov("check", "--strict", cwd=p, expect=1)
+    # --strict blocks at the EXIT; the blocking count still means
+    # severity==error, and a warning is neither blocking nor suppressed
+    assert "1 finding(s) (0 blocking), 0 suppressed" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3641,6 +3721,9 @@ SCENARIOS = {
     "decision_bom_draft": decision_bom_draft,
     "note_presence_exempt_globs": note_presence_exempt_globs,
     "trend_ignores_non_runs": trend_ignores_non_runs,
+    "plane_dirs_not_project_code": plane_dirs_not_project_code,
+    "decision_id_guards": decision_id_guards,
+    "check_strict_ignores_suppressed": check_strict_ignores_suppressed,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
