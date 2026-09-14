@@ -61,7 +61,7 @@ class Source:
         if self.fmt == "dir":
             out = []
             for num, p in self.dir_files():
-                body = p.read_text(encoding="utf-8")
+                body = p.read_text(encoding="utf-8-sig")
                 m = SECTION_RX.search(body)
                 title = (m.group(0).lstrip("# ").strip() if m
                          else f"{num} — {p.stem.split('-', 1)[-1]}")
@@ -104,13 +104,20 @@ def configured_path_fmt() -> tuple[Path, str]:
     path, fmt = DEFAULT_PATH, "sections"
     if CONFIG.is_file():
         try:
-            cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+            cfg = json.loads(CONFIG.read_text(encoding="utf-8-sig"))
         except (OSError, json.JSONDecodeError):
             cfg = {}
         p = cfg.get("path")
         if isinstance(p, str) and p:
             path = Path(p)
         f = cfg.get("format")
+        if f is not None and f not in FORMATS:
+            # rule 5: a typo'd format silently re-reads the source as
+            # sections — refusing names the value instead
+            import sys as _sys
+            print(f"decisions: unknown format {f!r} in {CONFIG} — "
+                  f"expected one of: {', '.join(FORMATS)}", file=_sys.stderr)
+            raise SystemExit(2)
         if f in FORMATS:
             fmt = f
     return path, fmt
@@ -125,7 +132,7 @@ def load() -> Source | None:
         return Source(path=path, fmt=fmt, text="")
     if not path.is_file():
         return None
-    return Source(path=path, fmt=fmt, text=path.read_text(encoding="utf-8"))
+    return Source(path=path, fmt=fmt, text=path.read_text(encoding="utf-8-sig"))
 
 
 def numbers_in_rev(rev: str) -> set[int]:

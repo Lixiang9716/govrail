@@ -251,3 +251,30 @@ def test_thread_crash_fails_loud(tmp_path, monkeypatch, capsys):
     assert "HARNESS-ERROR" in out
     assert "RuntimeError: boom" in out
     assert st._THREAD_CRASHES == []  # cleared for the next in-process run
+
+
+def test_multi_line_failure_quotes_killer_and_dumps_whole(tmp_path):
+    """A FAIL line quotes the killer exception, and a multi-line assert
+    message (subprocess output embedded) also lands WHOLE in a file the
+    line names — the traceback must not vanish with the print."""
+    def case():
+        raise AssertionError("header line\n  mid evidence\n"
+                             "AttributeError: 'x' object has no attribute 'y'")
+    line, ok = st._run_tool_case(case)
+    assert ok is False
+    assert "FAIL case (" in line and "AttributeError: 'x' object has no attribute 'y'" in line
+    path = line.rsplit("; full output: ", 1)[1].strip()
+    try:
+        dump = Path(path).read_text(encoding="utf-8")
+    finally:
+        os.unlink(path)
+    assert "header line" in dump and "mid evidence" in dump
+
+
+def test_single_line_failure_names_no_dump():
+    def case():
+        raise AssertionError("plain one-line failure")
+    line, ok = st._run_tool_case(case)
+    assert ok is False
+    assert "plain one-line failure" in line
+    assert "full output" not in line

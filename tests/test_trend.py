@@ -174,3 +174,12 @@ def test_trend_cost_flag_conflicts_fail_loud(tmp_path, monkeypatch, capsys):
     assert "cannot be combined" in capsys.readouterr().err
     assert trend.main(["--cost", "--gate", "a"]) == 2
     assert "--gate" in capsys.readouterr().err
+
+
+def test_trend_refuses_nonpositive_last(tmp_path, monkeypatch, capsys):
+    """--last < 1 refused loudly (it used to silently empty the window —
+    runs[-n:] with negative n slices from the front, 0 yields [])."""
+    monkeypatch.chdir(tmp_path)
+    for bad in ("0", "-2"):
+        assert trend.main(["--last", bad]) == 2
+        assert f"--last must be >= 1 (got {bad})" in capsys.readouterr().err

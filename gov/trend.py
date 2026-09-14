@@ -52,7 +52,13 @@ def _split_by_base(runs: list[dict], base: str) -> tuple[list[dict], list[dict]]
         return None
     from datetime import datetime as _dt
 
-    split_at = _dt.fromisoformat(proc.stdout.strip())
+    # git emits UTC as a trailing Z (%cI); fromisoformat accepts Z only
+    # on Python 3.11+, and 3.10 is inside the supported floor (D54) —
+    # normalize it or `trend --base` crashes on every UTC-hosted commit
+    stamp = proc.stdout.strip()
+    if stamp.endswith("Z"):
+        stamp = stamp[:-1] + "+00:00"
+    split_at = _dt.fromisoformat(stamp)
 
     def _ts(run):
         try:
@@ -191,6 +197,14 @@ def main(argv: list[str] | None = None) -> int:
                              "duration movers — govrail standardizes the "
                              "ledger shape; the numbers stay caller-supplied")
     args = parser.parse_args(argv)
+
+    # a non-positive --last silently emptied the window (runs[-n:] with
+    # negative n slices from the front, and 0 yields []) — a machine
+    # caller reads an empty trend as "no runs exist" (rule 5)
+    if args.last < 1:
+        print(f"trend: --last must be >= 1 (got {args.last})",
+              file=sys.stderr)
+        return 2
 
     if args.by_tag and args.cost:
         print("trend: --by-tag and --cost cannot be combined — --cost "

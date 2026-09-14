@@ -8,10 +8,12 @@
       "conflict-markers",
       "archive",
       "rubric",
-      "decisions"
+      "decisions",
+      "source-limits"
     ],
     "quick": [
-      "notes"
+      "notes",
+      "source-limits"
     ],
     "governance": [
       "self-test"
@@ -103,6 +105,17 @@
       "paths": [
         "src/**",
         "eval/**"
+      ]
+    },
+    {
+      "id": "archive",
+      "label": "archived-notes seal",
+      "command": [
+        "gov",
+        "verify-archive"
+      ],
+      "paths": [
+        ".agents/notes/archived/**"
       ]
     }
   ]

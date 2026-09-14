@@ -37,3 +37,15 @@ def test_missing_title_fails(tmp_path):
     text = "Status: implemented\n\n## Problem\np\n\n## Decision\nd\n\n## Alternatives considered\na\n"
     errs = verify_notes.check_note(_note(tmp_path, text))
     assert any("title" in e for e in errs)
+
+
+def test_bom_prefixed_note_passes(tmp_path, monkeypatch):
+    """A UTF-8 BOM is a legal encoding artifact Windows editors add —
+    the memory plane decodes it away instead of failing the title
+    check with a violation the author cannot see."""
+    d = tmp_path / ".agents" / "notes" / "implemented" / "feature"
+    d.mkdir(parents=True)
+    (d / "2026-01-01-b.md").write_bytes(
+        "\ufeff".encode("utf-8") + VALID.encode("utf-8"))
+    monkeypatch.chdir(tmp_path)
+    assert verify_notes.main([]) == 0

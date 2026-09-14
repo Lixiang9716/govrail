@@ -68,6 +68,16 @@ class TestShippedSyntaxRule:
         assert value["summary"]["blocking"] >= 1
         assert value["languages"] == ["go"]
 
+    def test_json_report_lands_on_stderr_not_stdout(self, project, capsys):
+        # --json's help promises "the human report moves to stderr";
+        # stdout must stay exactly one JSON value for machine callers.
+        (project / "broken.go").write_text("func {", encoding="utf-8")
+        assert checks.main(["--lang", "go", "--json"]) == 1
+        cap = capsys.readouterr()
+        json.loads(cap.out)  # stdout stays exactly one JSON value
+        assert "gov check:" not in cap.out
+        assert "broken.go" in cap.err and "gov check:" in cap.err
+
     def test_clean_tree_prints_clean_and_exits_zero(self, project, capsys):
         (project / "fine.go").write_text("package main\n", encoding="utf-8")
         assert checks.main(["--lang", "go"]) == 0

@@ -33,6 +33,7 @@ name, either here (``add --id`` duplicate) or at gate time
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import re
 import subprocess
@@ -94,6 +95,13 @@ def _next_free(nums: set[int]) -> int:
 
 def _next(args: argparse.Namespace) -> int:
     anchor_to_git_root("decision next")
+    # a non-positive count silently printed NOTHING — a machine caller
+    # asking for -3 numbers reads an empty stdout as "no decisions
+    # exist" (rule 5: refuse and name the value)
+    if args.count < 1:
+        print(f"decision next: --count must be >= 1 (got {args.count})",
+              file=sys.stderr)
+        return 2
     src = dec.load()
     local = set(src.numbers()) if src is not None else set()
     ref_nums = _ref_numbers(args.base)
@@ -137,7 +145,7 @@ def _parse_draft(path: Path, fmt: str) -> tuple[str | None, str]:
     ``## Dn —`` heading). table drafts: the raw row lines, first cell
     ``Dn`` (explicit) or ``?`` (allocate).
     """
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     if fmt == "table":
         if not text.strip():
             # an empty table draft would otherwise append nothing while
@@ -156,33 +164,46 @@ def _parse_draft(path: Path, fmt: str) -> tuple[str | None, str]:
     return lines[0].strip("# ").strip(), "\n".join(lines[1:]).strip("\n")
 
 
-def _atomic_write(path: Path, text: str) -> None:
-    """Write via temp file + os.replace; flock guards same-checkout adds.
+def _locked(parent: Path):
+    """Exclusive flock over one add's read-modify-write, same checkout.
 
-    Two worktrees have separate checkouts, so cross-worktree allocation
-    races are the ``--base`` flag's job, not the lock's.
+    The lock must cover the READ too, not just the write: two concurrent
+    `decision add` calls that both read the pre-add text and then write
+    serialize on the file but the second write carries the first's stale
+    view — one decision silently vanishes. Cross-checkout allocation
+    races remain the ``--base`` flag's job (separate checkouts, separate
+    locks; the docstring on the old write-only guard always said so).
     """
-    lock_path = path.parent / ".decision.lock"
-    lock = None
-    try:
-        import fcntl  # POSIX only; absence degrades to no lock
-        path.parent.mkdir(parents=True, exist_ok=True)
-        lock = open(lock_path, "w")
-        fcntl.flock(lock, fcntl.LOCK_EX)
-    except ImportError:
-        pass
-    try:
-        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
-        os.replace(tmp, path)
-    finally:
-        if lock:
-            lock.close()
-            try:
-                lock_path.unlink()  # don't litter the tree
-            except OSError:
-                pass  # a concurrent holder recreated it; harmless
+    import contextlib
+
+    @contextlib.contextmanager
+    def _ctx():
+        lock = None
+        try:
+            import fcntl  # POSIX only; absence degrades to no lock
+            parent.mkdir(parents=True, exist_ok=True)
+            lock = open(parent / ".decision.lock", "w")
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        except ImportError:
+            pass
+        try:
+            yield
+        finally:
+            if lock:
+                lock.close()
+                try:
+                    (parent / ".decision.lock").unlink()  # don't litter
+                except OSError:
+                    pass  # a concurrent holder recreated it; harmless
+    return _ctx()
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Atomic temp-file + os.replace; the caller holds ``_locked``."""
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
 
 
 def _validate_id(explicit: str | None, nums: set[int], local: set[int],
@@ -232,6 +253,22 @@ def _add(args: argparse.Namespace) -> int:
         raise SystemExit(2)
     title, body = _parse_draft(draft, fmt)
 
+    # The flock covers the whole read-modify-write: the numbers read and
+    # the write must see the same file state, or two concurrent adds in
+    # one checkout lose the first writer's decision to the second's
+    # stale view. A dry run reads and never writes — no lock needed.
+    lock = _locked(path.parent) if not args.dry_run \
+        else contextlib.nullcontext()
+    with lock:
+        return _add_locked(args, src, path, fmt, title, body)
+
+
+def _add_locked(args: argparse.Namespace, src, path: Path, fmt: str,
+                title: str | None, body: str) -> int:
+    # re-read INSIDE the lock: the source loaded at command start caches
+    # the file's text, and a concurrent add may have moved it since
+    src = dec.load()
+    path, fmt = src.path, src.fmt
     local = set(src.numbers())
     ref_nums = _ref_numbers(args.base)
     if args.base:
