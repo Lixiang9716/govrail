@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.1](https://github.com/Lixiang9716/govrail/compare/v0.30.0...v0.30.1) (2026-09-14)
+
+
+### Bug Fixes
+
+* BOM-tolerant memory plane, check --json stderr report, self-test failure dumps, non-positive window refusals — plus the docker e2e matrix, 98 scenarios (D58) ([#184](https://github.com/Lixiang9716/govrail/issues/184)) ([d847758](https://github.com/Lixiang9716/govrail/commit/d847758c23422104e79aa61b10839553b4203de3))
+
 ## [0.30.0](https://github.com/Lixiang9716/govrail/compare/v0.29.4...v0.30.0) (2026-09-11)
 
 
