@@ -3487,6 +3487,173 @@ def decision_against_alias(base):
     assert "1 row behind" in r.stderr, r.stderr
 
 
+def decision_bom_draft(base):
+    """A decision draft saved with a UTF-8 BOM (Windows editor) lands
+    cleanly: the title parses without the BOM byte, the D-row is
+    written, and verify-decisions passes it."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text("# 决策\n\n", encoding="utf-8")
+    draft = p / "d1.md"
+    draft.write_bytes(
+        "\ufeff锚定决策\n\n- **选项**：用 BOM 草稿\n\n- **状态**：已决\n"
+        .encode("utf-8"))
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    first = (docs / "decisions.md").read_text(encoding="utf-8")
+    assert "## D0 — 锚定决策" in first, first
+    gov("verify-decisions", cwd=p)
+
+
+def note_presence_exempt_globs(base):
+    """The manifest's note_presence_exempt hint has teeth with
+    selectivity: in ONE commit touching an exempt path (scratch/**)
+    and a normal code file, only the code file is flagged — the exempt
+    file stays out of the non-trivial list."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    manifest = p / ".gov" / "manifest.json"
+    m = json.loads(manifest.read_text(encoding="utf-8"))
+    m["note_presence_exempt"] = ["scratch/**"]
+    manifest.write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+    commit_all(p, "exempt hint")
+    (p / "scratch").mkdir()
+    (p / "scratch" / "junk.md").write_text("junk\n", encoding="utf-8")
+    (p / "m.py").write_text("x = 1\n", encoding="utf-8")
+    commit_all(p, "mixed change")
+    r = gov("verify-note-presence", cwd=p)
+    assert "exempt (.gov/manifest.json note_presence_exempt): " \
+           "scratch/**" in r.stdout, r.stdout
+    assert "1 non-trivial file(s) (m.py)" in r.stdout, r.stdout
+    assert "junk.md" not in r.stdout, r.stdout
+
+
+def trend_ignores_non_runs(base):
+    """A non-run record (#119: SCOPED_OUT etc.) never drags a gate's
+    p50: with late = [SCOPED_OUT@0ms, PASS@300ms] the late p50 reads
+    300ms (the mover ×3.0), not the 150ms a naive average would give."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gate = {"gate": "g", "outcome": "PASS", "blocking": False,
+            "detail": "", "duration_ms": 100, "selected_by": "e2e",
+            "scoped_out": False}
+    skipped = dict(gate, outcome="SCOPED_OUT", duration_ms=0)
+    late = dict(gate, duration_ms=300)
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    with history.open("a", encoding="utf-8") as f:
+        for i, rec in enumerate((gate, late, skipped)):
+            f.write(json.dumps(
+                {"ts": f"2026-09-14T0{i}:00:00+00:00",
+                 "gates": [rec]}) + "\n")
+    r = gov("trend", cwd=p)
+    assert "p50 100ms → 300ms (×3.0 ↑)" in r.stdout, r.stdout
+
+
+def plane_dirs_not_project_code(base):
+    """The plane's own surfaces are not project code: .py files under
+    .gov/ and .agents/ are invisible to stats (the language rows count
+    only src/) and to check (a broken .gov .py stays silent, the same
+    breakage in src/ is named and red)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / "src").mkdir()
+    (p / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    gov_dir = p / ".gov" / "deep"
+    gov_dir.mkdir(parents=True)
+    (gov_dir / "hidden.py").write_text("y = 2\n", encoding="utf-8")
+    ag = p / ".agents" / "tools"
+    ag.mkdir(parents=True)
+    (ag / "util.py").write_text("z = 3\n", encoding="utf-8")
+    r = gov("stats", "--json", "--lang", "python", cwd=p)
+    assert json.loads(r.stdout)["languages"]["python"]["files"] == 1
+    r = gov("check", "--lang", "python", cwd=p)
+    assert "hidden.py" not in r.stdout + r.stderr
+    (gov_dir / "hidden.py").write_text("def (:\n", encoding="utf-8")
+    r = gov("check", "--lang", "python", cwd=p)
+    assert "hidden.py" not in r.stdout + r.stderr, r.stdout + r.stderr
+    (p / "src" / "a.py").write_text("def (:\n", encoding="utf-8")
+    r = gov("check", "--lang", "python", cwd=p, expect=1)
+    assert "a.py" in r.stdout + r.stderr, r.stdout + r.stderr
+
+
+def decision_id_guards(base):
+    """Explicit numbers are guarded at the WRITE path: a draft row
+    pinning D9 against the allocated D0 is refused (naming both), and
+    `--id D9` is refused too — it would skip D1..D8, and pre-
+    partitioned siblings need every number to land. The plain ? draft
+    allocates; verify-decisions stays green throughout (holes are
+    structurally impossible, not merely flagged)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    (p / ".gov" / "decisions.json").write_text(
+        json.dumps({"path": "docs/decisions.md", "format": "table"}),
+        encoding="utf-8")
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text(
+        "| Dn | title | options |\n|---|---|---|\n", encoding="utf-8")
+    draft = p / "d9row.md"
+    draft.write_text("| D9 | jump ahead | 选项：explicit |\n",
+                     encoding="utf-8")
+    r = gov("decision", "add", "--from", str(draft), cwd=p, expect=1)
+    assert "pins D9 but D0 was allocated" in r.stdout + r.stderr, (
+        r.stdout + r.stderr)
+    r = gov("decision", "add", "--from", str(draft), "--id", "D9",
+            cwd=p, expect=1)
+    assert "skips D0" in r.stdout + r.stderr, r.stdout + r.stderr
+    assert "next free is D0" in r.stdout + r.stderr, r.stdout + r.stderr
+    draft.write_text("| ? | fill the hole | 选项：hole |\n",
+                     encoding="utf-8")
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    gov("verify-decisions", cwd=p)
+
+
+def check_strict_ignores_suppressed(base):
+    """--strict raises the bar for ACTIVE findings only: a violation
+    discharged by a `gov:ignore-check` marker keeps the strict run
+    green (0 finding(s), 1 suppressed) — the bar moves, the discharge
+    still counts."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    src = p / "src"
+    src.mkdir()
+    (src / "a.py").write_text(
+        "data = open('x.txt')  # gov:ignore-check "
+        "python/open-text-encoding\n", encoding="utf-8")
+    r = gov("check", "--strict", cwd=p)
+    assert "0 finding(s) (0 blocking), 1 suppressed" in r.stdout, r.stdout
+    (src / "a.py").write_text("data = open('x.txt')\n", encoding="utf-8")
+    r = gov("check", "--strict", cwd=p, expect=1)
+    # --strict blocks at the EXIT; the blocking count still means
+    # severity==error, and a warning is neither blocking nor suppressed
+    assert "1 finding(s) (0 blocking), 0 suppressed" in r.stdout, r.stdout
+
+
+def lease_unreadable_never_stolen(base):
+    """A present-but-unreadable lease (the mid-create window between
+    O_EXCL create and payload write, frozen here) reads as BUSY —
+    exit 3, "<unreadable lease>", the file byte-for-byte — never as
+    takeover fodder (CI's nonroot cell turned that window into two
+    winners from one race). A PARSED expired lease is still taken
+    over legally."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    lock = p / ".git" / "gov-locks" / "race__x.json"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_bytes(b"")
+    r = gov("acquire", "race/x", "--agent", "grabber", cwd=p, expect=3)
+    assert "<unreadable lease>" in r.stderr, r.stderr
+    assert lock.read_bytes() == b"", "the unreadable file was modified"
+    lock.write_text(json.dumps(
+        {"resource": "race/x", "holder": "corpse",
+         "acquired_at": "2020-01-01T00:00:00+00:00",
+         "expires_at": "2020-01-01T00:00:00+00:00"}), encoding="utf-8")
+    r = gov("acquire", "race/x", "--agent", "new", cwd=p)
+    assert "took over an expired lease" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3574,6 +3741,13 @@ SCENARIOS = {
     "preset_skills_additive": preset_skills_additive,
     "recall_where_precedence": recall_where_precedence,
     "decision_against_alias": decision_against_alias,
+    "decision_bom_draft": decision_bom_draft,
+    "note_presence_exempt_globs": note_presence_exempt_globs,
+    "trend_ignores_non_runs": trend_ignores_non_runs,
+    "plane_dirs_not_project_code": plane_dirs_not_project_code,
+    "decision_id_guards": decision_id_guards,
+    "check_strict_ignores_suppressed": check_strict_ignores_suppressed,
+    "lease_unreadable_never_stolen": lease_unreadable_never_stolen,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,

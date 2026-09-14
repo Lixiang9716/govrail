@@ -22,7 +22,9 @@
     "dist",
     "node_modules",
     "target",
-    "venv"
+    "venv",
+    ".gov",
+    ".agents"
   ],
   "functions": [
     "method_declaration",
