@@ -3442,6 +3442,51 @@ def preset_skills_additive(base):
     assert m.get("note_presence_exempt") == [".gov/tasks/**"]
 
 
+def recall_where_precedence(base):
+    """A term hit in BOTH title and body reports the stronger where —
+    'in title' — in both the strict line and the --any line (presence
+    collapses to the best where, one mention per term)."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    n = p / ".agents" / "notes" / "implemented" / "testing"
+    n.mkdir(parents=True)
+    (n / "2026-09-14-alpha.md").write_text(
+        "# Agent Note: alpha plan\n\nStatus: implemented\n\n"
+        "## Problem\nalpha appears again in the body\n\n"
+        "## Decision\nd\n\n## Alternatives considered\na\n",
+        encoding="utf-8")
+    r = gov("recall", "alpha", cwd=p)
+    assert "2026-09-14-alpha.md — matched in title" in r.stdout, r.stdout
+    r = gov("recall", "--any", "alpha", cwd=p)
+    assert ("2026-09-14-alpha.md — matched 1/1 terms "
+            "(alpha in title)") in r.stdout, r.stdout
+
+
+def decision_against_alias(base):
+    """--against is --base's alias end to end: a sibling branch's D2
+    pushes the trunk's next window past it through EITHER flag, with
+    the same stale-base warning on stderr."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    d = p / "docs" / "decisions.md"
+    d.parent.mkdir(parents=True)
+    d.write_text("## D1 — seed\n\n- **选项**：x\n\n- **状态**：已决\n",
+                 encoding="utf-8")
+    commit_all(p, "D1")
+    branch = git("rev-parse", "--abbrev-ref", "HEAD",
+                 cwd=p).stdout.strip()
+    git("checkout", "-b", "sibling", cwd=p)
+    d.write_text("## D1 — seed\n\n- **选项**：x\n\n- **状态**：已决\n\n"
+                 "## D2 — side\n\n- **选项**：y\n\n- **状态**：已决\n",
+                 encoding="utf-8")
+    commit_all(p, "D2 on sibling")
+    git("checkout", branch, cwd=p)
+    r = gov("decision", "next", "--count", "2", "--against", "sibling",
+            cwd=p)
+    assert "D3" in r.stdout and "D4" in r.stdout, r.stdout
+    assert "1 row behind" in r.stderr, r.stderr
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3527,6 +3572,8 @@ SCENARIOS = {
     "task_claim_status_guards": task_claim_status_guards,
     "memory_plane_bom": memory_plane_bom,
     "preset_skills_additive": preset_skills_additive,
+    "recall_where_precedence": recall_where_precedence,
+    "decision_against_alias": decision_against_alias,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
