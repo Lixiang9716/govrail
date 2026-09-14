@@ -3,6 +3,13 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.1 — notes saved on Windows just work, and failures explain themselves
+
+- **A UTF-8 BOM no longer breaks your notes**: Windows editors add an invisible BOM, and a note saved with one used to fail the title check with a violation you could not see. The memory plane (verify-notes, recall, decisions, audit) now decodes it away — nothing to change on your side.
+- **`gov check --json` keeps talking to humans**: stdout stays exactly one JSON value for your tooling; the finding summary now prints on stderr, so running it in a terminal still shows the verdict.
+- **A failing self-test hands you the whole story**: the FAIL line quotes the killer exception and names a file holding the full output — read the cause without re-running anything.
+- **Impossible windows refuse loudly**: `decision next --count 0` and `trend --last -1` exit 2 naming the value, instead of an empty answer that reads as "nothing exists".
+
 ## 0.30.0 — the plane learns to read code: tree-sitter parse layer, gov stats, gov check
 
 - **tree-sitter joins the base dependencies** (core + 8 official grammar
