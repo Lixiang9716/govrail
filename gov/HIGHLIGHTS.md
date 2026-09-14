@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.1 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- BOM-tolerant memory plane, check --json stderr report, self-test failure dumps, non-positive window refusals — plus the docker e2e matrix, 98 scenarios (D58)
+
 ## 0.30.0 — the plane learns to read code: tree-sitter parse layer, gov stats, gov check
 
 - **tree-sitter joins the base dependencies** (core + 8 official grammar
