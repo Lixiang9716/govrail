@@ -3487,6 +3487,70 @@ def decision_against_alias(base):
     assert "1 row behind" in r.stderr, r.stderr
 
 
+def decision_bom_draft(base):
+    """A decision draft saved with a UTF-8 BOM (Windows editor) lands
+    cleanly: the title parses without the BOM byte, the D-row is
+    written, and verify-decisions passes it."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    docs = p / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text("# 决策\n\n", encoding="utf-8")
+    draft = p / "d1.md"
+    draft.write_bytes(
+        "\ufeff锚定决策\n\n- **选项**：用 BOM 草稿\n\n- **状态**：已决\n"
+        .encode("utf-8"))
+    gov("decision", "add", "--from", str(draft), cwd=p)
+    first = (docs / "decisions.md").read_text(encoding="utf-8")
+    assert "## D0 — 锚定决策" in first, first
+    gov("verify-decisions", cwd=p)
+
+
+def note_presence_exempt_globs(base):
+    """The manifest's note_presence_exempt hint has teeth with
+    selectivity: in ONE commit touching an exempt path (scratch/**)
+    and a normal code file, only the code file is flagged — the exempt
+    file stays out of the non-trivial list."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    manifest = p / ".gov" / "manifest.json"
+    m = json.loads(manifest.read_text(encoding="utf-8"))
+    m["note_presence_exempt"] = ["scratch/**"]
+    manifest.write_text(json.dumps(m, indent=2) + "\n", encoding="utf-8")
+    commit_all(p, "exempt hint")
+    (p / "scratch").mkdir()
+    (p / "scratch" / "junk.md").write_text("junk\n", encoding="utf-8")
+    (p / "m.py").write_text("x = 1\n", encoding="utf-8")
+    commit_all(p, "mixed change")
+    r = gov("verify-note-presence", cwd=p)
+    assert "exempt (.gov/manifest.json note_presence_exempt): " \
+           "scratch/**" in r.stdout, r.stdout
+    assert "1 non-trivial file(s) (m.py)" in r.stdout, r.stdout
+    assert "junk.md" not in r.stdout, r.stdout
+
+
+def trend_ignores_non_runs(base):
+    """A non-run record (#119: SCOPED_OUT etc.) never drags a gate's
+    p50: with late = [SCOPED_OUT@0ms, PASS@300ms] the late p50 reads
+    300ms (the mover ×3.0), not the 150ms a naive average would give."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    gate = {"gate": "g", "outcome": "PASS", "blocking": False,
+            "detail": "", "duration_ms": 100, "selected_by": "e2e",
+            "scoped_out": False}
+    skipped = dict(gate, outcome="SCOPED_OUT", duration_ms=0)
+    late = dict(gate, duration_ms=300)
+    history = p / ".gov" / "history" / "gates.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    with history.open("a", encoding="utf-8") as f:
+        for i, rec in enumerate((gate, late, skipped)):
+            f.write(json.dumps(
+                {"ts": f"2026-09-14T0{i}:00:00+00:00",
+                 "gates": [rec]}) + "\n")
+    r = gov("trend", cwd=p)
+    assert "p50 100ms → 300ms (×3.0 ↑)" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3574,6 +3638,9 @@ SCENARIOS = {
     "preset_skills_additive": preset_skills_additive,
     "recall_where_precedence": recall_where_precedence,
     "decision_against_alias": decision_against_alias,
+    "decision_bom_draft": decision_bom_draft,
+    "note_presence_exempt_globs": note_presence_exempt_globs,
+    "trend_ignores_non_runs": trend_ignores_non_runs,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
