@@ -246,13 +246,21 @@ def _takeover(common: Path, resource: str, payload: str,
     """Replace an expired lease inside the guard's critical section.
 
     The only place an expired lease is ever unlinked — and only after the
-    expiry is RE-checked inside the guard (another taker may have won the
-    race between the caller's classification and this critical section).
-    A fresh lock is never unlinked here.
+    expiry is RE-checked inside the guard (another taker may have won
+    the race between the caller's classification and this critical
+    section). A fresh lock is never unlinked here, and neither is a
+    PRESENT-BUT-UNREADABLE one: an empty or corrupt file is either
+    mid-create (the O_EXCL winner has not written its payload yet) or
+    tampered — unlinking it would double-issue the lease (found live by
+    the nonroot cell: two winners from one race). Only a PARSED lease
+    whose expires_at is provably past may be replaced.
     """
     def action() -> bool:
         path = _lease_path(common, resource)
-        if _is_fresh(_read_lease(path), now):
+        data = _read_lease(path)
+        if data is None:
+            return False  # unreadable: busy, never stolen
+        if _is_fresh(data, now):
             return False  # someone re-acquired; no longer expired
         try:
             os.unlink(path)
@@ -310,16 +318,18 @@ def acquire(resource: str, holder: str, ttl: float,
             print(f"acquire: '{resource}' leased by '{holder}' until {expires}")
             return 0
         data = _read_lease(path)
-        if not _is_fresh(data, now):
-            # expired or unreadable → lazy takeover under the guard
+        if data is not None and not _is_fresh(data, now):
+            # provably expired → lazy takeover under the guard
             if _takeover(common, resource, payload, now):
                 print(f"acquire: '{resource}' leased by '{holder}' until "
                       f"{expires} (took over an expired lease)")
                 return 0
             # lost the takeover race; re-classify on the next loop pass
             continue
-        held_by = data.get("holder")
-        until = data.get("expires_at")
+        # fresh, or present-but-unreadable (mid-create/tampered — never
+        # stolen): both read as held, so the loop reaches the refusal
+        held_by = (data or {}).get("holder", "<unreadable lease>")
+        until = (data or {}).get("expires_at", "unknown")
         remaining = deadline - time.monotonic()
         if wait is None or remaining <= 0:
             print(f"acquire: REFUSED — '{resource}' is held by '{held_by}' "

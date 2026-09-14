@@ -469,3 +469,34 @@ def test_locks_cli_imports_when_fcntl_missing(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as e:
         locks.main([])
     assert e.value.code == 2  # bare command: named usage error, not a crash
+
+
+def test_unreadable_lease_is_never_taken_over(tmp_path):
+    """A present-but-unreadable lease is either mid-create (the O_EXCL
+    winner has not written its payload yet — found live by the nonroot
+    cell: two winners from one race) or tampered; both must read as
+    BUSY, never as takeover fodder. The file stays byte-for-byte."""
+    _git_repo(tmp_path)
+    _lockdir(tmp_path).mkdir(parents=True, exist_ok=True)
+    lease = _lease(tmp_path, "r")
+    lease.write_bytes(b"")  # the mid-create window, frozen
+    r = _gov(tmp_path, "acquire", "r", "--agent", "grabber", "--ttl", "300")
+    assert r.returncode == 3, (r.stdout, r.stderr)
+    assert "<unreadable lease>" in r.stderr, r.stderr
+    assert lease.read_bytes() == b"", "the unreadable file was modified"
+    lease.write_bytes(b"{not json at all")
+    r = _gov(tmp_path, "acquire", "r", "--agent", "grabber", "--ttl", "300")
+    assert r.returncode == 3, (r.stdout, r.stderr)
+    assert lease.read_bytes() == b"{not json at all"
+
+
+def test_unreadable_lease_blocks_waiter_without_spinning(tmp_path):
+    """An unreadable lease reaches the busy refusal even under --wait —
+    the old classify loop spun on it forever (takeover always False,
+    refusal unreachable)."""
+    _git_repo(tmp_path)
+    _lockdir(tmp_path).mkdir(parents=True, exist_ok=True)
+    _lease(tmp_path, "r").write_bytes(b"")
+    r = _gov(tmp_path, "acquire", "r", "--agent", "w", "--ttl", "300", "--wait", "1")
+    assert r.returncode == 3, (r.stdout, r.stderr)
+    assert "<unreadable lease>" in r.stderr, r.stderr

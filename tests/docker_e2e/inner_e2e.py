@@ -3631,6 +3631,29 @@ def check_strict_ignores_suppressed(base):
     assert "1 finding(s) (0 blocking), 0 suppressed" in r.stdout, r.stdout
 
 
+def lease_unreadable_never_stolen(base):
+    """A present-but-unreadable lease (the mid-create window between
+    O_EXCL create and payload write, frozen here) reads as BUSY —
+    exit 3, "<unreadable lease>", the file byte-for-byte — never as
+    takeover fodder (CI's nonroot cell turned that window into two
+    winners from one race). A PARSED expired lease is still taken
+    over legally."""
+    p = fresh_project(base)
+    gov("init", cwd=p)
+    lock = p / ".git" / "gov-locks" / "race__x.json"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_bytes(b"")
+    r = gov("acquire", "race/x", "--agent", "grabber", cwd=p, expect=3)
+    assert "<unreadable lease>" in r.stderr, r.stderr
+    assert lock.read_bytes() == b"", "the unreadable file was modified"
+    lock.write_text(json.dumps(
+        {"resource": "race/x", "holder": "corpse",
+         "acquired_at": "2020-01-01T00:00:00+00:00",
+         "expires_at": "2020-01-01T00:00:00+00:00"}), encoding="utf-8")
+    r = gov("acquire", "race/x", "--agent", "new", cwd=p)
+    assert "took over an expired lease" in r.stdout, r.stdout
+
+
 SCENARIOS = {
     "locale_bites": locale_bites,
     "wheel_version": wheel_version,
@@ -3724,6 +3747,7 @@ SCENARIOS = {
     "plane_dirs_not_project_code": plane_dirs_not_project_code,
     "decision_id_guards": decision_id_guards,
     "check_strict_ignores_suppressed": check_strict_ignores_suppressed,
+    "lease_unreadable_never_stolen": lease_unreadable_never_stolen,
     "recall_any_multilingual": recall_any_multilingual,
     "cost_malformed": cost_malformed,
     "no_record_optout": no_record_optout,
