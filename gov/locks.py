@@ -206,14 +206,43 @@ def _is_fresh(data: dict | None, now: datetime) -> bool:
 
 
 def _create_exclusive(path: Path, payload: str) -> bool:
-    """O_CREAT|O_EXCL create with content; False when the file exists."""
+    """Exclusive create with content, ATOMICALLY visible to readers.
+
+    The payload is written to a unique temp file in the lease
+    directory and hard-linked into place: link(2) fails with EEXIST
+    when the target exists (the exclusivity), and a reader sees
+    either no file or the WHOLE payload. The old create-then-write
+    window (an empty lease file for a few microseconds) let a second
+    racer classify the lock as unheld and steal it — the nonroot cell
+    found two winners from one race, live. Where link(2) is
+    unavailable, fall back to direct O_EXCL create; readers of the
+    empty mid-create file then read busy (never stolen).
+    """
+    import tempfile
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent),
+                                    prefix=".lease-", suffix=".tmp")
     try:
-        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-    except FileExistsError:
-        return False
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(payload)
-    return True
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(payload)
+        try:
+            os.link(tmp_name, path)
+            return True
+        except FileExistsError:
+            return False
+        except OSError:
+            try:
+                fd2 = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                              0o644)
+            except FileExistsError:
+                return False
+            with os.fdopen(fd2, "w", encoding="utf-8") as f:
+                f.write(payload)
+            return True
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
 
 
 def _guarded(common: Path, resource: str, action) -> object:
@@ -312,25 +341,13 @@ def acquire(resource: str, holder: str, ttl: float,
     path.parent.mkdir(parents=True, exist_ok=True)
 
     deadline = time.monotonic() + (max(0.0, wait) if wait is not None else 0.0)
-    # An EMPTY lease file is the mid-create window (O_EXCL winner has
-    # not written its payload yet — microseconds): re-read briefly
-    # before calling it unreadable, or every claim race would hand the
-    # loser an "<unreadable lease>" instead of the holder's name.
-    unreadable_grace = time.monotonic() + 0.5
     while True:
         now = datetime.now(timezone.utc)
         if _create_exclusive(path, payload):
             print(f"acquire: '{resource}' leased by '{holder}' until {expires}")
             return 0
         data = _read_lease(path)
-        if data is None:
-            if path.stat().st_size == 0 and time.monotonic() < unreadable_grace:
-                time.sleep(0.01)
-                continue  # transient: the winner's payload lands in ms
-            # non-empty corrupt (tampered) or empty past the grace —
-            # busy, never stolen: unreadable means unverifiable
-            held_by, until = "<unreadable lease>", "unknown"
-        elif not _is_fresh(data, now):
+        if data is not None and not _is_fresh(data, now):
             # provably expired → lazy takeover under the guard
             if _takeover(common, resource, payload, now):
                 print(f"acquire: '{resource}' leased by '{holder}' until "
@@ -338,9 +355,11 @@ def acquire(resource: str, holder: str, ttl: float,
                 return 0
             # lost the takeover race; re-classify on the next loop pass
             continue
-        else:
-            held_by = data.get("holder")
-            until = data.get("expires_at")
+        # fresh, or unreadable (creation is atomic now, so unreadable
+        # means tampered — never stolen): both read as held, so the
+        # loop reaches the refusal instead of spinning
+        held_by = (data or {}).get("holder", "<unreadable lease>")
+        until = (data or {}).get("expires_at", "unknown")
         remaining = deadline - time.monotonic()
         if wait is None or remaining <= 0:
             print(f"acquire: REFUSED — '{resource}' is held by '{held_by}' "

@@ -24,24 +24,29 @@ False → `continue` never reached the refusal).
 ## Decision
 
 Fail-SAFE for the unreadable case, fail-open nowhere it can
-double-issue — in two cuts, because CI caught the first cut being too
-coarse (test_task's claim race: the loser hit the SAME empty-file
-window and got "<unreadable lease>" instead of the holder's name):
+double-issue — in three cuts, each caught by a real judge (CI's
+nonroot cell, then test_task's claim race on a loaded runner, then
+the same race surviving a 0.5s grace):
 
+- **The structural fix**: `_create_exclusive` writes the payload to
+  a unique temp file and HARD-LINKS it into place — link(2) fails
+  with EEXIST when the target exists (the exclusivity) and readers
+  see either no file or the WHOLE payload. The mid-create window
+  ceases to exist instead of being waited out. Where link(2) is
+  unavailable, a direct O_EXCL create falls back (readers of the
+  empty file read busy, never stolen).
 - `_takeover` unlinks ONLY a PARSED lease whose expires_at is
   provably past; a present-but-unreadable file returns False
   (busy) with the file untouched.
-- The acquire loop takes over only parsed-expired leases. An EMPTY
-  file gets a 0.5s re-read grace (the winner's payload lands in
-  microseconds — a claim race's loser must see the holder's name,
-  not static); after the grace, or for a NON-empty corrupt file,
-  the refusal reads "held by '<unreadable lease>'". The busy
-  refusal is reachable in every branch — which also fixes the old
-  loop's --wait spin on unreadable files.
+- The acquire loop takes over only parsed-expired leases; an
+  unreadable file reads as "held by '<unreadable lease>'" and the
+  busy refusal is reachable in every branch — which also fixes the
+  old loop's --wait spin on unreadable files.
 
 Two unit tests freeze the mid-create window (empty file) and the
 tampered file: busy 3, byte-for-byte untouched, no spin under
---wait; the parsed-expired takeover keeps its existing coverage.
+--wait; the parsed-expired takeover keeps its existing coverage,
+and both exactly-one-winner race tests now stress the atomic path.
 The e2e scenario walks the frozen window, the untouched file, and
 the legal parsed-expired takeover in one journey.
 
