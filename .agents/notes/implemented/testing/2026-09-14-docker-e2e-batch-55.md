@@ -24,15 +24,20 @@ False → `continue` never reached the refusal).
 ## Decision
 
 Fail-SAFE for the unreadable case, fail-open nowhere it can
-double-issue:
+double-issue — in two cuts, because CI caught the first cut being too
+coarse (test_task's claim race: the loser hit the SAME empty-file
+window and got "<unreadable lease>" instead of the holder's name):
 
 - `_takeover` unlinks ONLY a PARSED lease whose expires_at is
   provably past; a present-but-unreadable file returns False
   (busy) with the file untouched.
-- The acquire loop takes over only parsed-expired leases; an
-  unreadable file falls through to the busy refusal as
-  "held by '<unreadable lease>'" — which also fixes the --wait spin
-  (the refusal is now reachable).
+- The acquire loop takes over only parsed-expired leases. An EMPTY
+  file gets a 0.5s re-read grace (the winner's payload lands in
+  microseconds — a claim race's loser must see the holder's name,
+  not static); after the grace, or for a NON-empty corrupt file,
+  the refusal reads "held by '<unreadable lease>'". The busy
+  refusal is reachable in every branch — which also fixes the old
+  loop's --wait spin on unreadable files.
 
 Two unit tests freeze the mid-create window (empty file) and the
 tampered file: busy 3, byte-for-byte untouched, no spin under

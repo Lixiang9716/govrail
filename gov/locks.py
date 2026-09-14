@@ -312,13 +312,25 @@ def acquire(resource: str, holder: str, ttl: float,
     path.parent.mkdir(parents=True, exist_ok=True)
 
     deadline = time.monotonic() + (max(0.0, wait) if wait is not None else 0.0)
+    # An EMPTY lease file is the mid-create window (O_EXCL winner has
+    # not written its payload yet — microseconds): re-read briefly
+    # before calling it unreadable, or every claim race would hand the
+    # loser an "<unreadable lease>" instead of the holder's name.
+    unreadable_grace = time.monotonic() + 0.5
     while True:
         now = datetime.now(timezone.utc)
         if _create_exclusive(path, payload):
             print(f"acquire: '{resource}' leased by '{holder}' until {expires}")
             return 0
         data = _read_lease(path)
-        if data is not None and not _is_fresh(data, now):
+        if data is None:
+            if path.stat().st_size == 0 and time.monotonic() < unreadable_grace:
+                time.sleep(0.01)
+                continue  # transient: the winner's payload lands in ms
+            # non-empty corrupt (tampered) or empty past the grace —
+            # busy, never stolen: unreadable means unverifiable
+            held_by, until = "<unreadable lease>", "unknown"
+        elif not _is_fresh(data, now):
             # provably expired → lazy takeover under the guard
             if _takeover(common, resource, payload, now):
                 print(f"acquire: '{resource}' leased by '{holder}' until "
@@ -326,10 +338,9 @@ def acquire(resource: str, holder: str, ttl: float,
                 return 0
             # lost the takeover race; re-classify on the next loop pass
             continue
-        # fresh, or present-but-unreadable (mid-create/tampered — never
-        # stolen): both read as held, so the loop reaches the refusal
-        held_by = (data or {}).get("holder", "<unreadable lease>")
-        until = (data or {}).get("expires_at", "unknown")
+        else:
+            held_by = data.get("holder")
+            until = data.get("expires_at")
         remaining = deadline - time.monotonic()
         if wait is None or remaining <= 0:
             print(f"acquire: REFUSED — '{resource}' is held by '{held_by}' "
