@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.2 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- leases are created by atomic hard-link — a race CI caught could double-issue a lease; plus e2e batches 53-55, 8 more scenarios
+
 ## 0.30.1 — notes saved on Windows just work, and failures explain themselves
 
 - **A UTF-8 BOM no longer breaks your notes**: Windows editors add an invisible BOM, and a note saved with one used to fail the title check with a violation you could not see. The memory plane (verify-notes, recall, decisions, audit) now decodes it away — nothing to change on your side.
