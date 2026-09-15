@@ -192,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
         missing = [v for v in released if v not in _versions_from_highlights(highlights_text)]
 
     for v in missing:
-        print(f"verify_doc_sync: CHANGELOG has [{_fmt(v)}] but {highlights_path} has "
+        print(f"verify_doc_sync: CHANGELOG has [{_fmt(v)}] but "
+              f"{highlights_path.as_posix()} has "
               f"no section for it — copy the version FROM CHANGELOG and add "
               f"a '## {_fmt(v)}' section")
     for v in ahead:
