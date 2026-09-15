@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.3 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- close the audited defect report — 47 findings across the plane
+
 ## 0.30.2 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - leases are created by atomic hard-link — a race CI caught could double-issue a lease; plus e2e batches 53-55, 8 more scenarios
