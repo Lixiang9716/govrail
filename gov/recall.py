@@ -43,9 +43,7 @@ except ImportError:  # direct script execution (self-test runs files by path)
     from root import anchor_to_git_root
 
 NOTES = Path(".agents/notes")
-DECISIONS = Path("docs/decisions.md")
 POSTMORTEM = Path("docs/postmortem")
-D_SECTION_RX = re.compile(r"(?m)^## (D\d+ — .+)$")
 
 WHERE = {3: "title", 2: "headings", 1: "body"}
 

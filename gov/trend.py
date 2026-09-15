@@ -22,6 +22,7 @@ except ImportError:  # direct script execution
     from root import anchor_to_git_root
 
 HISTORY = Path(".gov/history/gates.jsonl")
+STATS_HISTORY = Path(".gov/history/stats.jsonl")
 
 
 def _p50(values: list[int]) -> float:
@@ -62,9 +63,15 @@ def _split_by_base(runs: list[dict], base: str) -> tuple[list[dict], list[dict]]
 
     def _ts(run):
         try:
-            return _dt.fromisoformat(run.get("ts", ""))
-        except ValueError:
+            ts = _dt.fromisoformat(run.get("ts", ""))
+        except (ValueError, TypeError):
             return None
+        # A naive stamp (hand-edited or third-party line) used to raise
+        # TypeError against the aware split point; anchor it to UTC like
+        # every other reader in the plane treats ledger stamps.
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=_dt.timezone.utc)
+        return ts
 
     early = [r for r in runs if _ts(r) and _ts(r) <= split_at]
     late = [r for r in runs if _ts(r) and _ts(r) > split_at]
@@ -84,24 +91,34 @@ def _report(early_runs: list[dict], late_runs: list[dict], indent: str, args) ->
     commit date when asked); runs without a parseable ts sit outside a
     --base split, exactly as before #120.
     """
-    durations: dict[str, list[int]] = {}
-    for run in early_runs + late_runs:
-        for rec in run.get("gates", []):
-            gid = rec.get("gate")
-            if gid is None or rec.get("outcome") in NON_RUN:
-                continue
-            durations.setdefault(gid, []).append(int(rec.get("duration_ms", 0)))
-
-    def _window(gid: str, group: list[dict]) -> list[int]:
-        return [int(rec.get("duration_ms", 0))
-                for run in group for rec in run.get("gates", [])
-                if rec.get("gate") == gid and rec.get("outcome") not in NON_RUN]
+    windows: dict[str, dict[str, list[int]]] = {}
+    # One validated pass builds both windows: a null/string duration_ms
+    # used to crash int() here while the --cost path skipped-and-named
+    # its bad values — the same ledger, two policies. The duration path
+    # now names its skips too and keeps the rest of the report.
+    bad: set[str] = set()
+    for group_name, group in (("early", early_runs), ("late", late_runs)):
+        for run in group:
+            for rec in run.get("gates", []):
+                gid = rec.get("gate")
+                if gid is None or rec.get("outcome") in NON_RUN:
+                    continue
+                raw = rec.get("duration_ms", 0)
+                if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                    bad.add(gid)
+                    continue
+                windows.setdefault(gid, {"early": [], "late": []})[group_name]\
+                    .append(int(raw))
+    if bad:
+        print(f"trend: skipping non-numeric duration_ms for gate(s): "
+              f"{', '.join(sorted(bad))}", file=sys.stderr)
+    durations = {gid: w["early"] + w["late"] for gid, w in windows.items()}
 
     movers, stable = [], []
     for gid in sorted(durations):
         if args.gate and gid != args.gate:
             continue
-        early, late = _window(gid, early_runs), _window(gid, late_runs)
+        early, late = windows[gid]["early"], windows[gid]["late"]
         if not early or not late:
             continue
         e, l = _p50(early), _p50(late)
@@ -174,6 +191,48 @@ def _cost_report(early: list[dict], late: list[dict], window: int) -> int:
     return 0
 
 
+def _stats_report(early: list[dict], late: list[dict], window: int) -> int:
+    """The consumer the stats ledger always promised: per-language
+    early→late movement of the recorded totals (gov stats --record).
+
+    Totals are cumulative per recording, so each half is summarized by
+    its MOST RECENT value, not a mean. Metrics, not evidence (D44's
+    line): nothing here verifies anything.
+    """
+
+    def last_value(runs: list[dict], field: str) -> dict[str, int]:
+        per: dict[str, int] = {}
+        for run in runs:
+            for lang, agg in (run.get("languages") or {}).items():
+                v = (agg or {}).get(field)
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    per[lang] = int(v)
+        return per
+
+    print(f"trend --stats: {window} recording(s) in {STATS_HISTORY}")
+    langs: set[str] = set()
+    rows: dict[str, list[str]] = {}
+    for field, label in (("lines", "lines"), ("symbols", "symbols"),
+                         ("parse_errors", "parse errors")):
+        early_v, late_v = last_value(early, field), last_value(late, field)
+        langs |= set(early_v) | set(late_v)
+        for lang in langs:
+            e, l = early_v.get(lang), late_v.get(lang)
+            if e is not None and l is not None and e != l:
+                rows.setdefault(lang, []).append(f"{label} {e} → {l}")
+            elif l is not None and e is None:
+                rows.setdefault(lang, []).append(f"{label} {l} (new)")
+    if not langs:
+        print("  no stats recorded yet — `gov stats --record` appends here")
+        return 0
+    for lang in sorted(langs):
+        if rows.get(lang):
+            print(f"  {lang}: " + "; ".join(rows[lang]))
+        else:
+            print(f"  {lang}: stable over the window")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("trend")
     parser = argparse.ArgumentParser(
@@ -196,6 +255,11 @@ def main(argv: list[str] | None = None) -> int:
                              "$GOV_COST, #126) per caller tag instead of "
                              "duration movers — govrail standardizes the "
                              "ledger shape; the numbers stay caller-supplied")
+    parser.add_argument("--stats", action="store_true",
+                        help="report the parse-layer stats ledger "
+                             "(.gov/history/stats.jsonl, from `gov stats "
+                             "--record`) instead of gate durations — the "
+                             "complexity trend the stats ledger exists for")
     args = parser.parse_args(argv)
 
     # a non-positive --last silently emptied the window (runs[-n:] with
@@ -215,6 +279,29 @@ def main(argv: list[str] | None = None) -> int:
               "not a single gate); --gate filters durations only",
               file=sys.stderr)
         return 2
+    if args.stats and (args.cost or args.by_tag or args.gate or args.base):
+        print("trend: --stats reports the stats ledger on its own — it "
+              "does not combine with --cost/--by-tag/--gate/--base",
+              file=sys.stderr)
+        return 2
+
+    if args.stats:
+        if not STATS_HISTORY.is_file():
+            print("trend: no stats ledger yet — `gov stats --record` "
+                  "appends to it")
+            return 0
+        recordings = []
+        for line in STATS_HISTORY.read_text(encoding="utf-8-sig").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                recordings.append(json.loads(line))
+            except json.JSONDecodeError:
+                print("trend: skipping a malformed stats line", file=sys.stderr)
+        recordings = recordings[-args.last:]
+        mid = len(recordings) // 2
+        return _stats_report(recordings[:mid], recordings[mid:], len(recordings))
 
     if not HISTORY.is_file():
         print("trend: no history yet — never recorded; runs record by "

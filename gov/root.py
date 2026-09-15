@@ -44,14 +44,21 @@ def anchor_to_git_root(tool: str) -> None:
     Also pins stdio to UTF-8 (#168): root anchoring is every root-anchored
     tool's first statement, so the wall is up before the first report line
     is printed.
+
+    The resolution ignores the GIT_DIR family (same policy as the hooks,
+    which unset them before calling gov): a tool that anchors by cwd must
+    not be silently re-pointed at some other repository by an inherited
+    variable — locks refuse such an env loudly for the same reason.
     """
     force_utf8_stdio()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
             encoding="utf-8", errors="replace",  # git speaks UTF-8, not the locale codec (#168)
+            env=env,
         )
     except OSError:
         return

@@ -99,7 +99,7 @@ def test_act1_adopt_and_govern(project):
 
     # --- pairing: baseline, then drift is red and the fix closes it ------
     docs = project / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)  # init seeds docs/ (decisions log + postmortem)
     (docs / "guide.md").write_text("the english guide\n", encoding="utf-8")
     (docs / "guide.zh.md").write_text("中文指南\n", encoding="utf-8")
     gov("verify-pairing", "--write", cwd=project)
@@ -151,13 +151,12 @@ def test_act1_adopt_and_govern(project):
     gov("run", "--base", "HEAD", cwd=project)
 
     # --- decisions: next number and the table guard ----------------------
-    (project / "docs" / "decisions.md").write_text(
-        "## D1 — adopt the plane\n\n- **选项**：gov init\n\n"
-        "- **状态**：已决\n", encoding="utf-8")
-    (project / "docs" / "decisions.zh.md").write_text(
-        "## D1 — 采用本平面\n\n- **选项**：gov init\n\n"
-        "- **状态**：已决\n", encoding="utf-8")
-    gov("verify-pairing", "--write", cwd=project)  # the new pair baselines
+    # init seeded the log as a TABLE (format declared in
+    # .gov/decisions.json) with D0; append D1 in the same format and the
+    # allocator answers D2. The seeded log is mono-lingual by design, so
+    # pairing (which excludes it) has nothing to baseline here.
+    with open(project / "docs" / "decisions.md", "a", encoding="utf-8") as f:
+        f.write("| D1 | Example decision | doing nothing |\n")
     r = gov("decision", "next", cwd=project)
     assert "D2" in r.stdout
     gov("verify-decisions", cwd=project)
@@ -315,10 +314,15 @@ def test_act3_presets_and_upgrades(project):
     r = gov("preset", "apply", "agent-heavy", cwd=project)
     assert "already adopted" in r.stdout
 
-    # a governance-mode run over the adopted surface
+    # a governance-mode run over the adopted surface. init seeded the
+    # decisions log as a TABLE (and declared the format in
+    # .gov/decisions.json), so the added row follows that format.
     (project / "docs").mkdir(exist_ok=True)
     (project / "docs" / "decisions.md").write_text(
-        "## D1 — adopt\n\n- **选项**：the plane\n\n- **状态**：已决\n",
+        "| ID | Decision | Alternatives |\n"
+        "|----|----------|--------------|\n"
+        "| D0 | Adopt the govrail governance plane | prose-only rules |\n"
+        "| D1 | Use leases for parallel workers | file mtimes; no lock at all |\n",
         encoding="utf-8")
     commit_all(project, "preset adopted")
     gov("run", "--mode", "governance", cwd=project)

@@ -25,10 +25,11 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from . import archive_notes, audit_notes, change_scope, gates, locks, recall, review
-from . import doctor, note, presets, receipt, self_test, trend, whatsnew
-from . import checks, decision, stats, task, verify_archive, verify_decisions, verify_doc_sync
-from . import verify_conflict_markers
+from . import (archive_notes, audit_notes, change_scope, decision, gates,
+               hookcmd, locks, recall, review, stats, task, verify_archive,
+               verify_conflict_markers, verify_decisions, verify_doc_sync,
+               verify_plane)
+from . import checks, doctor, note, presets, receipt, self_test, trend, whatsnew
 from . import verify_note_presence
 from . import verify_notes, verify_rubric
 from . import verify_translation_pairing
@@ -62,9 +63,46 @@ def _remove_empty_dirs(root: Path) -> None:
         p = p.parent
 
 
-def _hook_conflict(project: Path, name: str = "pre-push") -> bool:
-    """True when .git/hooks/<name> exists and is not a gov hook."""
-    git_hook = project / ".git" / "hooks" / name
+def _git_in(project: Path, *args: str) -> subprocess.CompletedProcess:
+    """One git command pinned to ``project`` — init acts on --project, not cwd."""
+    return subprocess.run(
+        ["git", "-c", "core.quotepath=off", "-C", str(project), *args],
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+
+
+def _resolve_hooks_dir(project: Path) -> tuple[Path | None, str | None]:
+    """(hooks dir, error): where this checkout's hooks actually run from.
+
+    Worktree-aware: a linked worktree's ``.git`` is a FILE, and its hooks
+    live in the COMMON dir — the old ``(project / ".git").is_dir()``
+    probe refused linked worktrees outright while doctor (worktree-aware
+    since #15) claimed everything was fine. ``core.hooksPath`` wins when
+    set (husky/lefthook users): a gov hook written to ``.git/hooks``
+    there is installed, manifested, and never executed.
+    """
+    probe = _git_in(project, "rev-parse", "--git-common-dir")
+    if probe.returncode != 0:
+        return None, "not a git repository (git rev-parse failed)"
+    common = probe.stdout.strip()
+    common_path = Path(common)
+    if not common_path.is_absolute():
+        common_path = (project / common_path).resolve()
+    configured = _git_in(project, "config", "--get", "core.hooksPath")
+    if configured.returncode == 0 and configured.stdout.strip():
+        configured_path = Path(configured.stdout.strip())
+        if not configured_path.is_absolute():
+            configured_path = (project / configured_path).resolve()
+        return configured_path, None
+    return common_path / "hooks", None
+
+
+def _hook_conflict(project: Path, name: str = "pre-push",
+                   hooks_dir: Path | None = None) -> bool:
+    """True when <hooks-dir>/<name> exists and is not a gov hook."""
+    git_hook = (hooks_dir or _resolve_hooks_dir(project)[0] or
+                project / ".git" / "hooks") / name
     if not git_hook.exists():
         return False
     try:
@@ -74,12 +112,18 @@ def _hook_conflict(project: Path, name: str = "pre-push") -> bool:
     return HOOK_MARKER not in existing
 
 
-def _install_hook(project: Path, name: str = "pre-push") -> None:
-    """Write .gov/hooks/<name> and wire it into .git/hooks (both executable)."""
+def _install_hook(project: Path, name: str = "pre-push",
+                  hooks_dir: Path | None = None) -> None:
+    """Write .gov/hooks/<name> and wire it into the checkout's real hooks
+    dir (both executable)."""
     data = TEMPLATES.joinpath(name).read_bytes()
     hook_dir = project / ".gov" / "hooks"
     hook_dir.mkdir(parents=True, exist_ok=True)
-    for dest in (hook_dir / name, project / ".git" / "hooks" / name):
+    dest_dir = hooks_dir or _resolve_hooks_dir(project)[0]
+    if dest_dir is None:
+        raise RuntimeError("no hooks dir resolved — pre-flight should have refused")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for dest in (hook_dir / name, dest_dir / name):
         dest.write_bytes(data)
         dest.chmod(0o755)
 
@@ -90,8 +134,14 @@ def _install_ci(project: Path, created: list[str]) -> None:
     if workflow.exists():
         print("init: .github/workflows/gov.yml already exists; leaving it untouched")
         return
+    # Pin the version THIS init runs with: an unpinned `pip install
+    # govrail` coupled every adopter's CI to the vendor's next release —
+    # one bad publish, hundreds of red builds. Upgrade deliberately
+    # (bump the pin, run gov init --upgrade for template drift).
+    template = TEMPLATES.joinpath("gov.yml").read_text(encoding="utf-8")
     workflow.parent.mkdir(parents=True, exist_ok=True)
-    workflow.write_bytes(TEMPLATES.joinpath("gov.yml").read_bytes())
+    workflow.write_text(template.replace("__GOV_VERSION__", __version__),
+                        encoding="utf-8")
     created.append(".github/workflows/gov.yml")
 
 
@@ -151,15 +201,18 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
 
     # Pre-flight the add-ons: fail loud before mutating anything, so a
     # conflict never leaves a half-initialized project with no manifest.
-    if hooks and not (project / ".git").is_dir():
-        print("init: --hooks needs a git repository (no .git found)", file=sys.stderr)
-        return 2
+    hooks_dir: Path | None = None
+    if hooks:
+        hooks_dir, err = _resolve_hooks_dir(project)
+        if hooks_dir is None:
+            print(f"init: --hooks needs a git repository ({err})", file=sys.stderr)
+            return 2
     for name in (("pre-push",) if hooks and not pre_commit
                  else ("pre-push", "pre-commit") if hooks
                  else ()):
-        if _hook_conflict(project, name):
+        if _hook_conflict(project, name, hooks_dir):
             print(
-                f"init: refusing to overwrite {project / '.git' / 'hooks' / name} — "
+                f"init: refusing to overwrite {hooks_dir / name} — "
                 "it is not a gov hook; merge the two by hand",
                 file=sys.stderr,
             )
@@ -192,6 +245,29 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         _copy(TEMPLATES.joinpath("rejections-README.md"), rejections_readme)
         created.append(".gov/rejections/README.md")
 
+    # The memory plane's other two surfaces, seeded so `gov recall` has
+    # something to search from day one: an empty decisions log and an
+    # absent postmortem dir used to leave recall's indexes pointing at
+    # files that did not exist — a new adopter's first weeks taught the
+    # agent that recall is useless, and a lost habit never comes back.
+    decisions_doc = project / "docs" / "decisions.md"
+    if not decisions_doc.exists():
+        _copy(TEMPLATES.joinpath("decisions-table.md"), decisions_doc)
+        created.append("docs/decisions.md")
+        # The seed is a TABLE; the loader defaults to sections headings.
+        # Declare the format or verify-decisions reads one D-row file as
+        # zero entries and goes red on the very first run.
+        decisions_cfg = gov_dir / "decisions.json"
+        if not decisions_cfg.exists():
+            decisions_cfg.write_text(
+                json.dumps({"format": "table"}, indent=2) + "\n",
+                encoding="utf-8")
+            created.append(".gov/decisions.json")
+    postmortem_readme = project / "docs" / "postmortem" / "README.md"
+    if not postmortem_readme.exists():
+        _copy(TEMPLATES.joinpath("postmortem-README.md"), postmortem_readme)
+        created.append("docs/postmortem/README.md")
+
     ag = project / "AGENTS.md"
     if ag.exists():
         text = ag.read_text(encoding="utf-8")
@@ -203,13 +279,30 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         ag.write_text(REFERENCE_LINE + "\n", encoding="utf-8")
 
     if hooks:
-        _install_hook(project, "pre-push")
+        _install_hook(project, "pre-push", hooks_dir)
         git_hooks.append("pre-push")
         if pre_commit:
-            _install_hook(project, "pre-commit")
+            _install_hook(project, "pre-commit", hooks_dir)
             git_hooks.append("pre-commit")
     if ci:
         _install_ci(project, created)
+
+    # The run ledger is local bookkeeping, not a deliverable: untracked
+    # history lines used to ride every diff and trip note-presence's
+    # non-trivial listing. init owns the ignore line now (idempotent;
+    # an existing .gitignore is appended to, never rewritten).
+    gitignore = project / ".gitignore"
+    ignore_line = ".gov/history/"
+    if gitignore.exists():
+        lines = gitignore.read_text(encoding="utf-8-sig",
+                                    errors="replace").splitlines()
+        if ignore_line not in lines:
+            gitignore.write_text(
+                ("\n" if lines and lines[-1].strip() else "")
+                + ignore_line + "\n", encoding="utf-8")
+    else:
+        gitignore.write_text(ignore_line + "\n", encoding="utf-8")
+        created.append(".gitignore")
 
     (gov_dir / "manifest.json").write_text(
         json.dumps(
@@ -221,25 +314,33 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         encoding="utf-8",
     )
 
+    # Seal the fresh constitution: rules.md + gates.json are tamper-
+    # evident from commit one (gov verify-plane checks the seal; a
+    # re-baseline is an explicit, printed decision).
+    verify_plane.baseline(project)
+
     print(f"init: initialized {project}")
     print("  .gov/rules.md (rules)")
     if created:
         print("  " + ", ".join(created) + " (created; project had none)")
     print("  AGENTS.md reference line")
     if hooks:
-        print("  .gov/hooks/pre-push + .git/hooks/pre-push (runs gov run before push)")
+        dest = hooks_dir or Path(".git/hooks")
+        print(f"  .gov/hooks/pre-push + {dest}/pre-push (runs gov run before push)")
         if pre_commit:
-            print("  .gov/hooks/pre-commit + .git/hooks/pre-commit "
+            print(f"  .gov/hooks/pre-commit + {dest}/pre-commit "
                   "(cheap content gates on staged files — opt-in, #110)")
     if ci and ".github/workflows/gov.yml" in created:
-        print("  .github/workflows/gov.yml (CI runs gov run)")
+        print(f"  .github/workflows/gov.yml (CI runs gov run; govrail pinned "
+              f"to =={__version__})")
 
     if "gates.json" in created:
         # A read-only existence probe picks the advice (not D13's rejected
         # auto-baselining — nothing is judged or written): with no docs to
         # pair, the baseline step cannot succeed and is not suggested.
+        seeded = {"decisions.md"}
         has_docs = (project / "README.md").exists() or any(
-            (project / "docs").glob("*.md")
+            f.name not in seeded for f in (project / "docs").glob("*.md")
         )
         print("next steps:")
         print("  1. gov run                        # pairing runs advisory until baselined")
@@ -249,6 +350,12 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         else:
             print("  2. no paired docs detected — leave pairing advisory, or disable it:")
             print("     set \"enabled\": false on the pairing gate in gates.json")
+        # The shipped gates police the GOVERNANCE plane (notes, seals,
+        # receipts) — they are not your test suite. Say so at install
+        # time instead of letting the slogan imply it.
+        print("  note: these gates guard the governance plane; wire your")
+        print("        test/lint/build gates into gates.json (presets ship")
+        print("        typed starters: gov preset list)")
 
     if preset is not None:
         # D53: one command for "a new project of this type" — init lands
@@ -283,6 +390,8 @@ def _inventory(created: set[str]) -> list[tuple[str, Any]]:
         (".gov/rejections/README.md", TEMPLATES.joinpath("rejections-README.md")),
         (".gov/hooks/pre-push", TEMPLATES.joinpath("pre-push")),
         (".gov/hooks/pre-commit", TEMPLATES.joinpath("pre-commit")),
+        ("docs/decisions.md", TEMPLATES.joinpath("decisions-table.md")),
+        ("docs/postmortem/README.md", TEMPLATES.joinpath("postmortem-README.md")),
     ]
     expected += [
         (f".agents/skills/{name}/SKILL.md", TEMPLATES.joinpath("skills") / name / "SKILL.md")
@@ -713,10 +822,20 @@ def uninstall(project: Path, force: bool = False) -> int:
         t = _template_for(rel)
         if t is not None:
             candidates.append((rel, t))
+
+    def _rendered(rel: Path, t: Path) -> bytes:
+        """The template AS INIT WRITES IT: gov.yml gets the version pin
+        substituted at install time, so an untouched install must not be
+        misread as 'customized' by comparing against the raw template."""
+        if Path(rel).name == "gov.yml":
+            return t.read_text(encoding="utf-8").replace(
+                "__GOV_VERSION__", __version__).encode("utf-8")
+        return t.read_bytes()
+
     for rel, t in candidates:
         p = project / rel
         try:
-            if p.is_file() and p.read_bytes() != t.read_bytes():
+            if p.is_file() and p.read_bytes() != _rendered(rel, t):
                 customized.append(rel)
         except OSError:
             pass
@@ -820,6 +939,11 @@ _COMMANDS = {
     "release": "release a lease you hold (--agent must match the holder)",
     "locks": "list current lease locks in the git common dir (diagnostic "
              "only, never an admission decision)",
+    "hooks": "git-hook gate runners (the installed hooks delegate here; "
+             "'hooks pre-commit' runs the gates whose 'stages' include "
+             "'pre-commit' under their configured advisory/blocking contract)",
+    "verify-plane": "tamper-evidence for the plane's own config "
+                    "(.gov/rules.md + gates.json; --write re-baselines)",
 }
 
 
@@ -1097,6 +1221,10 @@ def main(argv: list[str] | None = None) -> int:
         return task.main(rest)
     if cmd in ("acquire", "release", "locks"):
         return locks.main([cmd, *rest])
+    if cmd == "hooks":
+        return hookcmd.main(rest)
+    if cmd == "verify-plane":
+        return verify_plane.main(rest)
     print(f"gov: unknown command '{cmd}'", file=sys.stderr)
     _usage()
     return 2

@@ -23,6 +23,7 @@ the only place that touches tree-sitter. Three contracts, all fail loud
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -30,9 +31,11 @@ from pathlib import Path
 from typing import Iterator
 
 try:  # package context (`gov ...`)
+    from .pathmatch import glob_to_regex
     from importlib.resources import files as _res_files
     _LANGS = _res_files("gov").joinpath("langs")
 except Exception:  # direct-module execution (self-test scratch dirs)
+    from pathmatch import glob_to_regex
     _LANGS = Path(__file__).resolve().parent / "langs"
 
 # Directories never worth indexing, for any language: VCS internals,
@@ -68,14 +71,19 @@ class LangPack:
     kind_ids: dict[str, int] = field(default_factory=dict, compare=False)
 
     def matches(self, relpath: str) -> bool:
-        """``**`` spans directories, ``*``/``?`` do not (D15 semantics)."""
-        import fnmatch
-        parts = relpath.replace("\\", "/").split("/")
+        """The plane's one glob grammar (pathmatch): ``**`` spans
+        directories including zero of them, ``*``/``?`` never span a
+        separator. fnmatch used to serve here and translated ``*`` to
+        ``.*``, so a slash-less glob silently crossed directories and the
+        parse layer's file sets disagreed with the gate engine's.
+        """
+        norm = relpath.replace("\\", "/")
+        parts = norm.split("/")
         for g in self.globs:
             if "/" in g:
-                if fnmatch.fnmatchcase(relpath, g):
+                if glob_to_regex(g).match(norm):
                     return True
-            elif fnmatch.fnmatchcase(parts[-1], g):
+            elif glob_to_regex(g).match(parts[-1]):
                 return True
         return False
 
@@ -198,24 +206,26 @@ class FileSet:
 def _walk(root: Path, pack: LangPack) -> FileSet:
     files: list[Path] = []
     excluded_dirs: set[str] = set()
-    for p in sorted(root.rglob("*")):
-        rel = p.relative_to(root).as_posix()
-        parts = rel.split("/")
-        hit = next((d for d in DEFAULT_EXCLUDE if d in parts), None)
-        if hit is not None:
-            excluded_dirs.add(hit)
-            continue
-        if not p.is_file():
-            continue
-        if pack.excluded(rel):
-            continue
-        if p.is_symlink():
-            continue  # never follow links out of the declared tree
-        if pack.matches(rel):
-            files.append(p)
-        elif p.suffix and any(p.match(g) for g in pack.globs):
-            # matched a glob's basename but was excluded above — already named
-            pass
+    # os.walk with in-place pruning: rglob("*") enumerated the entire tree
+    # first — every file under node_modules/build/.venv — and only filtered
+    # afterwards, so "excluded" named the directory but never saved the walk.
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel_dir = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        kept: list[str] = []
+        for d in sorted(dirnames):
+            if d in DEFAULT_EXCLUDE or d in pack.exclude:
+                excluded_dirs.add(d)
+                continue
+            kept.append(d)
+        dirnames[:] = kept
+        for name in sorted(filenames):
+            p = Path(dirpath) / name
+            if p.is_symlink():
+                continue  # never follow links out of the declared tree
+            rel = name if rel_dir == "." else f"{rel_dir}/{name}"
+            if pack.matches(rel):
+                files.append(p)
+    files.sort()
     return FileSet(
         files=files,
         excluded_dirs=sorted(excluded_dirs),

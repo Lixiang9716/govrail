@@ -81,8 +81,13 @@ def _walk_metrics(src: bytes, root, pack) -> _Metrics:
         if node.type in pack.functions:
             m.functions += 1
             name_node = node.child_by_field_name("name")
-            name = (src[name_node.start_byte:name_node.end_byte].decode()
+            name = (src[name_node.start_byte:name_node.end_byte]
+                    .decode("utf-8", errors="replace")
                     if name_node is not None else node.type)
+            # errors="replace", matching checks.py's node_text: a GBK or
+            # Latin-1 identifier must cost a mangled NAME, not the whole
+            # `gov stats` run (strict decode crashed the command on
+            # non-UTF-8 sources).
             if not name.startswith("_"):
                 m.public += 1
             # The body is measured from zero: the count is nesting LEVELS
@@ -100,7 +105,8 @@ def _walk_metrics(src: bytes, root, pack) -> _Metrics:
             m.classes += 1
             name_node = node.child_by_field_name("name")
             if name_node is not None:
-                name = src[name_node.start_byte:name_node.end_byte].decode()
+                name = src[name_node.start_byte:name_node.end_byte]\
+                    .decode("utf-8", errors="replace")
                 if not name.startswith("_"):
                     m.public += 1
         nxt = depth + (1 if node.type in pack.nesting else 0)
@@ -275,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         path = history_path("stats.jsonl")
         path.parent.mkdir(parents=True, exist_ok=True)
         record = {
+            "kind": "stats",
             "v": STATS_VERSION,
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "languages": {

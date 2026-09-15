@@ -49,40 +49,27 @@ from typing import Any
 # script (self-test scratch dirs), where the package context is absent.
 try:
     from . import receipt as receipt_mod
+    from . import gitutil, pathmatch
     from .root import force_utf8_stdio
 except ImportError:  # direct-script execution (python gov/gates.py)
     import receipt as receipt_mod
+    import gitutil, pathmatch
     from root import force_utf8_stdio
 
 BLOCKING_OUTCOMES = ("FAIL", "TIMEOUT", "MISSING")
 OUTCOME_ORDER = ("FAIL", "TIMEOUT", "MISSING", "SKIP", "PASS")
 
-_RX_CACHE: dict[str, re.Pattern[str]] = {}
-
-
 def _glob_regex(pattern: str) -> re.Pattern[str]:
-    """Compile a path glob: ``**`` spans directories, ``*``/``?`` do not."""
-    rx = _RX_CACHE.get(pattern)
-    if rx is not None:
-        return rx
-    out: list[str] = []
-    i = 0
-    while i < len(pattern):
-        c = pattern[i]
-        if c == "*":
-            if pattern[i : i + 2] == "**":
-                out.append(".*")
-                i += 2
-                continue
-            out.append("[^/]*")
-        elif c == "?":
-            out.append("[^/]")
-        else:
-            out.append(re.escape(c))
-        i += 1
-    rx = re.compile("^" + "".join(out) + "$")
-    _RX_CACHE[pattern] = rx
-    return rx
+    """Compile a path glob under the plane's one grammar (pathmatch).
+
+    ``**`` spans directories including zero of them — ``**/x.py`` reaches
+    a root-level ``x.py`` and ``a/**/b.py`` reaches ``a/b.py``, matching
+    the gitignore/globstar convention users write by reflex. The old
+    local translator compiled ``**`` to ``.*``, which demanded at least
+    one directory between the slashes and silently scoped gates out of
+    root-level files.
+    """
+    return pathmatch.glob_to_regex(pattern)
 
 
 class ConfigError(Exception):
@@ -245,6 +232,11 @@ class Gate:
     allow_failure: bool = False
     enabled: bool = True
     paths: list[str] = field(default_factory=list)
+    # Git hooks this gate rides (e.g. "pre-commit"): the hook runner runs
+    # the gate against the index (--staged) with the SAME advisory/
+    # blocking contract the DAG honors — the hook stopped hand-wiring
+    # `gate || status=1`, which ignored allowFailure entirely.
+    stages: list[str] = field(default_factory=list)
 
 
 def _require_object(value: Any, what: str) -> dict:
@@ -311,7 +303,7 @@ def load_config(path: str) -> tuple[dict[str, list[str]], list[Gate], int, str |
     for i, g in enumerate(gates_raw):
         g = _require_object(g, f"gates[{i}]")
         allowed_gate = {"id", "command", "label", "needs", "timeoutMs",
-                        "allowFailure", "enabled", "paths"}
+                        "allowFailure", "enabled", "paths", "stages"}
         unknown = sorted(set(g) - allowed_gate)
         if unknown:
             known_id = g.get("id") or f"gates[{i}]"
@@ -349,6 +341,14 @@ def load_config(path: str) -> tuple[dict[str, list[str]], list[Gate], int, str |
             raise ConfigError(f"gate '{gid}': 'paths' must be an array of strings")
         if any(not p for p in paths):
             raise ConfigError(f"gate '{gid}': 'paths' must not contain empty strings")
+        stages = g.get("stages", [])
+        known_stages = {"pre-commit", "pre-push"}
+        if not isinstance(stages, list) or not all(isinstance(s, str) for s in stages):
+            raise ConfigError(f"gate '{gid}': 'stages' must be an array of strings")
+        bad_stages = sorted(set(stages) - known_stages)
+        if bad_stages:
+            raise ConfigError(f"gate '{gid}': unknown stage(s): {', '.join(bad_stages)} "
+                              f"(known: {', '.join(sorted(known_stages))})")
         gates.append(
             Gate(
                 id=gid,
@@ -359,6 +359,7 @@ def load_config(path: str) -> tuple[dict[str, list[str]], list[Gate], int, str |
                 allow_failure=allow_failure,
                 enabled=enabled,
                 paths=list(paths),
+                stages=list(stages),
             )
         )
 
@@ -472,8 +473,48 @@ def _history_path() -> Path:
     return history_path("gates.jsonl")
 
 
-def _run_one(gate: Gate) -> tuple[Gate, str, str, bool]:
-    """Run one gate; return (gate, outcome, detail, blocking_failed).
+DEFAULT_TIMEOUT_MS = 600_000
+# The ledger's per-gate detail budget. #109 keeps the *report* unclipped —
+# "why did it fail" is answered by one run — but the JSONL history line
+# used to embed the same full output with no ceiling at all, so one
+# chatty gate grew every future `gov run` and `gov trend`. A ceiling on
+# the *record* (report untouched) bounds the growth; 0 disables.
+HISTORY_DETAIL_CAP = int(os.environ.get("GOV_HISTORY_DETAIL_CAP", "262144"))
+HISTORY_ROTATE_BYTES = 50 * 1024 * 1024
+
+# Popen handles of gates currently running, so --fail-fast can kill the
+# whole pool instead of waiting out the stragglers.
+_LIVE_PROCS: set = set()
+
+
+def _kill_tree(proc: Any) -> None:
+    """Kill a gate's process tree, not just its direct child.
+
+    A timeout that kills only the direct child leaves any grandchild the
+    gate spawned holding the output pipes — `communicate` then blocks on
+    the orphans forever and ``timeoutMs`` never actually fires. POSIX:
+    the gate runs in its own session, so the group dies together;
+    Windows: ``taskkill /T`` walks the tree.
+    """
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+            )
+        else:
+            import signal
+
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+def _run_one(gate: Gate, live: set | None = None) -> tuple[Gate, str, str, bool, int]:
+    """Run one gate; return (gate, outcome, detail, blocking_failed, duration_ms).
 
     A passing gate's output is kept as detail too: exit 0 with something
     to say (a warning, an advisory) must stay visible — passing never
@@ -481,22 +522,51 @@ def _run_one(gate: Gate) -> tuple[Gate, str, str, bool]:
     """
     exe = gate.command[0]
     started = time.monotonic()
-    if shutil.which(exe) is None:
+    # Resolve once and run the resolved path: on Windows a bare name like
+    # "npm" resolves to npm.cmd, which CreateProcess will not execute —
+    # the run used to die with a raw FileNotFoundError there.
+    resolved = shutil.which(exe)
+    if resolved is None:
         return gate, "MISSING", f"command not found: {exe}", True, 0
+    timeout_ms = gate.timeout_ms or DEFAULT_TIMEOUT_MS
     try:
-        proc = subprocess.run(
-            gate.command,
-            capture_output=True,
+        proc = subprocess.Popen(
+            [resolved, *gate.command[1:]],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             # Gate output is repo tooling output, UTF-8 by convention;
             # the locale codec must not crash the run on it (#168).
             encoding="utf-8", errors="replace",
-            timeout=gate.timeout_ms / 1000 if gate.timeout_ms else None,
+            # Own session/process group: the kill below can reach the
+            # gate's whole tree (M: subprocess-tree timeout).
+            start_new_session=os.name != "nt",
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
         )
-    except subprocess.TimeoutExpired:
-        return gate, "TIMEOUT", f"exceeded {gate.timeout_ms}ms", True, gate.timeout_ms
+    except OSError as exc:
+        # Exec-format (no shebang), permission, ... — a gate that cannot
+        # start is a gate outcome (MISSING), never a runner traceback.
+        return gate, "MISSING", f"cannot execute {exe}: {exc}", True, 0
+    if live is not None:
+        live.add(proc)
+    timed_out = False
+    try:
+        try:
+            out, err = proc.communicate(timeout=timeout_ms / 1000)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _kill_tree(proc)
+            try:
+                out, err = proc.communicate(timeout=5)
+            except (subprocess.TimeoutExpired, ValueError):
+                out, err = "", ""
+    finally:
+        if live is not None:
+            live.discard(proc)
     duration_ms = int((time.monotonic() - started) * 1000)
-    output = ((proc.stdout or "") + (proc.stderr or "")).strip()
+    output = ((out or "") + (err or "")).strip()
+    if timed_out:
+        return gate, "TIMEOUT", f"exceeded {timeout_ms}ms", True, duration_ms
     if proc.returncode == 0:
         return gate, "PASS", output, False, duration_ms
     # #109 failure-first: a failing gate's evidence is never clipped at
@@ -507,22 +577,17 @@ def _run_one(gate: Gate) -> tuple[Gate, str, str, bool]:
 
 
 def _changed_files(base: str) -> list[str] | None:
-    """Files changed against ``base`` (tracked diff + untracked); None on error."""
-    files: set[str] = set()
-    for cmd in (
-        ["git", "diff", "--name-only", base],
-        ["git", "ls-files", "--others", "--exclude-standard"],
-    ):
-        proc = subprocess.run(cmd, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace")
-        if proc.returncode != 0:
-            print(
-                f"gov run: --base {base!r} failed: {proc.stderr.strip()}",
-                file=sys.stderr,
-            )
-            return None
-        files.update(f for f in proc.stdout.splitlines() if f)
-    return sorted(files)
+    """Files changed against ``base`` (tracked diff + untracked); None on error.
+
+    The listing is gitutil's: quotepath off and NUL-split, so a non-ASCII
+    path reaches the ``paths`` matchers as itself instead of git's quoted
+    octal escape (which scoped path-matched gates out silently).
+    """
+    files, error = gitutil.changed_files(base)
+    if error is not None:
+        print(f"gov run: --base {base!r} failed: {error}", file=sys.stderr)
+        return None
+    return files
 
 
 def _select_by_paths(
@@ -612,7 +677,7 @@ def run_gates(
         pending: dict[Any, Gate] = {}
 
         def enqueue(gate: Gate) -> None:
-            pending[pool.submit(_run_one, gate)] = gate
+            pending[pool.submit(_run_one, gate, _LIVE_PROCS)] = gate
 
         def settle(gid: str) -> None:
             """Propagate a settled gate to its dependents; SKIP transitively."""
@@ -658,6 +723,12 @@ def run_gates(
                     stop = True
                     for other in pending:
                         other.cancel()
+                    # Future.cancel() only reaches unstarted work; a gate
+                    # already mid-run used to be waited out to the end.
+                    # Killing the live process trees makes every running
+                    # _run_one return immediately — fail-fast is fast.
+                    for proc in list(_LIVE_PROCS):
+                        _kill_tree(proc)
                     pending = {}
                     break
                 settle(g.id)
@@ -748,8 +819,13 @@ def run_gates(
         # included; only verification decides what counts as evidence.
         # Tree state is measured BEFORE any ledger write: a tracked
         # .gov/history must not dirty the very receipt that describes it.
-        rec = receipt_mod.build_receipt(records, receipt.get("tag", ""),
-                                        receipt.get("selection", {}))
+        try:
+            rec = receipt_mod.build_receipt(records, receipt.get("tag", ""),
+                                            receipt.get("selection", {}))
+        except receipt_mod.ReceiptError as exc:
+            # A corrupt ledger tail must not bury this run's own report:
+            # name the receipt failure, keep the exit code truthful.
+            emit(f"receipt: skipped — the receipts ledger is unreadable ({exc})")
     if record_path is not None:
         # D28/D29: append-only history — one line per run, the plane's
         # own philosophy. Recording is the default (the file is local
@@ -761,9 +837,22 @@ def run_gates(
         # same run line — also absent-unless-supplied, so unreported runs
         # keep the pre-#126 record shape.
         record_path.parent.mkdir(parents=True, exist_ok=True)
+        if (record_path.stat().st_size if record_path.exists() else 0) \
+                > HISTORY_ROTATE_BYTES:
+            # One-generation rotation: the ledger stays append-only per
+            # run, but a ledger with no ceiling at all grows forever; the
+            # previous generation survives as <name>.1 for archaeology.
+            record_path.replace(record_path.parent / (record_path.name + ".1"))
         run_record = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "gates": records,
+            "gates": [
+                ({**r, "detail": r["detail"][:HISTORY_DETAIL_CAP]
+                  + f"\n... [clipped at {HISTORY_DETAIL_CAP} chars; the run "
+                    "report keeps the full output]"}
+                 if HISTORY_DETAIL_CAP and len(r.get("detail", "")) > HISTORY_DETAIL_CAP
+                 else r)
+                for r in records
+            ],
         }
         if caller:
             run_record["caller"] = caller

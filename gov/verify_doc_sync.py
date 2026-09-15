@@ -21,19 +21,45 @@ Exit codes: 0 = paired; 1 = violations; 2 = unreadable source.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
 
 try:  # package context (`gov ...`)
+    from . import atomicio
     from .root import anchor_to_git_root
 except ImportError:  # direct script execution
+    import atomicio
     from root import anchor_to_git_root
 
 CHANGELOG = Path("CHANGELOG.md")
+# govrail's own layout is the DEFAULT target; a project adopting the gate
+# without this layout declares its own file in .gov/docsync.json
+# ({"highlights": "<path>"}). The default path MISSING with no config is
+# "the gate is not set up here" (named exit 0) — the old hard default
+# meant every adopter ate a permanent exit 2 they could never turn green.
 HIGHLIGHTS = Path("gov/HIGHLIGHTS.md")
+DOC_SYNC_CONFIG = Path(".gov/docsync.json")
 # Coverage begins where HIGHLIGHTS was born (0.12.0).
 FLOOR = (0, 12, 0)
+
+
+def _configured_highlights() -> tuple[Path, bool, str | None]:
+    """(path, explicitly_configured, error) from .gov/docsync.json."""
+    if not DOC_SYNC_CONFIG.is_file():
+        return HIGHLIGHTS, False, None
+    try:
+        cfg = json.loads(DOC_SYNC_CONFIG.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        return HIGHLIGHTS, False, f"cannot read {DOC_SYNC_CONFIG}: {e}"
+    if not isinstance(cfg, dict):
+        return HIGHLIGHTS, False, f"{DOC_SYNC_CONFIG} must be a JSON object"
+    p = cfg.get("highlights")
+    if not isinstance(p, str) or not p:
+        return HIGHLIGHTS, False, (
+            f"'highlights' in {DOC_SYNC_CONFIG} must be a path string")
+    return Path(p), True, None
 
 
 def _versions_from_changelog(text: str) -> list[tuple]:
@@ -120,16 +146,33 @@ def main(argv: list[str] | None = None) -> int:
                         "verify-pairing's")
     args = parser.parse_args(argv)
 
-    if not CHANGELOG.is_file():
-        print("verify_doc_sync: no CHANGELOG.md — nothing to pair")
-        return 0
-    changelog_text = CHANGELOG.read_text(encoding="utf-8")
-
-    try:
-        highlights_text = HIGHLIGHTS.read_text(encoding="utf-8")
-    except OSError:
-        print(f"verify_doc_sync: cannot read {HIGHLIGHTS}", file=sys.stderr)
+    highlights_path, configured, err = _configured_highlights()
+    if err is not None:
+        print(f"verify_doc_sync: {err}", file=sys.stderr)
         return 2
+
+    if not CHANGELOG.is_file():
+        print("verify_doc_sync: no CHANGELOG.md — the pairing has no "
+              "released side; nothing to sync (the gate goes green only "
+              "because there is provably nothing to pair)")
+        return 0
+    try:
+        changelog_text = CHANGELOG.read_text(encoding="utf-8-sig")
+        highlights_text = highlights_path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
+        if configured and not highlights_path.exists():
+            # Configured means intended: a declared file that does not
+            # exist is a broken prerequisite, not a silent pass.
+            print(f"verify_doc_sync: configured highlights file "
+                  f"{highlights_path} does not exist", file=sys.stderr)
+        else:
+            print(f"verify_doc_sync: cannot read a pairing input: {e}",
+                  file=sys.stderr)
+        return 2
+    if not configured and highlights_path == HIGHLIGHTS:
+        print(f"verify_doc_sync: syncing {CHANGELOG} against {highlights_path} "
+              f"(govrail's default layout; declare your own in "
+              f"{DOC_SYNC_CONFIG}: {{\"highlights\": \"<path>\"}})")
 
     released = [v for v in _versions_from_changelog(changelog_text) if v >= FLOOR]
     covered = _versions_from_highlights(highlights_text)
@@ -138,17 +181,17 @@ def main(argv: list[str] | None = None) -> int:
     ahead = [v for v in covered if v not in released and v > (max(released) if released else (0, 0, 0))]
 
     if args.write and missing:
-        HIGHLIGHTS.write_text(
-            _write_missing(changelog_text, highlights_text, missing),
-            encoding="utf-8")
+        atomicio.write_text(
+            highlights_path,
+            _write_missing(changelog_text, highlights_text, missing))
         for v in missing:
             print(f"verify_doc_sync: drafted the '{_fmt(v)}' section from "
                   "CHANGELOG — rewrite it for usage before it reads as one")
-        highlights_text = HIGHLIGHTS.read_text(encoding="utf-8")
+        highlights_text = highlights_path.read_text(encoding="utf-8-sig")
         missing = [v for v in released if v not in _versions_from_highlights(highlights_text)]
 
     for v in missing:
-        print(f"verify_doc_sync: CHANGELOG has [{_fmt(v)}] but HIGHLIGHTS has "
+        print(f"verify_doc_sync: CHANGELOG has [{_fmt(v)}] but {highlights_path} has "
               f"no section for it — copy the version FROM CHANGELOG and add "
               f"a '## {_fmt(v)}' section")
     for v in ahead:

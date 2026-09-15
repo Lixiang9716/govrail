@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
                     if best is None or rank > best[0]:
                         best = (rank, e.source, where)
             if best:
-                scored.append((*best, ) if False else (best[0], best[1], best[2]))
+                scored.append((best[0], best[1], best[2]))
         scored.sort(key=lambda h: (-h[0], "/archived/" in h[1], h[1]))
         if not scored:
             print("  (no memory hits — you may be first; plan the note)")
@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     items = []
     if RUBRIC.is_file():
         print("## 4. rubric")
-        text = RUBRIC.read_text(encoding="utf-8")
+        text = RUBRIC.read_text(encoding="utf-8-sig")
         items = re.findall(r"(?m)^### (R\d+ — .+)$", text)
         item_bodies = _rubric_bodies(text)
         for heading in items:
@@ -151,17 +151,26 @@ def main(argv: list[str] | None = None) -> int:
             m = re.search(r"\*\*Checks:\*\*\s*(.+)", body)
             anchors = re.findall(r"`([^`]+)`", m.group(1)) if m else []
             shown = 0
+            # Each file's lines are read ONCE and reused across anchors:
+            # the scan used to re-read every changed file per unmatched
+            # anchor — O(anchors x files) full-text reads on a broad rubric.
+            file_lines: dict[str, list[str] | None] = {}
+
+            def _lines(f: str) -> list[str] | None:
+                if f not in file_lines:
+                    try:
+                        file_lines[f] = Path(f).read_text(
+                            encoding="utf-8", errors="replace").splitlines()
+                    except OSError:
+                        file_lines[f] = None
+                return file_lines[f]
+
             for anchor in anchors:
                 if shown >= 2:
                     break
                 for f in files:
-                    local = Path(f)
-                    if not local.is_file():
-                        continue
-                    try:
-                        lines = local.read_text(encoding="utf-8",
-                                                errors="replace").splitlines()
-                    except OSError:
+                    lines = _lines(f)
+                    if not lines:
                         continue
                     for idx, line in enumerate(lines):
                         if anchor in line:

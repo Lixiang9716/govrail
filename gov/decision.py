@@ -42,9 +42,10 @@ import tempfile
 from pathlib import Path
 
 try:  # package context (`gov ...`)
-    from . import decisions as dec
+    from . import atomicio, decisions as dec, lockfile
     from .root import anchor_to_git_root
 except ImportError:  # direct script execution
+    import atomicio, lockfile
     import decisions as dec
     from root import anchor_to_git_root
 
@@ -165,7 +166,7 @@ def _parse_draft(path: Path, fmt: str) -> tuple[str | None, str]:
 
 
 def _locked(parent: Path):
-    """Exclusive flock over one add's read-modify-write, same checkout.
+    """Exclusive inter-process lock over one add's read-modify-write.
 
     The lock must cover the READ too, not just the write: two concurrent
     `decision add` calls that both read the pre-add text and then write
@@ -173,37 +174,27 @@ def _locked(parent: Path):
     view — one decision silently vanishes. Cross-checkout allocation
     races remain the ``--base`` flag's job (separate checkouts, separate
     locks; the docstring on the old write-only guard always said so).
-    """
-    import contextlib
 
-    @contextlib.contextmanager
-    def _ctx():
-        lock = None
-        try:
-            import fcntl  # POSIX only; absence degrades to no lock
-            parent.mkdir(parents=True, exist_ok=True)
-            lock = open(parent / ".decision.lock", "w")
-            fcntl.flock(lock, fcntl.LOCK_EX)
-        except ImportError:
-            pass
-        try:
-            yield
-        finally:
-            if lock:
-                lock.close()
-                try:
-                    (parent / ".decision.lock").unlink()  # don't litter
-                except OSError:
-                    pass  # a concurrent holder recreated it; harmless
-    return _ctx()
+    The mutex is lockfile's, not a hand-rolled flock: the previous
+    version closed AND unlinked ``.decision.lock``, which is the classic
+    lockfile-unlink race (A holds inode I; B blocks on the path; A
+    closes and unlinks; C creates a NEW inode and is granted at once —
+    B and C both inside, one decision lost). The lock file now stays;
+    and Windows no longer degrades silently to no lock at all — without
+    a primitive the add refuses (rule 5).
+    """
+    return lockfile.exclusive(parent / ".decision.lock")
 
 
 def _atomic_write(path: Path, text: str) -> None:
-    """Atomic temp-file + os.replace; the caller holds ``_locked``."""
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(text)
-    os.replace(tmp, path)
+    """atomicio's write: temp file, fsync, mode-preserving os.replace.
+
+    The old inline version skipped the fsync (a crash could leave a
+    truncated ledger) and inherited mkstemp's 0600 (the shared ledger
+    became unreadable to other collaborators); the caller holds
+    ``_locked``.
+    """
+    atomicio.write_text(path, text)
 
 
 def _validate_id(explicit: str | None, nums: set[int], local: set[int],

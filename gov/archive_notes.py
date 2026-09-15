@@ -20,8 +20,10 @@ import sys
 from pathlib import Path
 
 try:  # package context (`gov ...`)
+    from . import atomicio
     from .root import anchor_to_git_root
 except ImportError:  # direct script execution (self-test runs files by path)
+    import atomicio
     from root import anchor_to_git_root
 
 NOTES_ROOT = Path(".agents/notes")
@@ -65,9 +67,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     drifted: list[str] = []
+    missing: list[str] = []
     if MANIFEST.is_file():
         try:
-            previous = json.loads(MANIFEST.read_text(encoding="utf-8")).get("files", {})
+            previous = json.loads(MANIFEST.read_text(encoding="utf-8-sig")).get("files", {})
         except (json.JSONDecodeError, OSError) as e:
             print(f"archive_notes: cannot read the current seal {MANIFEST}: {e}",
                   file=sys.stderr)
@@ -76,20 +79,33 @@ def main(argv: list[str] | None = None) -> int:
             rel for rel, meta in previous.items()
             if rel in files and files[rel]["sha256"] != meta.get("sha256")
         )
-        if drifted and not args.rebaseline:
-            print("archive_notes: refusing to re-seal — file(s) differ from the current seal:")
-            for rel in drifted:
-                print(f"  {rel}")
+        # A sealed entry present in the manifest but absent on disk is
+        # drift too — the loudest kind. The old comparison only saw
+        # entries existing on BOTH sides, so `rm archived/foo.md` plus a
+        # re-seal sailed through with exit 0 and no --rebaseline: the
+        # freeze (D5, "never edit, move, or delete") guarded edits and
+        # not deletions, which are the trivially silent case.
+        missing = sorted(set(previous) - set(files))
+        if (drifted or missing) and not args.rebaseline:
+            if drifted:
+                print("archive_notes: refusing to re-seal — file(s) differ from the current seal:")
+                for rel in drifted:
+                    print(f"  {rel}")
+            if missing:
+                print("archive_notes: refusing to re-seal — sealed file(s) are GONE "
+                      "(archived notes are frozen; deletions are drift):")
+                for rel in missing:
+                    print(f"  {rel}")
             print(
                 "restore them (git checkout) or pass --rebaseline to accept the "
-                "new content",
+                "new state",
                 file=sys.stderr,
             )
             return 1
 
     ARCHIVED.mkdir(parents=True, exist_ok=True)
-    MANIFEST.write_text(
-        json.dumps({"files": files}, indent=2) + "\n", encoding="utf-8"
+    atomicio.write_text(
+        MANIFEST, json.dumps({"files": files}, indent=2) + "\n"
     )
     if drifted:
         print(f"archive_notes: RE-BASELINED {len(drifted)} drifted file(s): "

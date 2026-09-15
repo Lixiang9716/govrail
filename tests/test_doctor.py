@@ -114,8 +114,8 @@ def test_all_shipped_gates_adopted_is_ok(tmp_path, monkeypatch, capsys):
     and the check goes quiet-ok."""
     monkeypatch.chdir(tmp_path)
     gates_ = [{"id": i, "command": PASS} for i in
-              ("self-test", "notes", "pairing", "note-presence",
-               "conflict-markers", "archive", "task", "rubric")]
+              ("notes", "pairing", "note-presence",
+               "conflict-markers", "archive", "task", "plane", "rubric")]
     gates_.append({"id": "decisions",
                    "command": ["gov", "verify-decisions"]})
     gates_.append({"id": "doc-sync", "command": PASS,

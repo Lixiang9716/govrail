@@ -10,6 +10,9 @@
 # not by inherited environment (#20).
 
 # Resolve gov robustly (D29): explicit override, then PATH, then module.
+# $GOV_BIN is an argv STRING and is word-split by design — it may carry
+# interpreter arguments ("python -m gov"); a path containing spaces is
+# not a supported form.
 gov_cmd() {
     if [ -n "$GOV_BIN" ]; then
         exec $GOV_BIN "$@"
@@ -23,17 +26,36 @@ gov_cmd() {
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH \
       GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
-zero=0000000000000000000000000000000000000000
+# The all-zero object id depends on the repository's hash algorithm:
+# 40 hex for sha1, 64 for sha256. A hardcoded 40-zero constant made
+# every push from a sha256 clone read as "new branch", diff against a
+# bad revision, and block the push — the exact opposite of the promise
+# that a fresh install never goes red on its first run.
+case "$(git rev-parse --show-object-format 2>/dev/null | tr -d '[:space:]')" in
+    sha256) zero=0000000000000000000000000000000000000000000000000000000000000000 ;;
+    *)      zero=0000000000000000000000000000000000000000 ;;
+esac
+
 base=""
-while read local_ref local_sha remote_ref remote_sha; do
-    if [ "$remote_sha" != "$zero" ] && [ -z "$base" ]; then
-        base="$remote_sha"  # first push range: gates select against it
+bases=0
+full=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # A branch deletion pushes no content — nothing to gate.
+    [ "$local_ref" = "$zero" ] && continue
+    if [ "$remote_sha" = "$zero" ]; then
+        full=1   # new remote branch: everything is the change
+    elif [ "$remote_sha" != "$base" ]; then
+        base="$remote_sha"
+        bases=$((bases + 1))
     fi
 done
 
-if [ -n "$base" ]; then
-    gov_cmd run --base "$base"
-else
-    # new branch (no remote sha): everything is the change — full mode
+if [ "$full" = 1 ] || [ "$bases" -gt 1 ] || [ -z "$base" ]; then
+    # Several push ranges — or a brand-new branch among them — cannot be
+    # summarized by ONE base ref: scoping to the first range would let a
+    # second branch's diff skip its gates, turning "smallest sufficient
+    # set" into an insufficient set. Full matrix: always sufficient.
     gov_cmd run
+else
+    gov_cmd run --base "$base"
 fi

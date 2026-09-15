@@ -87,8 +87,8 @@ def main(argv: list[str] | None = None) -> int:
 
     path = Path(args.path)
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as e:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
         print(f"verify_rubric: cannot read rubric {path}: {e}", file=sys.stderr)
         return 2
 
@@ -96,8 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     zh = path.with_name(path.stem + ".zh.md") if not path.name.endswith(".zh.md") else None
     if zh is not None and zh.exists():
         try:
-            zh_text = zh.read_text(encoding="utf-8")
-        except OSError as e:
+            zh_text = zh.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError) as e:
             print(f"verify_rubric: cannot read {zh}: {e}", file=sys.stderr)
             return 2
         en_ids, zh_ids = _ids(text), _ids(zh_text)

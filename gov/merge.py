@@ -87,9 +87,14 @@ def _scrubbed_env(extra: dict | None = None) -> dict:
 
 
 def _git(root: Path, *argv: str) -> subprocess.CompletedProcess:
-    """One git command, pinned to ``root`` with -C and the scrubbed env."""
+    """One git command, pinned to ``root`` with -C and the scrubbed env.
+
+    ``core.quotepath=off`` rides along: a conflicted non-ASCII path must
+    be listed as itself (the preflight prints it for a human to fix), not
+    as git's quoted octal escape.
+    """
     return subprocess.run(
-        ["git", "-C", str(root), *argv],
+        ["git", "-c", "core.quotepath=off", "-C", str(root), *argv],
         capture_output=True, text=True,
         encoding="utf-8", errors="replace",  # git speaks UTF-8, not the locale codec (#168)
         env=_scrubbed_env(),
@@ -236,106 +241,122 @@ def run_merge(branches: list[str], base: str | None = None,
               f"{(added.stderr or added.stdout).strip()}", file=sys.stderr, flush=True)
         return 2
 
-    # Wall 2 (the toplevel guard, #24/D33): before anything is merged into
-    # the scratch, it must resolve to ITSELF. If git resolves anywhere else,
-    # abort loud rather than merge into someone else's checkout.
-    top = _git(tmp, "rev-parse", "--show-toplevel")
-    resolved = Path(top.stdout.strip()).resolve() if top.returncode == 0 else None
-    if resolved != tmp.resolve():
+    # Everything below runs on the scratch; a deliberate failure keeps it
+    # for inspection (the returns below), but an UNEXPECTED exit — Ctrl-C,
+    # a crash — used to leak both the temp dir and git's worktree metadata,
+    # violating D33 wall 3 (the host repository ends as it started). The
+    # except un-docks the worktree before propagating.
+    try:
+        # Wall 2 (the toplevel guard, #24/D33): before anything is merged into
+        # the scratch, it must resolve to ITSELF. If git resolves anywhere else,
+        # abort loud rather than merge into someone else's checkout.
+        top = _git(tmp, "rev-parse", "--show-toplevel")
+        resolved = Path(top.stdout.strip()).resolve() if top.returncode == 0 else None
+        if resolved != tmp.resolve():
+            _remove_worktree(root, tmp)
+            print(f"gov run --merge: scratch worktree escaped — git in {tmp} "
+                  f"resolves to {resolved or '<no repository>'}; refusing to "
+                  "merge into it (D33 wall 2)", file=sys.stderr, flush=True)
+            return 2
+
+        merged: list[str] = []
+        steps: list[tuple[str, str, str]] = []  # (branch, tree sha, summary tail)
+        prev = base_sha
+        for k, br in enumerate(branches, start=1):
+            names = ", ".join(merged) if merged else "<base>"
+            print(f"merge: step {k}/{len(branches)}: merging '{br}' "
+                  f"(already-merged set: {names})", flush=True)
+            m = _git(tmp, "merge", "--no-ff", "--no-edit", br)
+            if m.returncode != 0:
+                raw_conflicted = _git(tmp, "diff", "--name-only", "-z",
+                                      "--diff-filter=U").stdout
+                conflicted = [f for f in raw_conflicted.split("\0") if f]
+                if (m.stdout or m.stderr).strip():
+                    print((m.stdout + m.stderr).strip(), flush=True)
+                if conflicted:
+                    print(f"merge: branch {k} ({br}) conflicts with "
+                          f"already-merged set ({names})", flush=True)
+                    print("merge: conflicted file(s):", flush=True)
+                    for f in conflicted:
+                        print(f"  {f}", flush=True)
+                else:
+                    print(f"merge: branch {k} ({br}) could not be merged "
+                          f"(already-merged set: {names})", flush=True)
+                print(f"merge: the union cannot land as ordered — stopping "
+                      f"before any further branch", flush=True)
+                print(f"merge: scratch worktree kept for inspection: {tmp}", flush=True)
+                return 1
+
+            head = _git(tmp, "rev-parse", "HEAD").stdout.strip()
+            last = k == len(branches)
+            argv = _step_argv(tmp, config, prev, last, receipt, tag, cost,
+                              no_record)
+            step_env = _scrubbed_env(
+                {"GIT_CEILING_DIRECTORIES": str(tmp.parent)})  # wall 3 hardening
+            # stderr streams live (the human report must not be buffered away);
+            # stdout is the one JSON value the orchestrator summarizes (D26).
+            step = subprocess.run(argv, cwd=tmp, env=step_env,
+                                  stdout=subprocess.PIPE, text=True,
+                                  encoding="utf-8", errors="replace")
+            records: list[dict] = []
+            if step.stdout and step.stdout.strip():
+                import json
+                try:
+                    parsed = json.loads(step.stdout)
+                except json.JSONDecodeError:
+                    parsed = None
+                # The step contract is one JSON ARRAY of gate records; an
+                # object or a bare scalar used to flow into _summarize and
+                # die on r["gate"] — a malformed step is "no records",
+                # reported as such below.
+                if isinstance(parsed, list):
+                    records = parsed
+            failed, ran, passes, scoped = _summarize(records)
+            if step.returncode != 0:
+                print(f"merge: branch {k} ({br}) FAILED the gates on the union "
+                      f"tree — already-merged set ({names})", flush=True)
+                if failed:
+                    for r in records:
+                        if r["gate"] in failed:
+                            first = (r.get("detail") or "").strip().splitlines()
+                            line = first[0] if first else "(no output)"
+                            print(f"merge:   failed gate '{r['gate']}': {line}",
+                                  flush=True)
+                else:
+                    print("merge:   (the step run exited "
+                          f"{step.returncode} before reporting gates — its "
+                          "error is printed above)", flush=True)
+                print(f"merge: the union of these branches is not landable — "
+                      f"fix the collision and re-run", flush=True)
+                print(f"merge: scratch worktree kept for inspection: {tmp}",
+                      flush=True)
+                return 1
+            tail = ""
+            if last and receipt:
+                tail = " (full matrix — receipt recorded for the union tree)"
+            print(f"merge: step {k}/{len(branches)}: '{br}' -> tree {head[:12]}; "
+                  f"gates: {ran} ran, {passes} pass"
+                  + (f"; out of scope: {', '.join(scoped)}" if scoped else "")
+                  + tail, flush=True)
+            merged.append(br)
+            steps.append((br, head, f"{ran} gate(s) ran, {passes} pass"))
+            prev = head
+
+        final = steps[-1][1]
+        print(f"merge: union of {len(branches)} branch(es) is green — "
+              f"final tree {final[:12]} ({final})", flush=True)
+        for i, (br, sha, tail) in enumerate(steps, start=1):
+            print(f"merge:   step {i}: merged '{br}' -> {sha[:12]}; {tail}", flush=True)
+        if receipt:
+            print("merge: the receipt for the union tree is in this repository's "
+                  ".gov/history/receipts.jsonl — after landing, cite it: "
+                  "gov receipt verify <landed-commit> (verification matches the "
+                  "tree sha, so a squash merge of this content verifies)", flush=True)
         _remove_worktree(root, tmp)
-        print(f"gov run --merge: scratch worktree escaped — git in {tmp} "
-              f"resolves to {resolved or '<no repository>'}; refusing to "
-              "merge into it (D33 wall 2)", file=sys.stderr, flush=True)
-        return 2
-
-    merged: list[str] = []
-    steps: list[tuple[str, str, str]] = []  # (branch, tree sha, summary tail)
-    prev = base_sha
-    for k, br in enumerate(branches, start=1):
-        names = ", ".join(merged) if merged else "<base>"
-        print(f"merge: step {k}/{len(branches)}: merging '{br}' "
-              f"(already-merged set: {names})", flush=True)
-        m = _git(tmp, "merge", "--no-ff", "--no-edit", br)
-        if m.returncode != 0:
-            conflicted = [
-                f for f in _git(tmp, "diff", "--name-only",
-                                "--diff-filter=U").stdout.splitlines() if f
-            ]
-            if (m.stdout or m.stderr).strip():
-                print((m.stdout + m.stderr).strip(), flush=True)
-            if conflicted:
-                print(f"merge: branch {k} ({br}) conflicts with "
-                      f"already-merged set ({names})", flush=True)
-                print("merge: conflicted file(s):", flush=True)
-                for f in conflicted:
-                    print(f"  {f}", flush=True)
-            else:
-                print(f"merge: branch {k} ({br}) could not be merged "
-                      f"(already-merged set: {names})", flush=True)
-            print(f"merge: the union cannot land as ordered — stopping "
-                  f"before any further branch", flush=True)
-            print(f"merge: scratch worktree kept for inspection: {tmp}", flush=True)
-            return 1
-
-        head = _git(tmp, "rev-parse", "HEAD").stdout.strip()
-        last = k == len(branches)
-        argv = _step_argv(tmp, config, prev, last, receipt, tag, cost,
-                          no_record)
-        step_env = _scrubbed_env(
-            {"GIT_CEILING_DIRECTORIES": str(tmp.parent)})  # wall 3 hardening
-        # stderr streams live (the human report must not be buffered away);
-        # stdout is the one JSON value the orchestrator summarizes (D26).
-        step = subprocess.run(argv, cwd=tmp, env=step_env,
-                              stdout=subprocess.PIPE, text=True,
-                              encoding="utf-8", errors="replace")
-        records: list[dict] = []
-        if step.stdout and step.stdout.strip():
-            import json
-            try:
-                records = json.loads(step.stdout)
-            except json.JSONDecodeError:
-                records = []
-        failed, ran, passes, scoped = _summarize(records)
-        if step.returncode != 0:
-            print(f"merge: branch {k} ({br}) FAILED the gates on the union "
-                  f"tree — already-merged set ({names})", flush=True)
-            if failed:
-                for r in records:
-                    if r["gate"] in failed:
-                        first = (r.get("detail") or "").strip().splitlines()
-                        line = first[0] if first else "(no output)"
-                        print(f"merge:   failed gate '{r['gate']}': {line}",
-                              flush=True)
-            else:
-                print("merge:   (the step run exited "
-                      f"{step.returncode} before reporting gates — its "
-                      "error is printed above)", flush=True)
-            print(f"merge: the union of these branches is not landable — "
-                  f"fix the collision and re-run", flush=True)
-            print(f"merge: scratch worktree kept for inspection: {tmp}",
-                  flush=True)
-            return 1
-        tail = ""
-        if last and receipt:
-            tail = " (full matrix — receipt recorded for the union tree)"
-        print(f"merge: step {k}/{len(branches)}: '{br}' -> tree {head[:12]}; "
-              f"gates: {ran} ran, {passes} pass"
-              + (f"; out of scope: {', '.join(scoped)}" if scoped else "")
-              + tail, flush=True)
-        merged.append(br)
-        steps.append((br, head, f"{ran} gate(s) ran, {passes} pass"))
-        prev = head
-
-    final = steps[-1][1]
-    print(f"merge: union of {len(branches)} branch(es) is green — "
-          f"final tree {final[:12]} ({final})", flush=True)
-    for i, (br, sha, tail) in enumerate(steps, start=1):
-        print(f"merge:   step {i}: merged '{br}' -> {sha[:12]}; {tail}", flush=True)
-    if receipt:
-        print("merge: the receipt for the union tree is in this repository's "
-              ".gov/history/receipts.jsonl — after landing, cite it: "
-              "gov receipt verify <landed-commit> (verification matches the "
-              "tree sha, so a squash merge of this content verifies)", flush=True)
-    _remove_worktree(root, tmp)
-    print(f"merge: scratch worktree removed ({tmp})", flush=True)
-    return 0
+        print(f"merge: scratch worktree removed ({tmp})", flush=True)
+        return 0
+    except (KeyboardInterrupt, Exception):
+        _remove_worktree(root, tmp)
+        print("merge: interrupted — scratch worktree removed; the host "
+              "repository is unchanged (D33 wall 3)", flush=True)
+        raise

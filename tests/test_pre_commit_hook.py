@@ -52,7 +52,7 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
 def _baseline_pair(root: Path) -> None:
     """Create docs/a.md + docs/a.zh.md, confirm the pair, commit it."""
     docs = root / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)  # init seeds docs/ (decisions log)
     (docs / "a.md").write_text("hello\n", encoding="utf-8")
     (docs / "a.zh.md").write_text("nihao\n", encoding="utf-8")
     r = _gov(root, "verify-pairing", "--write", "docs/a.md")
@@ -103,12 +103,26 @@ def test_without_flag_commit_stage_unchanged(tmp_path):
 
 
 def test_commit_of_stale_pair_fails_naming_scoped_fix(tmp_path):
-    """Acceptance: with the hook, the drift commit is blocked at `git
-    commit` with the scoped fix command inline (#110)."""
+    """Acceptance (#110), under the hook's configured contract: pairing
+    ships advisory (allowFailure), so the hook WARNS and lets the commit
+    through until the repo flips it to blocking — the documented
+    "remove allowFailure to enforce" step — after which the drift commit
+    is blocked at `git commit` with the scoped fix inline."""
     _git_repo(tmp_path)
     assert cli.init(tmp_path, hooks=True, pre_commit=True) == 0
     _baseline_pair(tmp_path)
     (tmp_path / "docs" / "a.md").write_text("hello v2\n", encoding="utf-8")
+    assert _git(tmp_path, "add", "docs/a.md").returncode == 0
+    # advisory: the drift is NAMED, the commit is not blocked (H5 fix —
+    # the hook honors gates.json instead of hard-wiring `|| status=1`)
+    r = _git(tmp_path, "-c", "commit.gpgsign=false", "commit", "-qm", "drift")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "verify_translation_pairing: 1 violation(s)" in r.stderr
+    # flip to enforce (init's documented next step), redo the drift
+    gates = tmp_path / "gates.json"
+    cfg = gates.read_text(encoding="utf-8").replace('"allowFailure": true,\n', "")
+    gates.write_text(cfg, encoding="utf-8")
+    (tmp_path / "docs" / "a.md").write_text("hello v3\n", encoding="utf-8")
     assert _git(tmp_path, "add", "docs/a.md").returncode == 0
     r = _git(tmp_path, "-c", "commit.gpgsign=false", "commit", "-qm", "drift")
     assert r.returncode != 0, "a stale sidecar committed without complaint"

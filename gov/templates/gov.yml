@@ -16,6 +16,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install govrail
-        run: pip install govrail
+        # Pinned by `gov init --ci` to the version that ran init: an
+        # unpinned install coupled every adopter's CI to the vendor's
+        # next release. Upgrade deliberately (bump the pin; `gov init
+        # --upgrade` reports template drift).
+        run: pip install govrail==__GOV_VERSION__
       - name: Run the gate DAG
         run: gov run

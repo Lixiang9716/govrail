@@ -64,12 +64,22 @@ def _note_refs() -> set[str]:
         if not root.is_dir():
             continue
         for p in root.rglob("*.md"):
-            text = EXTERNAL_D_RX.sub("", p.read_text(encoding="utf-8"))
+            text = EXTERNAL_D_RX.sub("", p.read_text(encoding="utf-8-sig"))
             refs.update(f"D{d}" for d in D_REF_RX.findall(text))
     return refs
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _verify(argv)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        # An unreadable note or table is a broken prerequisite (exit 2),
+        # never a traceback that reads like a violation report.
+        print(f"verify_decisions: unreadable input: {e}", file=sys.stderr)
+        return 2
+
+
+def _verify(argv: list[str] | None = None) -> int:
     anchor_to_git_root("verify_decisions")
     parser = argparse.ArgumentParser(
         prog="gov verify-decisions",

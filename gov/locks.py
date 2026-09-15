@@ -147,25 +147,49 @@ def _announce_root(command: str, common: Path) -> None:
     print(f"{command}: lock root {common / LOCK_DIR}", file=sys.stderr)
 
 
+def _lock_stem(resource: str) -> str:
+    """Filesystem-safe, collision-free encoding of a resource name.
+
+    The old ``replace("/", "__")`` folded ``a/b`` and ``a__b`` onto the
+    same file — two distinct resources quietly shared one lease, and the
+    second one REFUSED with "held" while nothing of its own was out.
+    Percent-encoding keeps every resource one-to-one with its file
+    (``a/b`` -> ``a%2Fb``). Runtime leases predate this scheme expire on
+    their own TTL; nothing persistent migrates.
+    """
+    from urllib.parse import quote
+
+    return quote(resource, safe="")
+
+
 def _lease_path(common: Path, resource: str) -> Path:
-    return common / LOCK_DIR / (resource.replace("/", "__") + ".json")
+    return common / LOCK_DIR / (_lock_stem(resource) + ".json")
 
 
 def _guard_path(common: Path, resource: str) -> Path:
-    return common / LOCK_DIR / (resource.replace("/", "__") + ".guard")
+    return common / LOCK_DIR / (_lock_stem(resource) + ".guard")
 
 
 def _holder_id(agent: str | None) -> str:
-    """--agent, else $GOV_CALLER (D42's caller vocabulary), else the OS user.
+    """--agent, else $GOV_CALLER (D42's caller vocabulary), else user@host.
 
     Whitespace-only counts as absent, same as D42 treats it for --tag.
+    The bare OS user is NOT enough of an identity: every parallel worker
+    on the machine shares it, so holder-verified release could not tell
+    two workers apart and either could delete the other's lease. The
+    hostname tightens the cross-machine case; same-machine parallels
+    running as one user MUST still set --agent/$GOV_CALLER to be told
+    apart — the default is documented as "an identity", not "your
+    identity".
     """
     if agent and agent.strip():
         return agent.strip()
     caller = os.environ.get("GOV_CALLER", "")
     if caller.strip():
         return caller.strip()
-    return getpass.getuser()
+    import socket
+
+    return f"{getpass.getuser()}@{socket.gethostname()}"
 
 
 def _iso(dt: datetime) -> str:
@@ -224,6 +248,14 @@ def _create_exclusive(path: Path, payload: str) -> bool:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(payload)
+        # mkstemp is 0600 by design; a lease must be readable by anyone
+        # who must classify it (another worker's claim display, the lock
+        # list) — chmod BEFORE the link, because the link shares the
+        # inode and the O_EXCL fallback already created 0644.
+        try:
+            os.chmod(tmp_name, 0o644)
+        except OSError:
+            pass
         try:
             os.link(tmp_name, path)
             return True
@@ -326,6 +358,30 @@ def duration(value: str) -> float:
     return seconds
 
 
+def _sweep_strays(common: Path, ttl_s: float) -> None:
+    """Best-effort removal of orphaned ``.lease-*.tmp`` temp files.
+
+    A SIGKILL between mkstemp and the finally-unlink leaves the temp
+    file behind forever, and the ``*.json``-only lock listing never saw
+    it. Acquire sweeps temps older than the lease TTL — no in-flight
+    create lives that long without its writer being dead.
+    """
+    import time
+
+    lock_dir = common / LOCK_DIR
+    try:
+        entries = list(lock_dir.glob(".lease-*.tmp"))
+    except OSError:
+        return
+    cutoff = time.time() - max(ttl_s, 60.0)
+    for p in entries:
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+        except OSError:
+            pass  # raced a live writer or a vanished file: leave it be
+
+
 def acquire(resource: str, holder: str, ttl: float,
             wait: float | None, tool: str = "gov acquire") -> int:
     now = datetime.now(timezone.utc)
@@ -337,6 +393,7 @@ def acquire(resource: str, holder: str, ttl: float,
     ) + "\n"
     common = _common_dir(tool)
     _announce_root("acquire", common)
+    _sweep_strays(common, ttl)
     path = _lease_path(common, resource)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -432,13 +489,18 @@ def list_locks() -> int:
         print("  ".join(headers[i].ljust(widths[i]) for i in range(5)).rstrip())
         for r in rows:
             print("  ".join(r[i].ljust(widths[i]) for i in range(5)).rstrip())
+    strays = sorted(lock_dir.glob(".lease-*.tmp")) if lock_dir.is_dir() else []
+    for p in strays:
+        # A writer died between temp-create and link/unlink (SIGKILL
+        # lands there too); the temp is inert but invisible garbage
+        # unless named. `gov acquire` sweeps ones past their TTL.
+        print(f"orphaned temp: {p.name} (a writer died mid-create)")
     # no locks → an empty listing (exit 0): pure diagnostics, nothing is
     # admitted or rejected from it (review P1-3).
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    anchor_to_git_root("locks")
     parser = argparse.ArgumentParser(
         prog="gov acquire/release/locks",
         description="Lease locks: cross-process, cross-duration, "
@@ -448,7 +510,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_acq = sub.add_parser(
         "acquire", help="take a lease on a resource (busy → exit 3)")
-    p_acq.add_argument("resource", help="resource name ('/' is stored as '__')")
+    p_acq.add_argument("resource", help="resource name (stored percent-encoded)")
     p_acq.add_argument("--agent", metavar="ID",
                        help="holder identity (default: $GOV_CALLER, then "
                             "the OS user)")
@@ -463,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_rel = sub.add_parser(
         "release", help="release a lease you hold (holder-verified)")
-    p_rel.add_argument("resource", help="resource name ('/' is stored as '__')")
+    p_rel.add_argument("resource", help="resource name (stored percent-encoded)")
     p_rel.add_argument("--agent", metavar="ID",
                        help="holder identity (default: $GOV_CALLER, then "
                             "the OS user)")

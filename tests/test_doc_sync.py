@@ -22,7 +22,7 @@ def test_changelog_gains_version_highlights_missing(tmp_path, monkeypatch, capsy
         "## 0.13.2 — old\n\n- something\n", encoding="utf-8")
     assert vds.main([]) == 1
     out = capsys.readouterr().out
-    assert "CHANGELOG has [0.14.0] but HIGHLIGHTS has no section" in out
+    assert "CHANGELOG has [0.14.0] but gov/HIGHLIGHTS.md has no section" in out
     assert "copy the version FROM CHANGELOG" in out
 
 

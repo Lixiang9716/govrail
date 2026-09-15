@@ -5,13 +5,13 @@
     {
       "id": "pytest",
       "label": "python tests",
-      "command": ["python", "-m", "pytest", "-q"],
+      "command": ["python3", "-m", "pytest", "-q"],
       "paths": ["**/*.py", "pyproject.toml"]
     },
     {
       "id": "build",
       "label": "sdist+wheel build",
-      "command": ["python", "-m", "build"],
+      "command": ["python3", "-m", "build"],
       "paths": ["**/*.py", "pyproject.toml"]
     }
   ],

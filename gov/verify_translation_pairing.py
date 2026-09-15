@@ -54,8 +54,10 @@ import sys
 from pathlib import Path
 
 try:  # package context (`gov ...`)
+    from . import gitutil
     from .root import anchor_to_git_root
 except ImportError:  # direct script execution (self-test runs files by path)
+    import gitutil
     from root import anchor_to_git_root
 
 CONFIG_PATH = Path(".gov/pairing.json")
@@ -63,7 +65,10 @@ STEM = "{stem}"
 DEFAULT_CONFIG: dict[str, list[str]] = {
     "include": ["docs/**/*.md", "README.md"],
     "counterparts": [f"{STEM}.zh.md"],
-    "exclude": [],
+    # The memory plane govrail seeds is deliberately mono-lingual (its own
+    # repo excludes exactly these): decisions and postmortems are working
+    # records for the team's agents, not human-facing presentation docs.
+    "exclude": ["docs/decisions.md", "docs/postmortem/README.md"],
 }
 
 
@@ -80,9 +85,14 @@ def _blob_hash(path: Path) -> str:
 
 
 def _parse_record(path: Path) -> dict[str, str]:
-    """Parse ``pair: {en, zh}`` + ``counterpart:`` into a flat dict."""
+    """Parse ``pair: {en, zh}`` + ``counterpart:`` into a flat dict.
+
+    Raises (OSError, UnicodeDecodeError) — callers funnel them to exit 2:
+    an unreadable record is a broken prerequisite, never a silent pass.
+    utf-8-sig: a BOM the editor left must not corrupt the first key.
+    """
     result: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
@@ -185,8 +195,11 @@ def _record_files(cfg: dict[str, list[str]]) -> list[Path]:
     """Every .i18n.yaml in the include scope (deduped, sorted)."""
     files: dict[Path, None] = {}
     for pattern in cfg["include"]:
-        for match in _glob.glob(pattern.replace(".md", ".i18n.yaml"),
-                                recursive=True):
+        # Rewrite the .md suffix only: a directory named like "a.md.b/"
+        # inside the pattern used to be corrupted by a blanket replace.
+        rec_pattern = (pattern[: -len(".md")] + ".i18n.yaml"
+                       if pattern.endswith(".md") else pattern)
+        for match in _glob.glob(rec_pattern, recursive=True):
             p = Path(match)
             if p.is_file():
                 files[p] = None
@@ -311,17 +324,18 @@ def _register(src: Path, zh: Path) -> tuple[Path, dict[str, str]]:
 
 
 def _staged_files() -> list[str] | None:
-    """Paths staged in the index (deleted paths dropped); None = git failed."""
-    proc = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=d"],
-        capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-    )
+    """Paths staged in the index (deleted paths dropped); None = git failed.
+
+    gitutil's listing: quotepath off, NUL-split — a non-ASCII staged name
+    must reach the pair matchers as itself, not as git's quoted escape
+    (which matched nothing and silently checked no pair at all).
+    """
+    proc = gitutil.git("diff", "--cached", "--name-only", "-z", "--diff-filter=d")
     if proc.returncode != 0:
         print(f"verify_translation_pairing: --staged failed: "
-              f"{proc.stderr.strip()}", file=sys.stderr)
+              f"{(proc.stderr or proc.stdout).strip()}", file=sys.stderr)
         return None
-    return [line for line in proc.stdout.splitlines() if line.strip()]
+    return [f for f in proc.stdout.split("\0") if f]
 
 
 def _staged_sources(staged: list[str], cfg: dict[str, list[str]]) -> list[Path]:
@@ -352,7 +366,25 @@ def _staged_sources(staged: list[str], cfg: dict[str, list[str]]) -> list[Path]:
     return sorted(involved)
 
 
-def _pair_errors(src: Path, cfg: dict[str, list[str]]) -> list[str]:
+def _current_hash(path: Path, staged: bool) -> str:
+    """A side's content hash in the mode's source of truth.
+
+    ``--staged`` reads the INDEX: the pre-commit gate judges what the
+    commit will contain, and a worktree restored to clean after staging
+    drift must not buy a green light. ``ls-files --stage`` covers
+    tracked-but-untouched sides too (their index oid is their content);
+    a side absent from the index (brand-new, never added) falls back to
+    the working tree. The default mode hashes the working tree, as
+    before.
+    """
+    if staged:
+        oid = gitutil.index_blob_oid(str(path))
+        if oid is not None:
+            return oid
+    return _blob_hash(path)
+
+
+def _pair_errors(src: Path, cfg: dict[str, list[str]], staged: bool = False) -> list[str]:
     """The violation lines for one pair (shared by full and --staged runs)."""
     zh = _counterpart(src, cfg)
     if zh is None:
@@ -369,7 +401,7 @@ def _pair_errors(src: Path, cfg: dict[str, list[str]]) -> list[str]:
     if not rec.exists():
         return [f"{src.as_posix()}: missing record {rec.name} — baseline with --write {src.as_posix()}"]
     recorded = _parse_record(rec)
-    current = {"en": _blob_hash(src), "zh": _blob_hash(zh)}
+    current = {"en": _current_hash(src, staged), "zh": _current_hash(zh, staged)}
     errors: list[str] = []
     for side, expect in (("en", src), ("zh", zh)):
         if side not in recorded or not recorded[side]:
@@ -562,7 +594,17 @@ def main(argv: list[str] | None = None) -> int:
     cfg = _load_config()
     if cfg is None:
         return 2
+    try:
+        return _run(args, cfg)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        # A source, counterpart, or record that cannot be read is a broken
+        # prerequisite (exit 2), never a traceback pretending to be a
+        # different failure mode — and never a silent pass.
+        print(f"verify_translation_pairing: unreadable input: {exc}", file=sys.stderr)
+        return 2
 
+
+def _run(args: argparse.Namespace, cfg: dict[str, list[str]]) -> int:
     if args.explain:
         return _explain(cfg)
 
@@ -578,7 +620,7 @@ def main(argv: list[str] | None = None) -> int:
             print("verify_translation_pairing: no staged file belongs to a "
                   "pair — nothing to check")
             return 0
-        errors = [e for src in sources for e in _pair_errors(src, cfg)]
+        errors = [e for src in sources for e in _pair_errors(src, cfg, staged=True)]
         if errors:
             for e in errors:
                 print(e)

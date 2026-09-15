@@ -29,8 +29,9 @@ integrity D43 pins (the card is the rules@hash brief + receipt; claim
 state is runtime, not record). ``gov task list`` reads the lease files to
 display a claim column / ``claim`` JSON field; an expired lease reads as
 unclaimed. ``gov task close`` best-effort clears the card's own lease on
-success — holder-verified: only a lease naming the current caller is
-deleted, never another worker's.
+success — holder-aware: a lease naming the closer goes, a lease naming
+another live worker stays (only ``--force``, a knowing steal, removes
+it).
 
 Fail loud throughout (rule 5): missing rule files, malformed cards, and
 ambiguous id prefixes abort with the offending name.
@@ -47,10 +48,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:  # package context (`gov ...`)
-    from . import locks
+    from . import atomicio, locks, lockfile
     from .root import anchor_to_git_root
 except ImportError:  # direct script execution
-    import locks
+    import atomicio, lockfile, locks
     from root import anchor_to_git_root
 
 TASKS_DIR = Path(".gov/tasks")
@@ -151,10 +152,8 @@ def cmd_new(args: argparse.Namespace) -> int:
               "pin was taken; re-read them before briefing",
               file=sys.stderr)
         return 2
-    cards = _load_cards()
-    cid = _next_id(cards)
+    TASKS_DIR.mkdir(parents=True, exist_ok=True)
     card = {
-        "id": cid,
         "title": title,
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "rules": {"hash": combined, "files": files},
@@ -162,9 +161,19 @@ def cmd_new(args: argparse.Namespace) -> int:
         "status": "open",
         "receipt": None,
     }
-    TASKS_DIR.mkdir(parents=True, exist_ok=True)
-    path = TASKS_DIR / f"{cid}-{_slugify(title)}.json"
-    path.write_text(json.dumps(card, indent=2) + "\n", encoding="utf-8")
+    # ID allocation happens under the inter-process mutex: five parallel
+    # workers used to read the same "next free" number and write three
+    # T-0001 cards, and an ambiguous id could never be claimed again
+    # (_resolve refuses prefixes that match more than one card). The
+    # lock covers read-through-write; the card itself lands via
+    # atomicio (a crash mid-write used to brick every task subcommand
+    # on a half-written card).
+    with lockfile.exclusive(TASKS_DIR / ".new.lock"):
+        cards = _load_cards()
+        cid = _next_id(cards)
+        card["id"] = cid
+        path = TASKS_DIR / f"{cid}-{_slugify(title)}.json"
+        atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
     print(f"task: wrote {path}")
     print(brief_line(combined))
     for item in card["checklist"]:
@@ -241,6 +250,20 @@ def cmd_close(args: argparse.Namespace) -> int:
               "adopted rules (gov task check names the stale cards)",
               file=sys.stderr)
         return 1
+    # A live lease naming someone else IS in-flight work: closing here
+    # would silently delete the worker's claim out from under it. Only
+    # the holder (or an explicit --force, a knowing steal) may close a
+    # claimed card. The old "after close there is no in-flight work"
+    # defense assumed the closer was the worker — nothing did.
+    closer = locks._holder_id(getattr(args, "agent", None))
+    claim = _claim_of(card["id"], _common_dir_quiet())
+    if claim and claim["claimed_by"] != closer and not args.force:
+        print(f"task: {card['id']} is claimed by "
+              f"'{claim['claimed_by']}' until {claim['expires_at']} — "
+              "closing would delete their live lease; pass --force to "
+              "steal it knowingly, or have the holder release first",
+              file=sys.stderr)
+        return 2
     argv = [sys.executable, "-m", "gov", "run", "--json",
             "--mode", args.mode]
     try:
@@ -272,8 +295,9 @@ def cmd_close(args: argparse.Namespace) -> int:
         "gates": records,
     }
     card["status"] = "done"
-    path.write_text(json.dumps(card, indent=2) + "\n", encoding="utf-8")
-    _clear_task_lease(card["id"])
+    atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
+    _clear_task_lease(card["id"], holder=locks._holder_id(getattr(args, "agent", None)),
+                      force=args.force)
     print(f"task: closed {card['id']} with an all-green "
           f"{args.mode} run ({len(records)} gates)")
     return 0
@@ -317,27 +341,32 @@ def _claim_of(cid: str, common: Path | None) -> dict | None:
             "expires_at": data.get("expires_at")}
 
 
-def _clear_task_lease(cid: str) -> None:
-    """Best-effort: a closed card's own task lease is moot — clear it.
+def _clear_task_lease(cid: str, holder: str | None = None,
+                      force: bool = False) -> None:
+    """Best-effort: clear the closed card's own task lease.
 
-    Unconditional on purpose, unlike release's holder-verified delete: a
-    successful close means the work is finished, so ANY claim lease on the
-    card — whoever it names — is dead weight. Left in place, it starves
-    the next claimer for the winner's full TTL (drill-measured: a worker
-    waited 30 minutes past another's close because the lease named an
-    agent id the closer's identity check couldn't match). The holder-
-    verified principle still governs release, where a live lease protects
-    in-flight work; after close there is no in-flight work left to
-    protect. Silent when there is nothing to clear; this is incidental
-    cleanup piggybacking on close's receipt write, not a command of its
-    own.
+    Holder-aware, unlike the unconditional delete this used to be: a
+    lease naming ANOTHER live worker is their claim, and a close racing
+    a fresh claim must not eat it (cmd_close already refuses a
+    foreign-held card up front; this re-check closes the check-to-clear
+    race). A lease naming the closer — or the --force steal cmd_close
+    already announced — is dead weight and goes: left in place it
+    starves the next claimer for the winner's full TTL. Silent when
+    there is nothing to clear; this is incidental cleanup piggybacking
+    on close's receipt write, not a command of its own.
     """
     common = _common_dir_quiet()
     if common is None:
         return
     resource = f"task/{cid}"
     lease = locks._lease_path(common, resource)
-    if locks._read_lease(lease) is None:
+    data = locks._read_lease(lease)
+    if data is None:
+        return
+    named = data.get("holder")
+    if not force and holder is not None and named != holder:
+        print(f"task: {cid} was claimed by '{named}' while closing — "
+              "their lease is left in place", file=sys.stderr)
         return
     try:
         lease.unlink()
@@ -365,6 +394,16 @@ def cmd_claim(args: argparse.Namespace) -> int:
                        tool="task claim")
     if rc != 0:
         return rc
+    # The open-check ran BEFORE the lease, so a close could land between
+    # the check and the take (TOCTOU): re-read now that the lease is
+    # ours, and if the card closed meanwhile, drop the lease we just
+    # took instead of squatting on a done card.
+    _path_now, card_now = _resolve(_load_cards(), args.id)
+    if card_now.get("status") != "open":
+        locks.release(f"task/{cid}", holder, tool="task claim")
+        print(f"task: {card_now['id']} closed while the claim was being "
+              "taken — the fresh lease is released", file=sys.stderr)
+        return 2
     data = locks._read_lease(
         locks._lease_path(_common_dir_quiet(), f"task/{cid}"))
     if isinstance(data, dict):
@@ -445,6 +484,12 @@ def main(argv: list[str] | None = None) -> int:
                          help="gate mode to run (default: all)")
     p_close.add_argument("--timeout", type=int, default=600,
                          help="gate-run timeout in seconds (default 600)")
+    p_close.add_argument("--agent", metavar="ID",
+                         help="closer identity for the lease check (default: "
+                              "$GOV_CALLER, then user@host)")
+    p_close.add_argument("--force", action="store_true",
+                         help="close even when the card is claimed by another "
+                              "holder — a knowing steal of their live lease")
     p_close.set_defaults(func=cmd_close)
 
     p_list = sub.add_parser("list", help="list cards and their status")

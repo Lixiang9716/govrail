@@ -110,10 +110,17 @@ def test_init_template_modes_note_presence_and_governance(tmp_path):
     cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
     ids = [g["id"] for g in cfg["gates"]]
     assert "note-presence" in ids
-    # D24: the full matrix includes the tools' own smoke test — CI runs it
-    # from the first push (a fresh install's unpinned govrail is watched).
-    assert "self-test" in cfg["modes"]["all"]
-    assert cfg["modes"]["governance"] == ["self-test"]  # shortcut stays
+    # D4 (reversal): the vendor's own 53-case smoke test is OUT of the
+    # shipped DAG — it pinned every adopter's push to govrail's release
+    # health. govrail itself keeps the gate in ITS OWN gates.json.
+    assert "self-test" not in ids
+    assert "self-test" not in cfg["modes"]["all"]
+    # the plane seal ships instead: the constitution is tamper-evident
+    assert "plane" in ids
+    assert cfg["modes"]["governance"] == ["plane"]  # shortcut stays, re-aimed
+    staged = {g["id"]: g.get("stages", []) for g in cfg["gates"]}
+    assert staged["pairing"] == ["pre-commit"]
+    assert staged["conflict-markers"] == ["pre-commit"]
 
 
 def test_init_injects_skills(tmp_path):
@@ -158,6 +165,10 @@ def test_init_next_steps_match_reality(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "no paired docs detected" in out
     assert "verify-pairing --write" not in out
+    # D1 guidance: the shipped gates guard the governance plane — init
+    # says so and points at the presets for typed project gates.
+    assert "governance plane" in out
+    assert "gov preset list" in out
 
 
 def test_init_next_steps_with_docs(tmp_path, capsys):

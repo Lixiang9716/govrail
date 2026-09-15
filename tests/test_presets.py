@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from gov import cli, presets
+from gov import verify_plane as _vp
 
 REPO = Path(__file__).resolve().parent.parent
 AGENT_HEAVY = "agent-heavy"
@@ -52,9 +53,9 @@ def test_python_lib_bundle_loads():
     assert bundle["name"] == PYTHON_LIB
     assert bundle["description"]
     assert [g["id"] for g in bundle["gates"]] == ["pytest", "build"]
-    assert bundle["gates"][0]["command"] == ["python", "-m", "pytest", "-q"]
+    assert bundle["gates"][0]["command"] == ["python3", "-m", "pytest", "-q"]
     assert bundle["gates"][0]["paths"] == ["**/*.py", "pyproject.toml"]
-    assert bundle["gates"][1]["command"] == ["python", "-m", "build"]
+    assert bundle["gates"][1]["command"] == ["python3", "-m", "build"]
     assert bundle["gates"][1]["paths"] == ["**/*.py", "pyproject.toml"]
     assert bundle["modes"] == {"all": ["pytest", "build"],
                                "quick": ["pytest"]}
@@ -77,7 +78,7 @@ def test_docs_bilingual_bundle_loads():
 def test_preset_show_prints_the_content_presets_items(capsys):
     for name, gate_ids, commands in (
             (PYTHON_LIB, ("pytest", "build"),
-             ("python -m pytest -q", "python -m build")),
+             ("python3 -m pytest -q", "python3 -m build")),
             (DOCS_BILINGUAL, ("doc-sync",), ("gov verify-doc-sync",))):
         assert cli.main(["preset", "show", name]) == 0
         out = capsys.readouterr().out
@@ -199,9 +200,9 @@ def test_loader_rejects_mode_referencing_unknown_gate(tmp_path):
 
 def test_loader_accepts_mode_referencing_template_gate(tmp_path):
     _write_bundle(tmp_path, {"name": "probe", "description": "d",
-                             "modes": {"m": ["self-test"]}})
+                             "modes": {"m": ["notes"]}})
     bundle = presets.load("probe", root=tmp_path)
-    assert bundle["modes"] == {"m": ["self-test"]}
+    assert bundle["modes"] == {"m": ["notes"]}
 
 
 def test_loader_rejects_missing_skill_file_and_unknown_hint(tmp_path):
@@ -358,15 +359,16 @@ def test_apply_converges_mode_membership_for_already_adopted_gates(
     my_gate = {"id": "my-own-first", "label": "mine", "command": ["true"]}
     cfg["gates"].insert(1, my_gate)
     cfg["gates"] += [{"id": "pytest", "label": "hand-wired",
-                      "command": ["python", "-m", "pytest", "-q"]},
+                      "command": ["python3", "-m", "pytest", "-q"]},
                      {"id": "build", "label": "hand-wired",
-                      "command": ["python", "-m", "build"]}]
-    cfg["modes"]["all"] = ["self-test", "my-own-first", "notes", "pairing",
+                      "command": ["python3", "-m", "build"]}]
+    cfg["modes"]["all"] = ["plane", "my-own-first", "notes", "pairing",
                            "note-presence", "conflict-markers", "archive",
                            "task"]
     gates_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     with pytest.raises(gates_mod.ConfigError):
         gates_mod.load_config(str(gates_path))  # the drill's D24 state
+    _vp.baseline(tmp_path)  # the hand edit is this test's recorded state
 
     assert cli.main(["preset", "apply", PYTHON_LIB,
                      "--project", str(tmp_path)]) == 0
@@ -396,20 +398,21 @@ def test_apply_skips_mode_ids_missing_from_the_project(tmp_path, capsys):
     _init(tmp_path)
     gates_path = tmp_path / "gates.json"
     cfg = json.loads(gates_path.read_text(encoding="utf-8"))
-    cfg["gates"] = [g for g in cfg["gates"] if g["id"] != "self-test"]
-    cfg["modes"]["all"] = [m for m in cfg["modes"]["all"] if m != "self-test"]
+    cfg["gates"] = [g for g in cfg["gates"] if g["id"] != "plane"]
+    cfg["modes"]["all"] = [m for m in cfg["modes"]["all"] if m != "plane"]
     cfg["modes"]["governance"] = []
     gates_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    _vp.baseline(tmp_path)  # the hand edit is this test's recorded state
     capsys.readouterr()
 
     root = tmp_path / "bundles"
     _write_bundle(root, {"name": "probe", "description": "d",
-                         "modes": {"all": ["self-test"]}})
+                         "modes": {"all": ["plane"]}})
     assert presets.apply(tmp_path, "probe", root=root) == 0
     out = capsys.readouterr().out
-    assert "self-test" in out and "skipped" in out
+    assert "plane" in out and "skipped" in out
     merged = json.loads(gates_path.read_text(encoding="utf-8"))
-    assert "self-test" not in merged["modes"]["all"]
+    assert "plane" not in merged["modes"]["all"]
     gates_mod.load_config(str(gates_path))  # the skip kept the config valid
 
 
@@ -423,6 +426,7 @@ def test_apply_never_overwrites_a_local_same_id_gate(tmp_path, capsys):
     cfg["gates"].append(mine)
     cfg["modes"]["governance"].append("verify-decisions")
     gates_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    _vp.baseline(tmp_path)  # the hand edit is this test's recorded state
 
     assert cli.main(["preset", "apply", AGENT_HEAVY,
                      "--project", str(tmp_path)]) == 0
@@ -736,4 +740,4 @@ def test_acceptance_docs_bilingual_scratch_green_then_fail_loud(tmp_path):
         cwd=scratch, env=env, capture_output=True, text=True, timeout=120, encoding="utf-8", errors="replace")
     assert red.returncode == 1
     assert "FAIL doc-sync" in red.stdout
-    assert "CHANGELOG has [1.1.0] but HIGHLIGHTS has" in red.stdout
+    assert "CHANGELOG has [1.1.0] but gov/HIGHLIGHTS.md has" in red.stdout
