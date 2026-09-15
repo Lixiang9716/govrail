@@ -1,18 +1,16 @@
 #!/bin/sh
-# govrail: pre-commit hook installed by `gov init --hooks --pre-commit`; `gov uninstall` removes it.
-# Opt-in (issue #110): the CHEAP content gates on the staged files only —
-# pairing sidecar freshness for staged .md/.zh.md pairs and conflict
-# markers in the index. The full gate DAG stays on pre-push (rule 1: the
-# push owns the smallest sufficient set); a commit must stay fast.
-# Bypass for one commit: `git commit --no-verify`.
-
-# The hook unsets GIT_DIR & friends before running gov: they leak the
-# hook's repository into every subprocess, and gov's own tooling (and
-# self-test's scratch repositories) must resolve repositories by cwd,
-# not by inherited environment (#20/D32).
+# govrail: pre-commit hook installed by `gov init --hooks --pre-commit`;
+# `gov uninstall` removes it. The body delegates to `gov hooks
+# pre-commit`, which runs the gates configured with
+# "stages": ["pre-commit"] in gates.json — against the index, under
+# each gate's own allowFailure contract. Hand-wiring gates here (the
+# old form) ignored that contract and made an advisory gate block every
+# commit. Bypass for one commit: `git commit --no-verify`.
 
 # Resolve gov robustly (D29): explicit override, then PATH, then module.
-# No `exec` — this hook runs two gates, so the shell must survive.
+# $GOV_BIN is an argv STRING and is word-split by design — it may carry
+# interpreter arguments ("python -m gov"); a path containing spaces is
+# not a supported form.
 run_gov() {
     if [ -n "$GOV_BIN" ]; then
         $GOV_BIN "$@"
@@ -26,11 +24,4 @@ run_gov() {
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH \
       GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
-status=0
-# Stale sidecar for a staged pair: fail naming the scoped fix command
-# (`gov verify-pairing --write <pair>`), not the bare global rewrite.
-run_gov verify-pairing --staged || status=1
-# Markers staged mid-rebase: git refuses to police its own conflict
-# text; the gate does (D38).
-run_gov verify-conflict-markers --staged || status=1
-exit $status
+run_gov hooks pre-commit

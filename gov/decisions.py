@@ -27,6 +27,11 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+try:  # package context (`gov ...`)
+    from . import gitutil
+except ImportError:  # direct script execution (self-test scratch dirs)
+    import gitutil
+
 CONFIG = Path(".gov/decisions.json")
 DEFAULT_PATH = Path("docs/decisions.md")
 SECTION_RX = re.compile(r"(?m)^## (D\d+) — .*$")
@@ -55,8 +60,15 @@ class Source:
             out = []
             for m in ROW_RX.finditer(self.text):
                 row = m.group(0).strip()
-                first_cell = row.strip("|").split("|")[0].strip()
-                out.append((m.group(1), f"{m.group(1)} — {first_cell}", row))
+                cells = [c.strip() for c in row.strip("|").split("|")]
+                # The title lives in the SECOND cell: the first is by
+                # definition the Dn, so joining it back made every table
+                # row's title "D14 — D14" and title-level recall could
+                # never match a heading word.
+                title_cell = cells[1] if len(cells) > 1 and cells[1] else ""
+                title = (f"{m.group(1)} — {title_cell}" if title_cell
+                         else m.group(1))
+                out.append((m.group(1), title, row))
             return out
         if self.fmt == "dir":
             out = []
@@ -92,7 +104,21 @@ class Source:
         return sorted(int(d[1:]) for d, _, _ in self.entries())
 
     def header_has_alternatives(self) -> bool:
-        return bool(ALT_RX.search(self.text))
+        """True only when the table's HEADER ROW carries an alternatives
+        column — a real per-row cell that answers "what did it beat?".
+
+        The old check searched the whole file text for an alternatives
+        word, so ONE mention anywhere (a bullet in a decision's prose, a
+        word in the preamble) exempted every row from recording what it
+        beat. The header row is the FIRST table-shaped line in the file;
+        the column counts only when that row names it.
+        """
+        for line in self.text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("|") and stripped.count("|") >= 2:
+                cells = [c.strip() for c in stripped.strip("|").split("|")]
+                return any(ALT_RX.search(c) for c in cells[1:])
+        return False
 
 
 def configured_path_fmt() -> tuple[Path, str]:
@@ -144,17 +170,19 @@ def numbers_in_rev(rev: str) -> set[int]:
     """
     path, fmt = configured_path_fmt()
     if fmt == "dir":
-        out = subprocess.run(
-            ["git", "ls-tree", "-r", "--name-only", rev, "--", str(path)],
-            capture_output=True, text=True,
-            encoding="utf-8", errors="replace",
-        )
-        if out.returncode != 0:
-            raise subprocess.CalledProcessError(out.returncode, out.args,
-                                                output=out.stdout,
-                                                stderr=out.stderr)
+        # gitutil's ls-tree listing is NUL-split with quotepath off: the
+        # old line-split listing mangled non-ASCII D-file names into
+        # quoted octal escapes, DIR_FILE_RX matched none of them, and the
+        # numbers already spent on the ref went unseen — `decision next`
+        # re-allocated a live number, the exact collision it exists to
+        # prevent.
+        names, err = gitutil.tracked_names(rev, str(path))
+        if err is not None:
+            raise subprocess.CalledProcessError(
+                1, ["git", "ls-tree", "-r", "--name-only", rev, "--", str(path)],
+                output="", stderr=err)
         nums: set[int] = set()
-        for line in out.stdout.splitlines():
+        for line in names:
             name = Path(line).name
             m = DIR_FILE_RX.match(name)
             if m:

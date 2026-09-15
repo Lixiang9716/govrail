@@ -22,13 +22,14 @@ from datetime import date
 from pathlib import Path
 
 try:  # package context (`gov ...`)
+    from . import decisions as dec
     from .root import anchor_to_git_root
 except ImportError:  # direct script execution
+    import decisions as dec
     from root import anchor_to_git_root
 
 CLASSES = ("feature", "bug-fix", "simplification", "architecture", "process", "testing")
 NOTES_IMPLEMENTED = Path(".agents/notes/implemented")
-DECISIONS = Path("docs/decisions.md")
 
 SKELETON = """# Agent Note: {title}
 
@@ -48,12 +49,30 @@ Status: implemented{related}
 """
 
 
+def _configured_path() -> Path:
+    """The decisions source path from the ONE configuration (.gov/decisions.json)."""
+    return dec.configured_path_fmt()[0]
+
+
 def _known_decisions() -> set[str] | None:
-    if not DECISIONS.is_file():
+    """D-refs of the configured decisions source, via decisions.load —
+    the same loader every other consumer uses (a hand-rolled regex here
+    used to disagree with it and read a hardcoded docs/decisions.md).
+
+    None = no source exists; an EMPTY set = a source exists but parses
+    to zero entries — a format mismatch, named loudly, D-refs left
+    UNCHECKED. Treating that empty set as ground truth used to flag
+    every D-ref in every note as dangling: a wholesale false red.
+    """
+    src = dec.load()
+    if src is None:
         return None
-    text = DECISIONS.read_text(encoding="utf-8")
-    found = set(re.findall(r"(?m)^## (D\d+) — ", text))
-    return found or None
+    found = {d for d, _, _ in src.entries()}
+    if not found:
+        print(f"note: {src.path} parses to zero decision entries — check "
+              "its format or .gov/decisions.json (D-refs left unchecked)",
+              file=sys.stderr)
+    return found
 
 
 def _slugify(title: str) -> str:
@@ -82,10 +101,10 @@ def _new(args: argparse.Namespace) -> int:
             # Rule 5, same lesson audit-notes learned: "nothing to check
             # against" is said out loud, never silently skipped.
             print(f"note: no decisions table found — {args.ref} left unchecked "
-                  f"({DECISIONS})", file=sys.stderr)
+                  f"({_configured_path()})", file=sys.stderr)
         elif args.ref not in known:
-            print(f"note: {args.ref} is not in {DECISIONS} — fix the reference "
-                  "or add the decision first", file=sys.stderr)
+            print(f"note: {args.ref} is not in {_configured_path()} — fix the "
+                  "reference or add the decision first", file=sys.stderr)
             return 2
         related = f"\nRelated: {args.ref}"
     dest = NOTES_IMPLEMENTED / args.note_class / (
@@ -114,11 +133,16 @@ def _check(_: argparse.Namespace) -> int:
     if known is None:
         return 0
     violations = 0
+    table = _configured_path()
     for p in sorted(NOTES_IMPLEMENTED.rglob("*.md")):
-        text = an.EXTERNAL_D_RX.sub("", p.read_text(encoding="utf-8"))
+        try:
+            text = an.EXTERNAL_D_RX.sub("", p.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"note check: cannot read {p}: {e}", file=sys.stderr)
+            return 2
         for d in sorted(set(an.D_REF_RX.findall(text)), key=int):
             if f"D{d}" not in known:
-                print(f"{p}: references D{d}, not in {DECISIONS}")
+                print(f"{p}: references D{d}, not in {table}")
                 violations += 1
     if violations:
         print(f"note check: {violations} dangling D-reference(s)")

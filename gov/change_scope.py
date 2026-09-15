@@ -27,10 +27,12 @@ from pathlib import Path
 
 try:  # package context (`gov change-scope`)
     from .gates import _glob_regex
+    from . import gitutil
     from .verify_note_presence import (_is_exempt, _is_trivially_scoped,
                                        _load_exempt_globs)
 except ImportError:  # direct script execution (self-test runs files by path)
     from gates import _glob_regex
+    import gitutil
     from verify_note_presence import (_is_exempt, _is_trivially_scoped,
                                       _load_exempt_globs)
 
@@ -85,17 +87,7 @@ def _classify(path: str, surfaces: dict[str, dict] | None) -> str:
 
 
 def _changed(base: str) -> tuple[list[str], str | None]:
-    files: set[str] = set()
-    for cmd in (
-        ["git", "diff", "--name-only", base],
-        ["git", "ls-files", "--others", "--exclude-standard"],
-    ):
-        proc = subprocess.run(cmd, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace")
-        if proc.returncode != 0:
-            return [], proc.stderr.strip()
-        files.update(f for f in proc.stdout.splitlines() if f)
-    return sorted(files), None
+    return gitutil.changed_files(base)
 
 
 def _configured_gates(path: str, surfaces: dict[str, dict] | None) -> list[str] | None:

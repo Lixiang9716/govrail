@@ -1,0 +1,13 @@
+{
+  "files": {
+    ".gov/pairing.json": {
+      "sha256": "e5bef639ff66be81140b789404a58511bb7853171ddb312372555f0fca51b408"
+    },
+    ".gov/rules.md": {
+      "sha256": "1515c2745db61046f9357c786490a053de17e364aa9b22bfd029df8b30d0c347"
+    },
+    "gates.json": {
+      "sha256": "1b26457b829bfa7e8dcaad5521fcbe8cd98fde610172e8528511c0bd6779dad0"
+    }
+  }
+}

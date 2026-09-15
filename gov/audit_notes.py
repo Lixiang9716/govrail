@@ -75,7 +75,7 @@ FLAGS: dict[str, set[str]] = {
     "verify-doc-sync": {"--write"},
     "verify-conflict-markers": {"--base", "--staged"},
     "review": {"--base", "--hits", "--grade"},
-    "trend": {"--last", "--gate", "--base", "--by-tag", "--cost"},
+    "trend": {"--last", "--gate", "--base", "--by-tag", "--cost", "--stats"},
     "stats": {"--lang", "--record", "--json"},
     "check": {"--lang", "--strict", "--record", "--json"},
     "doctor": {"--json"},
@@ -86,11 +86,13 @@ FLAGS: dict[str, set[str]] = {
     "change-scope": {"--base"},
     "archive-notes": {"--rebaseline"},
     "task": {"--check", "--rules", "--mode", "--timeout",
-             "--agent", "--ttl", "--wait", "--json"},  # across subcommands
+             "--agent", "--ttl", "--wait", "--json", "--force"},  # across subcommands; --agent/--force on close
     "preset": {"--project"},  # on the `apply` subcommand (list/show are flagless)
     "acquire": {"--agent", "--ttl", "--wait"},
     "release": {"--agent"},
     "locks": set(),
+    "hooks": set(),  # the pre-commit subcommand is flagless
+    "verify-plane": {"--write"},
 }
 
 

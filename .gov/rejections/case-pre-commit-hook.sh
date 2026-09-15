@@ -1,10 +1,10 @@
 #!/bin/sh
 # gate: pairing
-# Proves the optional pre-commit hook rejects (#110): with
-# `gov init --hooks --pre-commit` installed, `git commit` of a pair whose
-# sidecar is stale fails naming the scoped fix command, and the fixed
-# pair commits. Repos without the flag keep the pre-push model — that
-# half is pinned in tests/test_pre_commit_hook.py.
+# Proves the pre-commit hook honors the CONFIGURED contract (#110, and
+# the advisory/blocking flip): pairing ships advisory, so a stale
+# sidecar is NAMED at commit time without blocking; after the documented
+# enforce step (remove allowFailure) the same drift blocks the commit
+# naming the scoped fix, and the fixed pair lands.
 set -u
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
@@ -38,7 +38,7 @@ test -x .git/hooks/pre-commit || {
 }
 
 # A confirmed pair, committed through the hook (must pass).
-mkdir docs
+mkdir -p docs
 printf 'hello\n' > docs/a.md
 printf 'nihao\n' > docs/a.zh.md
 python3 -m gov verify-pairing --write docs/a.md > out.txt 2>&1 || {
@@ -52,9 +52,30 @@ git -c commit.gpgsign=false commit -qm baseline || {
   exit 1
 }
 
-# The issue's evidence: edit one side, stage it, commit — one stage
-# earlier than push, with the scoped fix command inline.
+# The hook honors gates.json (the H5 contract): pairing ships advisory,
+# so the drift is NAMED at commit time but does not block yet.
 printf 'hello v2\n' > docs/a.md
+git add docs/a.md
+git -c commit.gpgsign=false commit -qm drift > out.txt 2>&1 || {
+  echo "case-pre-commit-hook: advisory pairing blocked a commit" >&2
+  cat out.txt >&2
+  exit 1
+}
+grep -q "verify_translation_pairing: 1 violation(s)" out.txt || {
+  echo "case-pre-commit-hook: the advisory did not name the drift" >&2
+  cat out.txt >&2
+  exit 1
+}
+# The documented enforce step (init's next steps): remove allowFailure.
+python3 - <<'PYEOF' || exit 1
+import json
+cfg = json.load(open("gates.json"))
+for g in cfg["gates"]:
+    if g["id"] == "pairing":
+        g.pop("allowFailure", None)
+json.dump(cfg, open("gates.json", "w"), indent=2)
+PYEOF
+printf 'hello v3\n' > docs/a.md
 git add docs/a.md
 if git -c commit.gpgsign=false commit -qm drift > out.txt 2>&1; then
   echo "case-pre-commit-hook: a stale sidecar committed without complaint" >&2

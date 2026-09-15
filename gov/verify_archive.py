@@ -59,8 +59,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        sealed = json.loads(MANIFEST.read_text(encoding="utf-8")).get("files", {})
-    except (json.JSONDecodeError, OSError) as e:
+        sealed = json.loads(MANIFEST.read_text(encoding="utf-8-sig")).get("files", {})
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         print(f"verify_archive: cannot read the seal {MANIFEST}: {e}", file=sys.stderr)
         return 2
 
@@ -69,6 +69,13 @@ def main(argv: list[str] | None = None) -> int:
         entry = sealed.get(rel)
         if entry is None:
             violations.append(f"{rel}: not in the seal — run gov archive-notes")
+        elif not isinstance(entry, dict):
+            # A hand-edited seal is exactly the threat model: a mangled
+            # entry must be a named violation, not an AttributeError that
+            # turns the "elegant red" into a traceback (which exits 2 —
+            # indistinguishable from "cannot run at all").
+            violations.append(f"{rel}: seal entry is malformed (expected an "
+                              "object with a sha256) — re-seal or restore the seal")
         elif _sha256(p) != entry.get("sha256"):
             violations.append(
                 f"{rel}: differs from its seal — restore it (git checkout) or "

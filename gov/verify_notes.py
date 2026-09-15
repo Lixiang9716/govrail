@@ -68,17 +68,31 @@ def check_note(path: Path) -> list[str]:
     return errors
 
 
-def _check_placement(root: Path) -> list[str]:
-    """Lifecycle dirs and class dirs must be the declared closed sets."""
+def _check_placement(root: Path) -> tuple[list[str], list[Path]]:
+    """Lifecycle dirs and class dirs must be the declared closed sets.
+
+    Also returns the loose notes found sitting directly at the notes root:
+    a file there used to be invisible to BOTH the placement check (which
+    only flagged unknown directories) and the format scan (which only
+    walked ``implemented/``) — a zero-cost bypass of the whole gate.
+    """
     errors: list[str] = []
+    loose: list[Path] = []
     for entry in sorted(root.iterdir()) if root.is_dir() else []:
         if entry.name == NOTES_README:
             continue
-        if entry.is_dir() and entry.name not in LIFECYCLES:
+        if entry.is_dir():
+            if entry.name not in LIFECYCLES:
+                errors.append(
+                    f"{entry}: unknown lifecycle '{entry.name}' "
+                    f"(known: {', '.join(LIFECYCLES)}) — this is not a note, "
+                    "move it or remove the directory"
+                )
+        elif entry.suffix == ".md":
+            loose.append(entry)
             errors.append(
-                f"{entry}: unknown lifecycle '{entry.name}' "
-                f"(known: {', '.join(LIFECYCLES)}) — this is not a note, "
-                "move it or remove the directory"
+                f"{entry}: notes live at implemented/<class>/<file>.md, "
+                f"not loose at the notes root (classes: {', '.join(CLASSES)})"
             )
     implemented = root / "implemented"
     for p in sorted(implemented.rglob("*.md")) if implemented.is_dir() else []:
@@ -93,17 +107,26 @@ def _check_placement(root: Path) -> list[str]:
                 f"{p}: unknown class '{rel.parts[0]}' "
                 f"(closed set: {', '.join(CLASSES)})"
             )
-    return errors
+    return errors, loose
 
 
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("verify_notes")
     notes_root = NOTES_DIR / "implemented"
     notes = sorted(notes_root.rglob("*.md")) if notes_root.exists() else []
-    errors = _check_placement(NOTES_DIR)
-    for note in notes:
-        for err in check_note(note):
-            errors.append(f"{note}: {err}")
+    try:
+        errors, loose = _check_placement(NOTES_DIR)
+        # Loose root notes get the format check too — placement is wrong,
+        # but the content is still a note and still has to answer for it.
+        for note in notes + loose:
+            for err in check_note(note):
+                errors.append(f"{note}: {err}")
+    except (OSError, UnicodeDecodeError) as e:
+        # A note that cannot be read is a broken prerequisite (exit 2):
+        # a traceback (exit 1-shaped crash) is indistinguishable from a
+        # violation report, and silently skipping it would pass garbage.
+        print(f"verify_notes: cannot read a note file: {e}", file=sys.stderr)
+        return 2
     if errors:
         for err in errors:
             print(err)

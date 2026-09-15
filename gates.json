@@ -10,7 +10,8 @@
       "archive",
       "decisions",
       "task",
-      "doc-sync"
+      "doc-sync",
+      "plane"
     ],
     "quick": [
       "notes",
@@ -56,6 +57,9 @@
         "docs/**",
         "README*",
         ".gov/pairing.json"
+      ],
+      "stages": [
+        "pre-commit"
       ]
     },
     {
@@ -72,6 +76,9 @@
       "command": [
         "gov",
         "verify-conflict-markers"
+      ],
+      "stages": [
+        "pre-commit"
       ]
     },
     {
@@ -124,7 +131,7 @@
     },
     {
       "id": "doc-sync",
-      "label": "CHANGELOG \u2194 HIGHLIGHTS pairing",
+      "label": "CHANGELOG ↔ HIGHLIGHTS pairing",
       "command": [
         "gov",
         "verify-doc-sync"
@@ -132,6 +139,20 @@
       "paths": [
         "CHANGELOG.md",
         "gov/HIGHLIGHTS.md"
+      ]
+    },
+    {
+      "id": "plane",
+      "label": "governance-plane seal (rules + gate set tamper-evidence)",
+      "command": [
+        "gov",
+        "verify-plane"
+      ],
+      "paths": [
+        ".gov/rules.md",
+        "gates.json",
+        ".gov/pairing.json",
+        ".gov/plane-seal.json"
       ]
     }
   ]

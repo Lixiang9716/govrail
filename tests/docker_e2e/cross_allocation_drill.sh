@@ -38,7 +38,7 @@ git init -q --bare -b main "$WORK/origin.git"
 git init -q "$WORK/seed"
 cd "$WORK/seed"
 git config user.email t@t; git config user.name t
-mkdir docs
+mkdir -p docs
 printf '## D1 — adopt\n\n- **选项**：gov init\n\n- **状态**：已决\n' > docs/decisions.md
 printf '# demo\n' > README.md
 git add -A

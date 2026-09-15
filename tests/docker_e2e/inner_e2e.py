@@ -14,6 +14,17 @@ import tempfile
 import time
 from pathlib import Path
 
+# The plane's runtime contract, applied to THIS process (the fixture
+# writes every file the scenarios then assert on): under the hostile
+# locale a GBK filesystem encoding would land non-ASCII names as GBK
+# bytes. Re-entered under UTF-8 mode before any scenario runs; gov
+# processes do the same at their own entries.
+try:
+    from gov.root import ensure_utf8_runtime
+    ensure_utf8_runtime(force_exec=True)
+except ImportError:  # gov not importable is impossible in the image
+    raise
+
 EXPECTED_VERSION = os.environ.get("GOV_E2E_EXPECTED_VERSION", "")
 PY = sys.executable or "python3"
 
@@ -80,7 +91,7 @@ def lifecycle(base):
     assert "environment sound" in r.stdout
     # pairing: a bilingual pair from birth, baselined
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "guide.md").write_text("guide\n", encoding="utf-8")
     (docs / "guide.zh.md").write_text("指南\n", encoding="utf-8")
     gov("verify-pairing", "--write", cwd=p)
@@ -191,7 +202,7 @@ def prepush_hook(base):
     git("remote", "add", "origin", str(remote), cwd=p)
     # the shipped DAG is green on the baselined tree -> push lands
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "guide.md").write_text("g\n", encoding="utf-8")
     (docs / "guide.zh.md").write_text("指\n", encoding="utf-8")
     gov("verify-pairing", "--write", cwd=p)
@@ -272,9 +283,13 @@ def locale_bites(base):
     import locale
     lc = os.environ.get("LC_ALL", "")
     if "gbk" in lc.lower() or "gb2312" in lc.lower():
-        enc = locale.getpreferredencoding(False)
+        # nl_langinfo reads the actual C locale: UTF-8 mode (which this
+        # harness re-execs into) no longer answers through
+        # getpreferredencoding, but the HOST is still GBK and must stay
+        # provably hostile or the cell proves nothing
+        enc = locale.nl_langinfo(locale.CODESET)
         assert enc.lower() in ("gbk", "cp936", "gb2312"), (
-            f"LC_ALL={lc!r} but preferred encoding is {enc!r} — the "
+            f"LC_ALL={lc!r} but the locale's codeset is {enc!r} — the "
             "hostile locale did not take; this cell would be vacuous")
         r = subprocess.run(
             [PY, "-c", "print('中文')"], capture_output=True,
@@ -470,7 +485,8 @@ def postmortem_recall(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     pm = p / "docs" / "postmortem"
-    pm.mkdir(parents=True)
+    pm.mkdir(parents=True, exist_ok=True)
+    (pm / "README.md").unlink()  # the corpus is exactly this fixture's docs
     (pm / "2026-09-11-outage.md").write_text(
         "# Postmortem: the outage\n\nroot cause: cache stampede\n",
         encoding="utf-8")
@@ -756,8 +772,11 @@ def decision_parallel(base):
         "the winner's decision is present exactly once"
     assert "## D1 — adopt" in text, "the seed decision was not clobbered"
     gov("verify-decisions", cwd=p)
-    assert not list(d.parent.glob(".decision.lock")), \
-        "the lock file must not litter the tree"
+    # the mutex file is DURABLE now (lockfile.py: unlinking it re-opens
+    # the inode race) — it stays, 0-byte, and that is the contract
+    locks_left = list(d.parent.glob(".decision.lock"))
+    assert len(locks_left) == 1 and locks_left[0].stat().st_size == 0, \
+        "the durable mutex file remains, empty"
     # serialization is observable: a sequential add after the race sees
     # the winner's D2 and allocates D3 (a concurrent D3 would refuse)
     gov("decision", "add", "--from", str(draft), "--id", "D3", cwd=p)
@@ -904,7 +923,7 @@ def postmortem_pair(base):
     gov("init", cwd=p)
     commit_all(p, "adopted")
     pm = p / "docs" / "postmortem"
-    pm.mkdir(parents=True)
+    pm.mkdir(parents=True, exist_ok=True)
     (pm / "2026-09-11-outage.md").write_text(
         "# Postmortem: the outage\n\nroot cause: cache stampede\n",
         encoding="utf-8")
@@ -1537,6 +1556,10 @@ def recall_corpus_boundaries(base):
     miss is never ambiguous about the corpus it missed."""
     p = fresh_project(base)
     gov("init", cwd=p)
+    # phase 1 needs a genuinely EMPTY corpus: init seeds the memory
+    # plane (decisions log, postmortem README) — gone here
+    (p / "docs" / "decisions.md").unlink()
+    (p / "docs" / "postmortem" / "README.md").unlink()
     commit_all(p, "adopted")
 
     # phase 1: NO memory sources at all — exit 2 "is this a project
@@ -1698,7 +1721,7 @@ def review_dossier_corpora(base):
         "## Problem\ncurrency swings\n\n## Decision\nhedge\n\n"
         "## Alternatives considered\nignore\n", encoding="utf-8")
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "decisions.md").write_text(
         "## D1 — hedge the rates\n\n- **选项**：hedge now\n\n"
         "- **状态**：已决\n", encoding="utf-8")
@@ -1754,7 +1777,7 @@ def postmortem_recall_any(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     pm = p / "docs" / "postmortem"
-    pm.mkdir(parents=True)
+    pm.mkdir(parents=True, exist_ok=True)
     (pm / "2026-09-11-outage.md").write_text(
         "# Postmortem: the outage\n\nroot cause: cache stampede\n",
         encoding="utf-8")
@@ -2001,6 +2024,10 @@ def merge_three_branch(base):
     # D24: an enabled gate in NO mode is a config error — wire it in
     gates["modes"]["all"].append("ok")
     (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
+    # the edit moved gates.json off its seal — re-baseline explicitly,
+    # then land BOTH on the default branch before branching
+    gov("verify-plane", "--write", cwd=p)
+    commit_all(p, "wire the ok gate")
     # the default branch is whatever `git init` chose — ask git
     default_branch = git("rev-parse", "--abbrev-ref",
                          "HEAD", cwd=p).stdout.strip()
@@ -2419,7 +2446,8 @@ def postmortem_bilingual_rank(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     pm = p / "docs" / "postmortem"
-    pm.mkdir(parents=True)
+    pm.mkdir(parents=True, exist_ok=True)
+    (pm / "README.md").unlink()  # the corpus is exactly these three docs
     (pm / "2026-09-01-avalanche.md").write_text(
         "# Postmortem: 缓存雪崩复盘\n\nthe retry storm amplified it\n",
         encoding="utf-8")
@@ -2611,7 +2639,7 @@ def whatsnew_since_edges(base):
 def stats_ledger_roundtrip(base):
     """The stats ledger's write side: `gov stats --record` appends one
     line per invocation to the SAME file check --record uses — stats
-    lines carry no kind, check lines carry kind=check, the file stays
+    lines carry kind=stats, check lines kind=check, the file stays
     append-only across the interleaving — and a file that does not
     parse is still recorded, with parse_errors counted, never silently
     omitted (metrics, not verdicts)."""
@@ -2628,7 +2656,7 @@ def stats_ledger_roundtrip(base):
         encoding="utf-8").strip().splitlines()
     assert len(lines) == 3, lines
     s1, s2, c1 = (json.loads(l) for l in lines)
-    assert "languages" in s1 and "kind" not in s1
+    assert "languages" in s1 and s1["kind"] == "stats"
     assert c1["kind"] == "check"
     py2 = s2["languages"]["python"]
     assert py2["files"] == 2, "the unparseable file is still inventoried"
@@ -2692,6 +2720,7 @@ def preset_adoption_bundle(base):
     cfg["gates"].append({"id": "my-gate", "command": ["true"]})
     cfg["modes"]["all"].append("my-gate")
     gates.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # record the hand-wired gate
     r = gov("preset", "apply", "python-lib", cwd=p)
     assert "added 2" in r.stdout, r.stdout
     cfg = json.loads(gates.read_text(encoding="utf-8"))
@@ -2716,7 +2745,8 @@ def window_edges(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     r = gov("decision", "next", "--count", "3", cwd=p)
-    assert "D0" in r.stdout and "D1" in r.stdout and "D2" in r.stdout, (
+    # the seeded decisions log spends D0
+    assert "D1" in r.stdout and "D2" in r.stdout and "D3" in r.stdout, (
         r.stdout)
     for bad in ("0", "-2"):
         r = gov("decision", "next", "--count", bad, cwd=p, expect=2)
@@ -3026,14 +3056,20 @@ def custom_mode_scoping(base):
     gov("init", cwd=p)
     cfg = json.loads((p / "gates.json").read_text(encoding="utf-8"))
     ids = [g["id"] for g in cfg["gates"]]
-    cfg["modes"]["deep"] = ids[:2]
+    # 'deep' runs gates that are green on this tree (pairing ships
+    # advisory and reads FAIL until baselined — presence asserts below
+    # would still hold, PASS would not)
+    deep = ["notes", "conflict-markers"]
+    cfg["modes"]["deep"] = deep
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the mode edit is recorded
     r = gov("run", "--mode", "deep", cwd=p)
-    for gid in ids[:2]:
+    for gid in deep:
         assert f"PASS {gid}" in r.stdout, r.stdout
-    for gid in ids[2:]:
-        assert f"PASS {gid}" not in r.stdout, r.stdout
+    for gid in ids:
+        if gid not in deep:
+            assert f"PASS {gid}" not in r.stdout, r.stdout
     r = gov("run", "--mode", "all", cwd=p)
     for gid in ids:
         # pairing runs advisory (FAIL) until baselined — the union
@@ -3050,7 +3086,7 @@ def change_scope_skips(base):
     the run."""
     p = fresh_project(base)
     gov("init", cwd=p)
-    (p / "docs").mkdir()
+    (p / "docs").mkdir(exist_ok=True)
     (p / "docs" / "a.md").write_text("x\n", encoding="utf-8")
     cfg = {"gates": [
         {"id": "docs-gate", "command": ["true"], "paths": ["docs/**"]},
@@ -3134,7 +3170,7 @@ def agent_lifecycle_receipt(base):
     gov("init", cwd=p)
     # day-one act: baseline pairing (init leaves it advisory until then)
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "guide.md").write_text("guide\n", encoding="utf-8")
     (docs / "guide.zh.md").write_text("指南\n", encoding="utf-8")
     gov("verify-pairing", "--write", cwd=p)
@@ -3192,7 +3228,7 @@ def pairing_violation_contract(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "guide.md").write_text("guide\n", encoding="utf-8")
     (docs / "guide.zh.md").write_text("指南\n", encoding="utf-8")
     gov("verify-pairing", "--write", cwd=p)
@@ -3211,6 +3247,7 @@ def pairing_violation_contract(base):
             g["allowFailure"] = False
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the strictness flip is recorded
     commit_all(p, "strict pairing")
     r = gov("run", "--base", "HEAD~2", cwd=p, expect=1)
     assert "FAIL pairing" in r.stdout, r.stdout
@@ -3377,7 +3414,7 @@ def task_claim_status_guards(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "guide.md").write_text("guide\n", encoding="utf-8")
     (docs / "guide.zh.md").write_text("指南\n", encoding="utf-8")
     gov("verify-pairing", "--write", cwd=p)
@@ -3469,7 +3506,8 @@ def decision_against_alias(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     d = p / "docs" / "decisions.md"
-    d.parent.mkdir(parents=True)
+    d.parent.mkdir(parents=True, exist_ok=True)
+    # the fixture's own seed: the govrail-seeded D0 is replaced
     d.write_text("## D1 — seed\n\n- **选项**：x\n\n- **状态**：已决\n",
                  encoding="utf-8")
     commit_all(p, "D1")
@@ -3494,7 +3532,7 @@ def decision_bom_draft(base):
     p = fresh_project(base)
     gov("init", cwd=p)
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "decisions.md").write_text("# 决策\n\n", encoding="utf-8")
     draft = p / "d1.md"
     draft.write_bytes(
@@ -3591,7 +3629,7 @@ def decision_id_guards(base):
         json.dumps({"path": "docs/decisions.md", "format": "table"}),
         encoding="utf-8")
     docs = p / "docs"
-    docs.mkdir()
+    docs.mkdir(exist_ok=True)
     (docs / "decisions.md").write_text(
         "| Dn | title | options |\n|---|---|---|\n", encoding="utf-8")
     draft = p / "d9row.md"
@@ -3640,7 +3678,9 @@ def lease_unreadable_never_stolen(base):
     over legally."""
     p = fresh_project(base)
     gov("init", cwd=p)
-    lock = p / ".git" / "gov-locks" / "race__x.json"
+    from gov.locks import _lease_path, _lock_stem
+    lock = _lease_path(p / ".git", "race/x")
+    assert lock.name == _lock_stem("race/x") + ".json"
     lock.parent.mkdir(parents=True, exist_ok=True)
     lock.write_bytes(b"")
     r = gov("acquire", "race/x", "--agent", "grabber", cwd=p, expect=3)

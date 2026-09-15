@@ -100,17 +100,26 @@ def _git_dir() -> str | None:
 
 def _check_hook(checks: list[dict]) -> None:
     import os
-    git_dir = _git_dir()
-    if git_dir is None:
+    try:
+        from . import gitutil
+    except ImportError:  # direct-script execution
+        import gitutil
+    hooks_dir = gitutil.hooks_dir()
+    if hooks_dir is None:
         checks.append({"name": "git-repo", "state": "note",
                        "detail": "not a git repository — hook checks skipped"})
         return
+    # Where hooks RUN from: core.hooksPath wins when set (husky/lefthook),
+    # else the common dir. The old check only looked at <common>/hooks, so
+    # a gov hook installed under a redirected hooksPath read as "absent"
+    # here while it ran fine — or worse, an uninstalled hook read as ok
+    # because SOME file sat in .git/hooks.
     # pre-push: the gate-DAG runner; pre-commit: the OPT-IN commit-stage
     # gates (#110) — its absence is a choice, not a problem.
     for name, how in (("pre-push", "gov init --hooks installs it"),
                       ("pre-commit",
                        "gov init --hooks --pre-commit installs it (opt-in)")):
-        hook = os.path.join(git_dir, "hooks", name)
+        hook = os.path.join(hooks_dir, name)
         for rel, what in ((hook, "the wired git hook"),
                           (f".gov/hooks/{name}", "the auditable copy")):
             if not os.path.exists(rel):
@@ -250,8 +259,13 @@ def _check_gate_adoption(checks: list[dict]) -> None:
 def _check_decisions(checks: list[dict]) -> None:
     import contextlib
     import io
-    import os
-    if not os.path.exists("docs/decisions.md"):
+    from . import decisions as dec
+    # The CONFIGURED source, not a hardcoded docs/decisions.md: a project
+    # that moved its table via .gov/decisions.json used to silently skip
+    # this check (doctor said nothing was there), and one that had only
+    # the default path got checked twice against different truths.
+    path, _fmt = dec.configured_path_fmt()
+    if not path.exists():
         return  # no table, nothing to check — not an environment problem
     from . import verify_decisions as vd
     # Capture the sub-run's stdout: in --json mode doctor's stdout must
@@ -261,7 +275,7 @@ def _check_decisions(checks: list[dict]) -> None:
         rc = vd.main([])
     if rc == 0:
         checks.append({"name": "decisions-table", "state": "ok",
-                       "detail": "decisions table parses"})
+                       "detail": f"decisions table parses ({path})"})
     else:
         checks.append({"name": "decisions-table", "state": "problem",
                        "detail": "decisions table has violations — "
@@ -275,9 +289,9 @@ def _check_parse_layer(checks: list[dict]) -> None:
     existing consumers. A missing/broken C extension is a named problem
     with the reinstall remedy, never a traceback and never a silent skip.
     """
+    import importlib
+    from . import parse as parse_mod
     try:
-        import importlib
-        from . import parse as parse_mod
         core = importlib.import_module("tree_sitter")
         versions = []
         for name in parse_mod.available():

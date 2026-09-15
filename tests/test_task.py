@@ -181,7 +181,8 @@ def _lease_dir(proj: Path) -> Path:
 
 
 def _task_lease(proj: Path, cid: str = "T-0001") -> Path:
-    return _lease_dir(proj) / (f"task__{cid}.json")
+    from gov.locks import _lock_stem
+    return _lease_dir(proj) / (_lock_stem(f"task/{cid}") + ".json")
 
 
 def test_claim_leases_open_card_and_announces(tmp_path, monkeypatch, capsys):
@@ -225,7 +226,12 @@ def test_claim_missing_or_closed_card_exit2(tmp_path, monkeypatch, capsys):
     # a usage error, not a busy: waiting cannot reopen a closed card
     assert task.main(["claim", "T-0001", "--ttl", "600"]) == 0
     monkeypatch.setenv("GOV_CALLER", "boss")
-    assert task.main(["close", "T-0001", "--timeout", "60"]) == 0
+    # M19 contract: a live lease naming another holder is in-flight work;
+    # a close from a third party refuses unless it is a knowing --force.
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "--timeout", "60"]) == 2
+    assert "claimed by 'w1'" in capsys.readouterr().err
+    assert task.main(["close", "T-0001", "--timeout", "60", "--force"]) == 0
     monkeypatch.setenv("GOV_CALLER", "w9")
     assert task.main(["claim", "T-0001"]) == 2
     assert "is 'done', not open" in capsys.readouterr().err

@@ -301,6 +301,22 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
               f"with `gov init --preset {name}`)", file=sys.stderr)
         return 2
 
+    # The plane seal (D2) must be INTACT before this apply touches the
+    # config: a clean pre-state means the only drift after the apply is
+    # the apply itself, which gets re-baselined below. An already-drifted
+    # plane refuses — an apply must not launder unrecorded edits
+    # (gov verify-plane --write accepts them explicitly first).
+    from . import verify_plane
+    drift = verify_plane.violations(project)
+    if drift:
+        print("gov preset: REFUSED — the governance plane drifted from its "
+              f"seal before this apply:", file=sys.stderr)
+        for d in drift:
+            print(f"  {d}", file=sys.stderr)
+        print("  accept the new state explicitly (gov verify-plane --write) "
+              "and re-run the preset", file=sys.stderr)
+        return 2
+
     wrote = False
     print(f"preset: applying '{name}' to {project}")
 
@@ -326,21 +342,35 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
     if added or modes_changed:
         text = json.dumps(merged, indent=2) + "\n"
         # Validate before landing — never write a gates.json the runner
-        # itself would reject (rule 6 in spirit, D39's own order).
+        # itself would reject (rule 6 in spirit, D39's own order). And
+        # land THE VALIDATED FILE ITSELF: the old flow unlinked the tmp
+        # and rewrote gates_path with a fresh write_text — a second,
+        # unvalidated, tear-able write that threw away the guarantee
+        # validation had just earned. os.replace of the tmp keeps the
+        # landing atomic.
         fd, tmp = tempfile.mkstemp(dir=project, suffix=".gates.json")
+        landed = False
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(text)
+                f.flush()
+                os.fsync(f.fileno())
             gates_mod.load_config(tmp)
+            try:
+                mode = (gates_path.stat().st_mode & 0o777) if gates_path.exists() \
+                    else 0o644
+                os.chmod(tmp, mode)
+            except OSError:
+                pass
+            os.replace(tmp, gates_path)
+            landed = True
         except Exception as e:  # noqa: BLE001 — any validation failure is fatal
-            os.unlink(tmp)
             print(f"gov preset: apply refused — merged gates.json fails "
                   f"schema validation: {e}", file=sys.stderr)
             return 2
         finally:
-            if os.path.exists(tmp):
+            if not landed and os.path.exists(tmp):
                 os.unlink(tmp)
-        gates_path.write_text(text, encoding="utf-8")
         wrote = True
         if added:
             print(f"  gates: added {len(added)} (in preset order): "
@@ -390,6 +420,12 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
 
     if not wrote:
         print(f"preset: '{name}' already adopted — nothing written")
+    else:
+        # The apply itself is the recorded change: extend the seal over
+        # the new config state, loudly, so verify-plane stays green for
+        # a flow that went through the plane's own front door.
+        verify_plane.baseline(project)
+        print("  plane: seal re-baselined over the adopted state")
     return 0
 
 

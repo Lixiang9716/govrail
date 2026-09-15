@@ -53,7 +53,8 @@ def _lockdir(root: Path) -> Path:
 
 
 def _lease(root: Path, resource: str) -> Path:
-    return _lockdir(root) / (resource.replace("/", "__") + ".json")
+    from gov.locks import _lock_stem
+    return _lockdir(root) / (_lock_stem(resource) + ".json")
 
 
 def _write_lease(root: Path, resource: str, holder: str, expires: datetime):
@@ -77,9 +78,11 @@ def test_acquire_creates_lease_with_correct_content(tmp_path):
              "--ttl", "300")
     assert r.returncode == 0, (r.stdout, r.stderr)
     data = _read_lease(tmp_path, "reports/summary.md")
-    # '/' in the resource name is stored as '__' in the filename
+    # the resource name is percent-encoded into the filename — and stays
+    # distinct from a literal "reports__summary.md" resource (the old
+    # replace("/", "__") folded the two onto one lease)
     assert _lease(tmp_path, "reports/summary.md").name == \
-        "reports__summary.md.json"
+        "reports%2Fsummary.md.json"
     assert data["resource"] == "reports/summary.md"
     assert data["holder"] == "agent-a"
     acquired = datetime.fromisoformat(data["acquired_at"])
@@ -362,13 +365,15 @@ def test_holder_defaults_to_gov_caller_then_os_user(tmp_path):
     assert _read_lease(tmp_path, "r")["holder"] == "caller-9"
     _gov(tmp_path, "release", "r", "--agent", "caller-9")
     import getpass
+    import socket
+    default = f"{getpass.getuser()}@{socket.gethostname()}"
     r = _gov(tmp_path, "acquire", "r")
     assert r.returncode == 0
-    assert _read_lease(tmp_path, "r")["holder"] == getpass.getuser()
+    assert _read_lease(tmp_path, "r")["holder"] == default
     # whitespace-only GOV_CALLER counts as absent (D42's rule for callers)
-    _gov(tmp_path, "release", "r", "--agent", getpass.getuser())
+    _gov(tmp_path, "release", "r", "--agent", default)
     r = _gov(tmp_path, "acquire", "r", env={"GOV_CALLER": "   "})
-    assert _read_lease(tmp_path, "r")["holder"] == getpass.getuser()
+    assert _read_lease(tmp_path, "r")["holder"] == default
 
 
 def test_nonpositive_ttl_refused(tmp_path):
