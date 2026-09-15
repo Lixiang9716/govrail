@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.3](https://github.com/Lixiang9716/govrail/compare/v0.30.2...v0.30.3) (2026-09-15)
+
+
+### Bug Fixes
+
+* close the audited defect report — 47 findings across the plane ([#188](https://github.com/Lixiang9716/govrail/issues/188)) ([2e2fef6](https://github.com/Lixiang9716/govrail/commit/2e2fef6e0cd1730ecbd7b6dc4ae6516e5ee48e6f))
+
 ## [0.30.2](https://github.com/Lixiang9716/govrail/compare/v0.30.1...v0.30.2) (2026-09-14)
 
 
