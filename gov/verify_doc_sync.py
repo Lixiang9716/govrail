@@ -170,7 +170,8 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
         return 2
     if not configured and highlights_path == HIGHLIGHTS:
-        print(f"verify_doc_sync: syncing {CHANGELOG} against {highlights_path} "
+        print(f"verify_doc_sync: syncing {CHANGELOG} against "
+              f"{highlights_path.as_posix()} "
               f"(govrail's default layout; declare your own in "
               f"{DOC_SYNC_CONFIG}: {{\"highlights\": \"<path>\"}})")
 

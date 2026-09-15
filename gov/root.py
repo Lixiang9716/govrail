@@ -38,6 +38,49 @@ def force_utf8_stdio() -> None:
             pass
 
 
+def ensure_utf8_runtime(force_exec: bool = False) -> None:
+    """One runtime contract for every process in this plane: UTF-8.
+
+    #168 pinned stdio; a hostile locale (the zh-CN GBK host, CI's
+    gbk-locale job) kept two more doors open: Python's FILESYSTEM
+    encoding follows the locale, so non-ASCII names landed on disk as
+    GBK bytes that no utf-8 listing decode can read back, and unpinned
+    subprocess text reads decoded the locale codec. ``PYTHONUTF8=1``
+    hands the contract to every Python child this process spawns; the
+    process itself re-execs under PEP 540 UTF-8 mode when it entered
+    through a real CLI entry. Windows already speaks UTF-8 for paths
+    (PEP 529) and its stdio wall is ``force_utf8_stdio``'s, so there
+    this function only exports the env.
+
+    Library calls into gov from a live interpreter (tests, embeddings)
+    must not restart the process — pass ``force_exec`` only from a
+    process's own bootstrap (the test conftest), never mid-run.
+    """
+    os.environ["PYTHONUTF8"] = "1"
+    if sys.flags.utf8_mode or \
+            sys.getfilesystemencoding().lower().startswith("utf"):
+        return
+    if "pytest" in sys.modules and not force_exec:
+        return  # a library call inside a test run must not restart it
+    argv0 = sys.argv[0] or ""
+    import shutil
+
+    main_spec = getattr(sys.modules.get("__main__"), "__spec__", None)
+    if main_spec is not None and getattr(main_spec, "name", ""):
+        # `python -m <pkg>`: re-enter through the module machinery —
+        # executing the resolved __main__.py by path would break
+        # package-relative imports, and the basename heuristic cannot
+        # tell gov's __main__ from pytest's.
+        argv = [sys.executable, "-X", "utf8", "-m", main_spec.name,
+                *sys.argv[1:]]
+    elif argv0 not in ("-c", ""):
+        script = shutil.which(argv0) or argv0
+        argv = [sys.executable, "-X", "utf8", script, *sys.argv[1:]]
+    else:
+        return  # no reliable way to reconstruct a -c entry; env carries it
+    os.execv(sys.executable, argv)  # replaces the process; never returns
+
+
 def anchor_to_git_root(tool: str) -> None:
     """Chdir to the git work-tree root when the caller is deeper inside.
 

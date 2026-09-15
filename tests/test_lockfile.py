@@ -35,6 +35,10 @@ def test_exclusive_creates_parent_dirs(tmp_path):
     assert lock.exists()
 
 
+@pytest.mark.skipif(__import__("os").name == "nt",
+                    reason="the probe child flocks — a POSIX mechanism; "
+                           "Windows exclusivity rides msvcrt.locking inside "
+                           "lockfile.exclusive itself")
 def test_second_process_blocks_until_release(tmp_path):
     """Cross-process exclusivity, end to end: the child tries a
     non-blocking flock on the same path while this process holds the
@@ -56,6 +60,9 @@ def test_second_process_blocks_until_release(tmp_path):
         assert child.stdout.strip() == "busy"
 
 
+@pytest.mark.skipif(__import__("os").name == "nt",
+                    reason="Windows always has msvcrt — there is no "
+                          "primitive-less platform to simulate here")
 def test_missing_primitives_refuse_loudly(tmp_path, monkeypatch):
     """No silent no-lock: a platform without a mutex primitive must raise,
     never yield an unprotected critical section (rule 5)."""

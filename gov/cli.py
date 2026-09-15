@@ -140,8 +140,11 @@ def _install_ci(project: Path, created: list[str]) -> None:
     # (bump the pin, run gov init --upgrade for template drift).
     template = TEMPLATES.joinpath("gov.yml").read_text(encoding="utf-8")
     workflow.parent.mkdir(parents=True, exist_ok=True)
-    workflow.write_text(template.replace("__GOV_VERSION__", __version__),
-                        encoding="utf-8")
+    # BYTES, not text mode: newline translation would make the installed
+    # file differ from the rendered template on Windows, and uninstall's
+    # byte-level customized check would refuse to delete its own install.
+    workflow.write_bytes(
+        template.replace("__GOV_VERSION__", __version__).encode("utf-8"))
     created.append(".github/workflows/gov.yml")
 
 
@@ -1129,7 +1132,9 @@ def _init_uninstall_args(
 
 
 def main(argv: list[str] | None = None) -> int:
-    from .root import force_utf8_stdio
+    from .root import ensure_utf8_runtime, force_utf8_stdio
+    if argv is None:  # a real process entry (console script / -m gov)
+        ensure_utf8_runtime()
     force_utf8_stdio()  # every report leaves as UTF-8, on every OS (#168)
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv:

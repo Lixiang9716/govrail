@@ -188,7 +188,7 @@ def hooks_dir() -> str | None:
         if configured:
             root = toplevel()
             if os.path.isabs(configured) or root is None:
-                return configured
-            return os.path.join(root, configured)
+                return os.path.normpath(configured)
+            return os.path.normpath(os.path.join(root, configured))
     common = common_dir()
-    return os.path.join(common, "hooks") if common else None
+    return os.path.normpath(os.path.join(common, "hooks")) if common else None
