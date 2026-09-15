@@ -189,7 +189,14 @@ def _holder_id(agent: str | None) -> str:
         return caller.strip()
     import socket
 
-    return f"{getpass.getuser()}@{socket.gethostname()}"
+    try:
+        user = getpass.getuser()
+    except (KeyError, OSError):
+        # `docker run --user 1000`: no passwd entry — the uid IS the
+        # identity this process has, and a crash here would take down
+        # every lease command (found by the nonroot e2e cell)
+        user = f"uid{os.getuid()}"
+    return f"{user}@{socket.gethostname()}"
 
 
 def _iso(dt: datetime) -> str:

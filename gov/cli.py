@@ -255,17 +255,11 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
     # agent that recall is useless, and a lost habit never comes back.
     decisions_doc = project / "docs" / "decisions.md"
     if not decisions_doc.exists():
+        # The seed is in the loader's DEFAULT format (sections): a fresh
+        # install needs no .gov/decisions.json declaration, and hand
+        # edits in the same format stay the path of least resistance.
         _copy(TEMPLATES.joinpath("decisions-table.md"), decisions_doc)
         created.append("docs/decisions.md")
-        # The seed is a TABLE; the loader defaults to sections headings.
-        # Declare the format or verify-decisions reads one D-row file as
-        # zero entries and goes red on the very first run.
-        decisions_cfg = gov_dir / "decisions.json"
-        if not decisions_cfg.exists():
-            decisions_cfg.write_text(
-                json.dumps({"format": "table"}, indent=2) + "\n",
-                encoding="utf-8")
-            created.append(".gov/decisions.json")
     postmortem_readme = project / "docs" / "postmortem" / "README.md"
     if not postmortem_readme.exists():
         _copy(TEMPLATES.joinpath("postmortem-README.md"), postmortem_readme)

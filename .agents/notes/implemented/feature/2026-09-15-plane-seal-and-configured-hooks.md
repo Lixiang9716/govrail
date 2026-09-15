@@ -33,9 +33,10 @@ documented remove-`allowFailure` step, not a hook edit. The template
 DAG drops the vendor self-test (govrail keeps it in its OWN gates.json)
 and the CI template pins `govrail==<init-time version>`. init resolves
 the real hooks dir (`core.hooksPath`, else the common dir — worktrees
-included), seeds the decisions log (table format declared in
-`.gov/decisions.json`, with a D0 "adopt the plane" row) and the
-postmortem README so recall has a corpus on day one, appends
+included), seeds the decisions log (in the loader's
+default sections format, with a D0 "adopt the plane" entry — no format
+declaration file for a fresh install to trip over) and the postmortem
+README so recall has a corpus on day one, appends
 `.gov/history/` to `.gitignore`, and prints that the shipped gates
 guard the governance plane — wire your own test/lint gates (presets
 ship typed starters, now on `python3`).

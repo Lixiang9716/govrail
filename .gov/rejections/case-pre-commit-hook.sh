@@ -1,10 +1,10 @@
 #!/bin/sh
 # gate: pairing
-# Proves the optional pre-commit hook rejects (#110): with
-# `gov init --hooks --pre-commit` installed, `git commit` of a pair whose
-# sidecar is stale fails naming the scoped fix command, and the fixed
-# pair commits. Repos without the flag keep the pre-push model — that
-# half is pinned in tests/test_pre_commit_hook.py.
+# Proves the pre-commit hook honors the CONFIGURED contract (#110, and
+# the advisory/blocking flip): pairing ships advisory, so a stale
+# sidecar is NAMED at commit time without blocking; after the documented
+# enforce step (remove allowFailure) the same drift blocks the commit
+# naming the scoped fix, and the fixed pair lands.
 set -u
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT

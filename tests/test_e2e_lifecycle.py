@@ -151,12 +151,13 @@ def test_act1_adopt_and_govern(project):
     gov("run", "--base", "HEAD", cwd=project)
 
     # --- decisions: next number and the table guard ----------------------
-    # init seeded the log as a TABLE (format declared in
-    # .gov/decisions.json) with D0; append D1 in the same format and the
-    # allocator answers D2. The seeded log is mono-lingual by design, so
-    # pairing (which excludes it) has nothing to baseline here.
+    # init seeded the log in the loader's default SECTIONS format with
+    # D0; append D1 the same way and the allocator answers D2. The
+    # seeded log is mono-lingual by design, so pairing (which excludes
+    # it) has nothing to baseline here.
     with open(project / "docs" / "decisions.md", "a", encoding="utf-8") as f:
-        f.write("| D1 | Example decision | doing nothing |\n")
+        f.write("\n## D1 — Example decision\n\n"
+                "- **选项**：doing nothing\n")
     r = gov("decision", "next", cwd=project)
     assert "D2" in r.stdout
     gov("verify-decisions", cwd=project)
@@ -315,14 +316,14 @@ def test_act3_presets_and_upgrades(project):
     assert "already adopted" in r.stdout
 
     # a governance-mode run over the adopted surface. init seeded the
-    # decisions log as a TABLE (and declared the format in
-    # .gov/decisions.json), so the added row follows that format.
+    # decisions log in the default SECTIONS format; the appended entries
+    # follow it.
     (project / "docs").mkdir(exist_ok=True)
     (project / "docs" / "decisions.md").write_text(
-        "| ID | Decision | Alternatives |\n"
-        "|----|----------|--------------|\n"
-        "| D0 | Adopt the govrail governance plane | prose-only rules |\n"
-        "| D1 | Use leases for parallel workers | file mtimes; no lock at all |\n",
+        "## D0 — Adopt the govrail governance plane\n\n"
+        "- **选项**：prose-only rules\n\n"
+        "## D1 — Use leases for parallel workers\n\n"
+        "- **选项**：file mtimes; no lock at all\n",
         encoding="utf-8")
     commit_all(project, "preset adopted")
     gov("run", "--mode", "governance", cwd=project)

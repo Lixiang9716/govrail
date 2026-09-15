@@ -78,7 +78,15 @@ def ensure_utf8_runtime(force_exec: bool = False) -> None:
         argv = [sys.executable, "-X", "utf8", script, *sys.argv[1:]]
     else:
         return  # no reliable way to reconstruct a -c entry; env carries it
-    os.execv(sys.executable, argv)  # replaces the process; never returns
+    # execv with BYTES: str args are encoded with the CURRENT (still
+    # hostile) filesystem codec, and the re-exec'd interpreter would
+    # decode them UTF-8 — a CJK argv term becomes mojibake at the
+    # doorway. UTF-8-encoding the bytes ourselves survives the hop.
+    exe = os.fsencode(sys.executable)
+    argv_bytes = [exe, b"-X", b"utf8"] + [
+        a if isinstance(a, bytes) else a.encode("utf-8", "surrogateescape")
+        for a in argv[1:]]
+    os.execv(exe, argv_bytes)  # replaces the process; never returns
 
 
 def anchor_to_git_root(tool: str) -> None:
