@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-import subprocess
 import sys
 
 from . import __version__
@@ -86,16 +85,14 @@ def _check_argparse_shadow(checks: list[dict]) -> None:
 
 
 def _git_dir() -> str | None:
-    """The git dir, worktree-aware (#15/D32): a linked worktree's .git is a
-    FILE; git rev-parse --git-common-dir resolves the shared dir (hooks
-    live there even from a linked worktree)."""
-    proc = subprocess.run(["git", "rev-parse", "--git-common-dir"],
-                          capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
-    if proc.returncode != 0:
-        return None
-    import os
-    return os.path.abspath(proc.stdout.strip()) or None
+    """The git dir, worktree-aware (#15/D32) — gitutil.common_dir is the
+    one implementation (a linked worktree's .git is a FILE; the common
+    dir holds the hooks for every worktree)."""
+    try:
+        from . import gitutil
+    except ImportError:  # direct-script execution
+        import gitutil
+    return gitutil.common_dir()
 
 
 def _check_hook(checks: list[dict]) -> None:

@@ -95,8 +95,8 @@ def test_next_against_is_an_alias_and_warns_stale_base(tmp_path, monkeypatch,
     assert decision.main(["next", "--against", "master"]) == 0
     captured = capsys.readouterr()
     assert captured.out.strip() == "D4"  # the union answers, alias or not
-    assert "your base is 2 rows behind 'master'" in captured.err
-    assert "missing D2, D3" in captured.err
+    assert "your branch has 2 rows that 'master' lacks" in captured.err
+    assert "(D2, D3)" in captured.err
     assert "rebase before numbering" in captured.err
 
 
@@ -133,7 +133,7 @@ def test_add_against_warns_stale_base_and_still_writes(tmp_path, monkeypatch,
     draft = _draft(tmp_path, "mine", "- **选项**: a\n- **被否**: b")
     assert decision.main(["add", "--from", draft, "--against", "master"]) == 0
     captured = capsys.readouterr()
-    assert "your base is 1 row behind 'master'" in captured.err
+    assert "your branch has 1 row that 'master'" in captured.err
     assert "rebase before numbering" in captured.err
     text = (docs / "decisions.md").read_text(encoding="utf-8")
     assert "## D3 — mine" in text  # allocated above the ref's D2

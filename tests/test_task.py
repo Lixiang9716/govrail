@@ -19,6 +19,9 @@ def _project(tmp_path: Path) -> Path:
     (tmp_path / ".gov" / "rules.md").write_text("# Rules\n", encoding="utf-8")
     (tmp_path / "gates.json").write_text(json.dumps({"gates": []}),
                                          encoding="utf-8")
+    # a governed project owes a seal (N2): task close's gate run prechecks it
+    from gov import verify_plane as _vp
+    _vp.baseline(tmp_path)
     return tmp_path
 
 
@@ -102,6 +105,10 @@ def test_close_runs_gates_and_records_receipt(tmp_path, monkeypatch):
         "modes": {"all": ["noop"]},
         "gates": [{"id": "noop", "command": PASS}],
     }), encoding="utf-8")
+    # the custom gate set is a recorded constitution change: re-baseline
+    # or close's out-of-band precheck refuses the run
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
     monkeypatch.chdir(proj)
     assert task.main(["new", "Close me"]) == 0
     # close shells out to `python -m gov run`; keep it in-process-cheap
@@ -215,6 +222,8 @@ def test_claim_missing_or_closed_card_exit2(tmp_path, monkeypatch, capsys):
         "modes": {"all": ["noop"]},
         "gates": [{"id": "noop", "command": PASS}],
     }), encoding="utf-8")
+    from gov import verify_plane as _vp2
+    _vp2.baseline(proj)  # the custom gate set is a recorded edit
     monkeypatch.chdir(proj)
     monkeypatch.setenv("GOV_CALLER", "w1")
     with pytest.raises(SystemExit) as exc:   # no card at all
@@ -385,6 +394,8 @@ def test_close_clears_own_card_lease(tmp_path, monkeypatch, capsys):
         "modes": {"all": ["noop"]},
         "gates": [{"id": "noop", "command": PASS}],
     }), encoding="utf-8")
+    from gov import verify_plane as _vp3
+    _vp3.baseline(proj)  # the custom gate set is a recorded edit
     monkeypatch.chdir(proj)
     monkeypatch.setenv("GOV_CALLER", "w1")
     assert task.main(["new", "Finish me"]) == 0

@@ -106,9 +106,21 @@ def empty_tree() -> str:
         input="", text=True, capture_output=True, encoding="utf-8",
         env=scrubbed_env(),
     )
-    if proc.returncode != 0:
+    if proc.returncode == 0:
+        return proc.stdout.strip()
+    # Read-only object stores (packed/readonly checkouts, some CI
+    # sandboxes) refuse the write — but the empty tree is a universal
+    # object with fixed ids per format, so the constant IS the answer
+    # (known-answer-pinned in tests).
+    format_ = object_format()
+    constant = {
+        "sha1": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "sha256": ("6ef19b41225c5369f1c104d45d8d85efa9b057b5"
+                   "3b14b4b9b939dd74decc5321"),
+    }.get(format_)
+    if constant is None:
         raise RuntimeError(f"git mktree failed: {(proc.stderr or '').strip()}")
-    return proc.stdout.strip()
+    return constant
 
 
 def changed_files(base: str | None = None) -> tuple[list[str], str | None]:

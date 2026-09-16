@@ -83,9 +83,10 @@ def _warn_stale_base(local: set[int], ref_nums: set[int], base: str) -> None:
     shown = ", ".join(f"D{n}" for n in behind[:5])
     if len(behind) > 5:
         shown += f", … (+{len(behind) - 5} more)"
-    print(f"decision: note: your base is {len(behind)} "
-          f"{'row' if len(behind) == 1 else 'rows'} behind '{base}' "
-          f"(missing {shown}) — rebase before numbering", file=sys.stderr)
+    print(f"decision: note: your branch has {len(behind)} "
+          f"{'row' if len(behind) == 1 else 'rows'} that '{base}' lacks "
+          f"({shown}) — the base predates your work; rebase before "
+          "numbering", file=sys.stderr)
 
 
 def _next_free(nums: set[int]) -> int:

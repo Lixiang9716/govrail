@@ -93,9 +93,28 @@ def test_run_precheck_quiet_on_intact_plane(tmp_path, monkeypatch):
     gates_mod._plane_precheck()  # no SystemExit
 
 
-def test_run_precheck_noop_without_seal(tmp_path, monkeypatch):
+def test_run_precheck_refuses_unsealed_plane(tmp_path, monkeypatch, capsys):
+    """N2: deleting the seal file is the same attack as disabling the
+    gate, one level up. The discriminator is the constitution: a
+    governed project (rules.md present) never sits in "constitution
+    without seal" — that state refuses with the one-command remedy."""
     from gov import gates as gates_mod
     (tmp_path / ".gov").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".gov" / "rules.md").write_text("# rules\n", encoding="utf-8")
     (tmp_path / "gates.json").write_text('{"gates": []}\n', encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    gates_mod._plane_precheck()  # repos without a seal are unaffected
+    with pytest.raises(SystemExit) as exc:
+        gates_mod._plane_precheck()
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "seal is GONE" in err and "verify-plane --write" in err
+
+
+def test_run_precheck_noop_for_bare_configs(tmp_path, monkeypatch):
+    """A bare gates.json (scratch configs, tests, tools that never
+    adopted the plane) has no constitution and no seal — nothing to
+    judge, and `gov run` must keep working on it."""
+    from gov import gates as gates_mod
+    (tmp_path / "gates.json").write_text('{"gates": []}\n', encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    gates_mod._plane_precheck()  # no SystemExit

@@ -40,16 +40,22 @@ def exclusive(path: Path) -> Iterator[None]:
     locked = False
     try:
         if os.name == "nt":
+            import errno as _errno
             import msvcrt
 
             # LK_LOCK blocks, retrying for ~10s before raising; loop so a
             # longer queue still gets in (each retry re-arms the timeout).
+            # ONLY "held by someone else" (EACCES) re-arms the wait — a
+            # permanent error (EBADF...) used to loop forever, ten silent
+            # seconds at a time.
             while True:
                 try:
                     msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
                     break
-                except OSError:
-                    continue
+                except OSError as e:
+                    if e.errno == _errno.EACCES:
+                        continue
+                    raise
         else:
             try:
                 import fcntl

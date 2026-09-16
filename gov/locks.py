@@ -58,7 +58,6 @@ import argparse
 import getpass
 import json
 import os
-import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -118,12 +117,8 @@ def _common_dir(tool: str) -> Path:
     directory. Under the main worktree ``--git-common-dir`` prints the
     RELATIVE ``.git`` — it is resolve()d against the caller's cwd.
     """
-    proc = subprocess.run(
-        ["git", "rev-parse", "--git-common-dir"],
-        capture_output=True, text=True,
-        encoding="utf-8", errors="replace",  # git speaks UTF-8, not the locale codec (#168)
-        env=_scrubbed_env(),
-    )
+    from . import gitutil as _gitutil
+    proc = _gitutil.git("rev-parse", "--git-common-dir")
     out = proc.stdout.strip()
     if proc.returncode != 0 or not out:
         detail = (proc.stderr or proc.stdout).strip() or "not a git repository"

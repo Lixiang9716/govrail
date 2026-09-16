@@ -73,3 +73,59 @@ def test_missing_primitives_refuse_loudly(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="no inter-process lock"):
         with lockfile.exclusive(lock):
             pass
+
+
+def test_windows_lock_retries_only_transient_errors(tmp_path, monkeypatch):
+    """EBADF (and friends) must RAISE, not re-arm the 10-second wait —
+    a permanent error used to loop forever, ten silent seconds at a
+    time. EACCES (held by another process) is the only retry."""
+    import errno as _errno
+    import os as _os
+    import sys as _sys
+    import types as _types
+
+    fake = _types.ModuleType("msvcrt")
+    takes = {"n": 0}
+
+    def _locking(fd, mode, nbytes):
+        if mode != fake.LK_LOCK:
+            return  # the unlock call; not a take
+        takes["n"] += 1
+        if takes["n"] == 1:
+            raise OSError(_errno.EACCES, "held by another process")
+        # second take succeeds: the lock is acquired
+
+    fake.locking = _locking
+    fake.LK_LOCK, fake.LK_UNLCK = 1, 2
+    monkeypatch.setitem(_sys.modules, "msvcrt", fake)
+    monkeypatch.setattr(_os, "name", "nt")
+
+    lock = tmp_path / "m.lock"
+    with lockfile.exclusive(lock):
+        pass
+    assert takes["n"] == 2  # one transient EACCES survived the wait
+
+
+def test_windows_lock_raises_on_permanent_errors(tmp_path, monkeypatch):
+    import errno as _errno
+    import os as _os
+    import sys as _sys
+    import types as _types
+
+    fake = _types.ModuleType("msvcrt")
+    calls = {"n": 0}
+
+    def _locking(fd, mode, nbytes):
+        calls["n"] += 1
+        raise OSError(_errno.EBADF, "bad file descriptor")
+
+    fake.locking = _locking
+    fake.LK_LOCK, fake.LK_UNLCK = 1, 2
+    monkeypatch.setitem(_sys.modules, "msvcrt", fake)
+    monkeypatch.setattr(_os, "name", "nt")
+
+    with pytest.raises(OSError) as exc:
+        with lockfile.exclusive(tmp_path / "m.lock"):
+            pass
+    assert exc.value.errno == _errno.EBADF
+    assert calls["n"] == 1  # raised immediately — no ten-second re-arm

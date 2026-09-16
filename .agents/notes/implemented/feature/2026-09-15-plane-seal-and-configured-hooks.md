@@ -31,7 +31,11 @@ Enforcement is OUT-OF-BAND by design (the reflexive gap: the in-DAG
 disables its own detector would otherwise go silent) — `gov run`
 checks the seal BEFORE parsing the config, and the pre-commit runner
 checks before reading the staged gate list; neither trusts anything
-from gates.json to judge it. The
+from gates.json to judge it. Deleting the seal file itself is the same
+attack one level up (N2): a plane config whose seal is GONE is
+nominated drift by the constitution's presence
+(`.gov/rules.md` exists → the seal must too), while bare gates.json
+scratch configs stay unsealed by design. The
 pre-commit hook delegates to `gov hooks pre-commit`, which runs every
 gate declaring `"stages": ["pre-commit"]` under its configured
 advisory/blocking contract — flipping pairing to blocking is the

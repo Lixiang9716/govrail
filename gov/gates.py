@@ -893,8 +893,9 @@ def _plane_precheck(tool: str = "gov run") -> None:
     the config BYTES directly and needs nothing from gates.json to
     judge them — pre-push, CI, task close, and manual runs all pass
     through here, so the tamper-evidence no longer depends on any
-    runner remembering to add a step. Repos without a seal are
-    unaffected; a recorded config edit is accepted via the explicit
+    runner remembering to add a step. A plane config without its seal
+    is drift too (N2: deleting the ledger is the attack one level up);
+    a recorded config edit is accepted via the explicit
     `gov verify-plane --write` re-baseline, exactly like the gate's."""
     try:
         from . import verify_plane

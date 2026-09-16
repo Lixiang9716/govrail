@@ -40,6 +40,19 @@ def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
                 os.fsync(f.fileno())
         os.chmod(tmp, mode)
         os.replace(tmp, path)
+        if fsync:
+            # fsync the DIRECTORY too: replace(2) is crash-safe but not
+            # power-loss-safe — without a dir fsync the rename itself can
+            # be lost while the file content is durable. Best-effort:
+            # platforms without a directory fd (Windows) skip it.
+            try:
+                dirfd = os.open(path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(dirfd)
+                finally:
+                    os.close(dirfd)
+            except OSError:
+                pass
     except BaseException:
         try:
             os.unlink(tmp)

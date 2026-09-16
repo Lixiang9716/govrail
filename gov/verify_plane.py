@@ -78,8 +78,21 @@ def violations(root: Path | None = None) -> list[str]:
     root = root or Path.cwd()
     files = _sealed_files(root)
     seal = root / SEAL_PATH
-    if not files or not seal.is_file():
-        return []
+    if not seal.is_file():
+        # N2: deleting the seal file is the same attack as disabling the
+        # gate, one level up. The discriminator is the CONSTITUTION
+        # (.gov/rules.md): init seals automatically, so a governed project
+        # never sits in "constitution without seal" — that state is drift.
+        # A bare gates.json (scratch configs, tests, tools that never
+        # adopted the plane) was never sealed and never will be.
+        constitution = root / ".gov" / "rules.md"
+        if not constitution.is_file():
+            return []
+        return [f"{SEAL_PATH.as_posix()}: the plane config exists but its "
+                "seal is GONE — restore it (git checkout) or accept the "
+                "current state explicitly (gov verify-plane --write)"]
+    if not files:
+        return []  # nothing left to judge (config deleted post-seal)
     try:
         sealed = json.loads(seal.read_text(encoding="utf-8-sig")).get("files", {})
     except (OSError, ValueError, UnicodeDecodeError) as e:
@@ -111,8 +124,8 @@ def main(argv: list[str] | None = None) -> int:
                              "(explicit, loudly-printed consent)")
     args = parser.parse_args(argv)
     root = Path.cwd()
-
     files = _sealed_files(root)
+
     if not files:
         print(f"{PROG}: no plane config found (no .gov/rules.md, no gates.json)")
         return 0
@@ -132,47 +145,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{PROG}: sealed {len(files)} file(s){detail}")
         return 0
 
-    if not seal.is_file():
-        print(f"{PROG}: no seal at {SEAL_PATH} — baseline it once: "
-              f"gov verify-plane --write (gov init writes it automatically)")
+    drift = violations(root)
+    if not drift:
+        print(f"{PROG}: {len(files)} plane file(s) sealed and intact")
         return 0
-
-    try:
-        sealed = json.loads(seal.read_text(encoding="utf-8-sig")).get("files", {})
-    except (OSError, ValueError, UnicodeDecodeError) as e:
-        print(f"{PROG}: cannot read the seal {SEAL_PATH}: {e}", file=sys.stderr)
+    # An unreadable seal is a broken prerequisite (2), not a verdict (1).
+    if any(d.startswith("cannot read") for d in drift):
+        print(f"{PROG}: {drift[0]}", file=sys.stderr)
         return 2
-
-    violations: list[str] = []
-    for rel, p in files.items():
-        entry = sealed.get(rel)
-        if entry is None:
-            violations.append(
-                f"{rel}: plane config is not sealed — baseline it explicitly "
-                f"(gov verify-plane --write)")
-        elif not isinstance(entry, dict):
-            violations.append(f"{rel}: seal entry is malformed — re-seal "
-                              f"(gov verify-plane --write)")
-        elif _sha256(p) != entry.get("sha256"):
-            violations.append(
-                f"{rel}: DIFFERS from its seal — the plane's own rules or gate "
-                "set moved without a recorded re-baseline; restore it "
-                "(git checkout) or accept the new constitution explicitly "
-                "(gov verify-plane --write)")
-    for rel in sealed:
-        if rel not in files:
-            violations.append(f"{rel}: sealed but the file is GONE — the plane's "
-                              "config was deleted")
-
-    if violations:
-        for v in violations:
-            print(v)
-        print(f"{PROG}: {len(violations)} violation(s) — the constitution is "
-              "tamper-evident, not tamper-proof; a seal change must be a "
-              "reviewed decision")
-        return 1
-    print(f"{PROG}: {len(files)} plane file(s) sealed and intact")
-    return 0
+    for v in drift:
+        print(v)
+    print(f"{PROG}: {len(drift)} violation(s) — the constitution is "
+          "tamper-evident, not tamper-proof; a seal change must be a "
+          "reviewed decision")
+    return 1
 
 
 if __name__ == "__main__":
