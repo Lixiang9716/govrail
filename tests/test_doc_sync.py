@@ -1,7 +1,4 @@
 """CHANGELOG ↔ HIGHLIGHTS pairing (D37)."""
-import subprocess
-import sys
-from pathlib import Path
 
 from gov import verify_doc_sync as vds
 

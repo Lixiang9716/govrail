@@ -30,7 +30,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 try:  # package context (`gov ...`)
@@ -126,7 +126,6 @@ def _verify(argv: list[str] | None = None) -> int:
         return report({"source": None, "decisions": 0, "violations": [],
                        "orphans": [], "overdue": [], "status": "ok"}, 0)
     path = src.path
-    text = src.text
     sections = dec.Source.entries(src)  # (id, title, body)
     if not sections:
         print(f"verify_decisions: {path} has no decision entries; check its "

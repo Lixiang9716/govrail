@@ -282,8 +282,8 @@ def run_merge(branches: list[str], base: str | None = None,
                 else:
                     print(f"merge: branch {k} ({br}) could not be merged "
                           f"(already-merged set: {names})", flush=True)
-                print(f"merge: the union cannot land as ordered — stopping "
-                      f"before any further branch", flush=True)
+                print("merge: the union cannot land as ordered — stopping "
+                      "before any further branch", flush=True)
                 print(f"merge: scratch worktree kept for inspection: {tmp}", flush=True)
                 return 1
 
@@ -326,8 +326,8 @@ def run_merge(branches: list[str], base: str | None = None,
                     print("merge:   (the step run exited "
                           f"{step.returncode} before reporting gates — its "
                           "error is printed above)", flush=True)
-                print(f"merge: the union of these branches is not landable — "
-                      f"fix the collision and re-run", flush=True)
+                print("merge: the union of these branches is not landable — "
+                      "fix the collision and re-run", flush=True)
                 print(f"merge: scratch worktree kept for inspection: {tmp}",
                       flush=True)
                 return 1

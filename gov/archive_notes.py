@@ -32,7 +32,11 @@ MANIFEST = ARCHIVED / "manifest.json"
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    # EOL-insensitive: a Windows checkout smudges LF to CRLF
+    # (core.autocrlf), and the seal must judge CONTENT — an eol
+    # translation the checkout chose is not a semantic edit.
+    data = path.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def main(argv: list[str] | None = None) -> int:

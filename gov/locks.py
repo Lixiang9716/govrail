@@ -537,7 +537,7 @@ def main(argv: list[str] | None = None) -> int:
                        help="holder identity (default: $GOV_CALLER, then "
                             "the OS user)")
 
-    p_list = sub.add_parser(
+    sub.add_parser(
         "locks", help="list current lease locks (read-only diagnostics)")
 
     args = parser.parse_args(argv)

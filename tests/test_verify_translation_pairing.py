@@ -241,7 +241,7 @@ def test_write_output_names_field_values(tmp_path, monkeypatch, capsys):
 def test_explain_is_read_only(tmp_path, monkeypatch, capsys):
     """Issue #150: --explain dumps schema + conventions, touches nothing."""
     monkeypatch.chdir(tmp_path)
-    docs = _pair(tmp_path)  # an unrecorded pair: explain must not baseline it
+    _pair(tmp_path)  # an unrecorded pair: explain must not baseline it
     _git_repo(tmp_path)
     before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
     assert vtp.main(["--explain"]) == 0

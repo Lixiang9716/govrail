@@ -170,7 +170,7 @@ def concurrency(base):
             ["gov", "acquire", "res/race", "--agent", f"racer-{i}"],
             cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace", env=env))
-    outs = [pr.communicate() for pr in procs]
+    [pr.communicate() for pr in procs]
     codes = [pr.returncode for pr in procs]
     winners = [i for i, c in enumerate(codes) if c == 0]
     losers = [i for i, c in enumerate(codes) if c == 3]

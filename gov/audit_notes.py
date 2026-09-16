@@ -81,7 +81,7 @@ FLAGS: dict[str, set[str]] = {
     "doctor": {"--json"},
     "note": {"--class", "--ref"},  # on the `new` subcommand
     "whatsnew": {"--since"},
-    "recall": {"--any"},
+    "recall": {"--any", "--snippet"},
     "audit-notes": {"--json"},
     "change-scope": {"--base"},
     "archive-notes": {"--rebaseline"},

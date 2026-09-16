@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from gov import verify_notes as vn
 

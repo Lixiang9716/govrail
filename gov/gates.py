@@ -708,7 +708,7 @@ def run_gates(
         stop = False
         while pending and not stop:
             for fut in list(as_completed(pending)):
-                gate = pending.pop(fut)
+                pending.pop(fut)
                 g, outcome, detail, is_blocking, duration_ms = fut.result()
                 outcomes[g.id] = outcome
                 details[g.id] = detail

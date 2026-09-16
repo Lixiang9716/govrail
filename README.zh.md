@@ -111,7 +111,11 @@ gov locks                      # 列出当前租约（纯诊断）
 
 ## 出处
 
+## 出处
+
 机制蒸馏自 DeepSeek Harness 仓库，其"门禁高于散文"公理塑造了本模板。保留：治理平面。留给你：产品平面。已锁定的设计决策见 [docs/decisions.md](docs/decisions.md)。
+
+> **关于重名**：本项目与 [haocn-ops/govrail](https://github.com/haocn-ops/govrail)（Cloudflare Workers agent 控制平面，已归档）无关。双方独立取名；本仓库是 Python `gov` CLI 治理平面，首发于 2026 年 8 月。
 
 ## Star 历史
 
