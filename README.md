@@ -143,10 +143,18 @@ deleting its definition.
 
 ## Origin
 
+## Origin
+
 The mechanisms are distilled from the DeepSeek Harness repository, whose
 gates-over-prose axiom shaped this template. Kept: the governance plane. Left to
 you: the product plane. The locked design decisions live in
 [docs/decisions.md](docs/decisions.md).
+
+> **On the name**: this project is unrelated to
+> [haocn-ops/govrail](https://github.com/haocn-ops/govrail) (a Cloudflare
+> Workers agent control plane, archived). Both chose the name
+> independently; this repository is the Python `gov` CLI governance plane,
+> first published August 2026.
 
 ## Star History
 

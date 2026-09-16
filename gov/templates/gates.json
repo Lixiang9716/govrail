@@ -28,7 +28,8 @@
       ],
       "paths": [
         ".agents/notes/**"
-      ]
+      ],
+      "timeoutMs": 120000
     },
     {
       "id": "pairing",
@@ -45,7 +46,8 @@
         "docs/**",
         "README*",
         ".gov/pairing.json"
-      ]
+      ],
+      "timeoutMs": 180000
     },
     {
       "id": "note-presence",
@@ -53,7 +55,8 @@
       "command": [
         "gov",
         "verify-note-presence"
-      ]
+      ],
+      "timeoutMs": 60000
     },
     {
       "id": "conflict-markers",
@@ -64,7 +67,8 @@
       ],
       "stages": [
         "pre-commit"
-      ]
+      ],
+      "timeoutMs": 120000
     },
     {
       "id": "archive",
@@ -75,7 +79,8 @@
       ],
       "paths": [
         ".agents/notes/archived/**"
-      ]
+      ],
+      "timeoutMs": 60000
     },
     {
       "id": "task",
@@ -87,7 +92,8 @@
       ],
       "paths": [
         ".gov/tasks/**"
-      ]
+      ],
+      "timeoutMs": 120000
     },
     {
       "id": "plane",
@@ -101,7 +107,8 @@
         "gates.json",
         ".gov/pairing.json",
         ".gov/plane-seal.json"
-      ]
+      ],
+      "timeoutMs": 60000
     }
   ]
 }

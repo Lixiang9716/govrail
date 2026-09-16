@@ -25,7 +25,13 @@ as untracked noise because init never managed `.gitignore`.
 `.gov/pairing.json` into `.gov/plane-seal.json` (written by init, or
 explicitly via `--write`); drift — edits, deletions, unsealed new
 configs — is a named red, and preset apply extends an intact seal
-chain automatically while refusing to launder accumulated drift. The
+chain automatically while refusing to launder accumulated drift.
+Enforcement is OUT-OF-BAND by design (the reflexive gap: the in-DAG
+`plane` gate lives inside the sealed `gates.json`, so tampering that
+disables its own detector would otherwise go silent) — `gov run`
+checks the seal BEFORE parsing the config, and the pre-commit runner
+checks before reading the staged gate list; neither trusts anything
+from gates.json to judge it. The
 pre-commit hook delegates to `gov hooks pre-commit`, which runs every
 gate declaring `"stages": ["pre-commit"]` under its configured
 advisory/blocking contract — flipping pairing to blocking is the

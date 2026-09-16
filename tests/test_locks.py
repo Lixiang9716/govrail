@@ -181,7 +181,7 @@ def test_concurrent_takeover_of_expired_lease_exactly_one_wins(tmp_path):
     # recreate is legal — the fresh-create path never takes the guard
     # (D52) — and the surviving lease still names exactly one holder.
     assert sorted(codes) == [0, 3], (codes, outs)
-    winner_out, loser_err = outs[codes.index(0)], outs[codes.index(3)]
+    _winner_out, loser_err = outs[codes.index(0)], outs[codes.index(3)]
     assert "REFUSED" in loser_err[1]
     assert _read_lease(tmp_path, "contested")["holder"] in ("race-a", "race-b")
 

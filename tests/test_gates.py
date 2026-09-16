@@ -296,7 +296,6 @@ def test_failed_gate_output_is_failure_first_uncapped(capsys):
     2000-char tail must still have its full block emitted; passing gates
     with output keep the display-side tail-3 budget (D20).
     """
-    long_text = "\n".join(f"evidence line {i}" for i in range(300))
     gs = [
         # earlier-stream passing gate with output → stays capped
         gates.Gate(id="chatty-ok", command=[

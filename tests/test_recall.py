@@ -152,3 +152,17 @@ def test_implemented_outranks_archived_at_equal_rank(tmp_path, monkeypatch, caps
     assert recall.main(["pairing"]) == 0
     lines = [l for l in capsys.readouterr().out.splitlines() if "2026-01-01-pairing.md" in l]
     assert lines[0].startswith(".agents/notes/implemented/")
+
+
+def test_snippet_prints_the_matched_line(tmp_path, monkeypatch, capsys):
+    """--snippet: the evidence is printed inline under each hit, trimmed,
+    indented — the address AND the quote."""
+    _memory(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert recall.main(["--snippet", "gate", "runner"]) == 0
+    out = capsys.readouterr().out
+    assert "matched in title" in out
+    assert "    Agent Note: the gate runner DAG" in out
+    # the miss path is untouched by --snippet
+    capsys.readouterr()
+    assert recall.main(["--snippet", "quantum-entangle"]) == 1

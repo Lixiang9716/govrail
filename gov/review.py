@@ -26,12 +26,10 @@ try:  # package context (`gov ...`)
     from . import change_scope as cs
     from . import recall as rc
     from . import verify_note_presence as vnp
-    from . import verify_rubric as vr
 except ImportError:  # direct script execution
     import change_scope as cs
     import recall as rc
     import verify_note_presence as vnp
-    import verify_rubric as vr
 
 RUBRIC = Path("docs/review-rubric.md")
 
@@ -223,7 +221,7 @@ def _grade(items: list[str]) -> int:
             continue
         if answer in ("f", "fail"):
             try:
-                evidence = input(f"    evidence (file:line or text): ").strip()
+                evidence = input("    evidence (file:line or text): ").strip()
             except EOFError:
                 evidence = "(no evidence given)"
             if not evidence:

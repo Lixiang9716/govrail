@@ -6,7 +6,14 @@ on:
 
 jobs:
   gates:
+    # The host matrix (P2): the wheel's supported floor is 3.10 and CI
+    # owns the full matrix (rule 1) — the Docker cells cover it for the
+    # wheel, and the host suite now covers it for the source checkout.
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -17,9 +24,11 @@ jobs:
           fetch-tags: true
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
       - name: Install
         run: pip install -e ".[dev]"
+      - name: Lint (ruff — pyflakes + syntax-level pycodestyle)
+        run: ruff check .
       - name: Unit tests
         run: pytest -q
       - name: Rejection cases
@@ -57,6 +66,9 @@ jobs:
           D2=$(mktemp -d); cd "$D2"; git init -q .
           gov init
           echo '{"modes": {"all": ["ok"]}, "gates": [{"id":"ok","command":["true"]}]}' > gates.json
+          # the overwrite is a recorded constitution change: re-baseline
+          # the seal or the out-of-band precheck refuses the close
+          gov verify-plane --write
           git add gates.json
           git -c user.email=t@t -c user.name=t commit -qm init
           gov task new "Close me"

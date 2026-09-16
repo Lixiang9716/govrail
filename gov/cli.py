@@ -594,8 +594,8 @@ def _adopt_new(project: Path, manifest_path: Path, target: str) -> int:
     print(f"init: adopt-new gates.json — added {len(added)} shipped gate(s): "
           + ", ".join(g["id"] for g in added))
     print(f"  all {len(local['gates'])} local gate(s) preserved untouched")
-    for note in modes_note:
-        print(f"  {note}")
+    for modes_line in modes_note:
+        print(f"  {modes_line}")
     print("  merged gates.json passes schema validation; manifest untouched "
           "(your gates.json stays customized)")
     return 0

@@ -19,7 +19,6 @@ Plus real-world parity: over this repository's ``gov/`` package both
 implementations must agree (today: both clean — the #168/#173 wall
 pinned everything).
 """
-import sys
 from pathlib import Path
 
 import pytest

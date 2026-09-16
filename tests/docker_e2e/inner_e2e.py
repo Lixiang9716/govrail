@@ -170,7 +170,7 @@ def concurrency(base):
             ["gov", "acquire", "res/race", "--agent", f"racer-{i}"],
             cwd=p, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace", env=env))
-    outs = [pr.communicate() for pr in procs]
+    [pr.communicate() for pr in procs]
     codes = [pr.returncode for pr in procs]
     winners = [i for i, c in enumerate(codes) if c == 0]
     losers = [i for i, c in enumerate(codes) if c == 3]
@@ -703,6 +703,7 @@ def surfaces_custom(base):
     gates["gates"].append(
         {"id": "ml", "command": ["true"], "paths": ["model/**"]})
     (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     (p / ".gov" / "surfaces.json").write_text(json.dumps(
         {"experiments/**": {"surface": "experiments",
                             "gates": ["source-limits"]}}), encoding="utf-8")
@@ -2111,6 +2112,7 @@ def merge_conflict_cross(base):
         {"id": "ok", "command": ["true"], "paths": ["src/**"]})
     gates["modes"]["all"].append("ok")
     (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     default_branch = git("rev-parse", "--abbrev-ref",
                          "HEAD", cwd=p).stdout.strip()
     for name, content in (("a", "aaa\n"), ("b", "bbb\n"),
@@ -3093,6 +3095,7 @@ def change_scope_skips(base):
         {"id": "poison", "command": ["false"], "paths": ["src/**"]}]}
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     commit_all(p, "seed")
     (p / "docs" / "b.md").write_text("y\n", encoding="utf-8")
     commit_all(p, "docs change")
@@ -3189,6 +3192,7 @@ def agent_lifecycle_receipt(base):
     cfg["modes"]["all"].append("red")
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     commit_all(p, "red gate")
     gov("task", "new", "Brief against red", cwd=p)
     r = gov("task", "close", "T-0002", cwd=p, expect=1)
@@ -3203,6 +3207,7 @@ def agent_lifecycle_receipt(base):
     cfg["modes"]["all"] = [g for g in cfg["modes"]["all"] if g != "red"]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     commit_all(p, "gate fixed")
     r = gov("task", "close", "T-0002", cwd=p, expect=1)
     assert "re-brief" in r.stderr, r.stderr
@@ -3266,6 +3271,7 @@ def run_gate_rerun(base):
     cfg["modes"]["all"].append("boom")
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     commit_all(p, "boom wired")
     r = gov("run", "--mode", "all", cwd=p, expect=1)
     assert "rerun: gov run --gate boom" in r.stdout, r.stdout
@@ -3277,6 +3283,7 @@ def run_gate_rerun(base):
                     for g in cfg["gates"]]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the fix is recorded
     commit_all(p, "boom fixed")
     r = gov("run", "--gate", "boom", cwd=p)
     assert "PASS boom" in r.stdout, r.stdout
@@ -3306,6 +3313,7 @@ def init_preset_from_scratch(base):
             g["command"] = ["true"]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     (p / "test_x.py").write_text(
         "def test_x():\n    assert True\n", encoding="utf-8")
     commit_all(p, "first test")
@@ -3348,6 +3356,7 @@ def gate_timeout_enforced(base):
            "modes": {"all": ["slow"]}}
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     commit_all(p, "slow gate")
     t0 = time.monotonic()
     r = gov("run", "--mode", "all", cwd=p, expect=1)
@@ -3358,6 +3367,7 @@ def gate_timeout_enforced(base):
     cfg["gates"][0]["command"] = ["true"]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
     commit_all(p, "fast command")
     gov("run", "--gate", "slow", cwd=p)
 

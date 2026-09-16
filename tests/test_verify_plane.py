@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from gov import verify_plane
 
 
@@ -64,3 +66,36 @@ def test_tampered_seal_is_unreadable_prerequisite(tmp_path):
     seal.write_text("{not json", encoding="utf-8")
     drift = verify_plane.violations(tmp_path)
     assert drift and "cannot read" in drift[0]
+
+
+def test_run_precheck_catches_drift_despite_disabled_plane_gate(tmp_path, monkeypatch, capsys):
+    """The reflexive gap (N1): the in-DAG plane gate lives inside the
+    sealed file, so tampering that disables its own detector must STILL
+    be caught — the out-of-band precheck reads the seal and the config
+    bytes without trusting anything from gates.json."""
+    from gov import gates as gates_mod
+    _init_plane(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
+    for g in cfg["gates"]:
+        g["enabled"] = False  # silence the in-DAG detector
+    (tmp_path / "gates.json").write_text(json.dumps(cfg), encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        gates_mod._plane_precheck()
+    assert exc.value.code == 1
+    assert "drifted from its seal" in capsys.readouterr().err
+
+
+def test_run_precheck_quiet_on_intact_plane(tmp_path, monkeypatch):
+    from gov import gates as gates_mod
+    _init_plane(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    gates_mod._plane_precheck()  # no SystemExit
+
+
+def test_run_precheck_noop_without_seal(tmp_path, monkeypatch):
+    from gov import gates as gates_mod
+    (tmp_path / ".gov").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "gates.json").write_text('{"gates": []}\n', encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    gates_mod._plane_precheck()  # repos without a seal are unaffected

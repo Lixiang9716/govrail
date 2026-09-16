@@ -1,6 +1,5 @@
 """Rejection-style tests for findings #15-#23 (D32)."""
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -90,7 +89,7 @@ def test_19_doctor_names_version_drift(tmp_path, monkeypatch, capsys):
     from gov import __version__, doctor
     doctor.main([])
     out = capsys.readouterr().out
-    assert f"manifest initialized with govrail 0.6.5" in out
+    assert "manifest initialized with govrail 0.6.5" in out
     assert f"this package is {__version__}" in out
     assert "gov init --upgrade" in out
     # match -> silent

@@ -32,7 +32,6 @@ sources found (wrong directory?).
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -161,6 +160,18 @@ def _presence(entry: Entry, term: str) -> int:
     return 0
 
 
+def _snippet(e: Entry, terms: list[str]) -> str:
+    """The first line (title, headings, then body) containing any term —
+    trimmed to a readable width."""
+    lowered = [t.lower() for t in terms]
+    for line in [e.title, *e.headings, *e.body.splitlines()]:
+        low = line.lower()
+        if any(t in low for t in lowered):
+            text = line.strip()
+            return (text[:100] + " …") if len(text) > 100 else text
+    return ""
+
+
 def _per_term(entries: list[Entry], terms: list[str]) -> list[int]:
     """Entries containing each term anywhere — the miss diagnostics (#148)."""
     return [sum(1 for e in entries if _presence(e, t)) for t in terms]
@@ -188,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="rank partial matches (entries containing some "
                              "terms, by terms matched) instead of requiring "
                              "every term; the strict AND stays the default")
+    parser.add_argument("--snippet", action="store_true",
+                        help="print the first matched line under each hit — "
+                             "the evidence inline, not just the address")
     args = parser.parse_args(argv)
 
     corpus = _corpus()
@@ -204,22 +218,28 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.any:
-        scored: list[tuple[int, int, str, str]] = []
+        scored: list[tuple[int, int, str, str, Entry]] = []
         for e in entries:
             matched = [(t, p) for t, p in
                        ((t, _presence(e, t)) for t in args.query) if p]
             if matched:
                 where = ", ".join(f"{t} in {WHERE[p]}" for t, p in matched)
                 scored.append((len(matched), max(p for _, p in matched),
-                               e.source, where))
+                               e.source, where, e))
         if not scored:
             return _print_miss(entries, args.query)
         # Full AND matches first, then more terms beat fewer; ties: where
         # they hit, then current authority over frozen evidence, then path
         # (F4).
         scored.sort(key=lambda s: (-s[0], -s[1], "/archived/" in s[2], s[2]))
-        for k, _best, source, where in scored:
+        for k, _best, source, where, e in scored:
             print(f"{source} — matched {k}/{len(args.query)} terms ({where})")
+            if args.snippet:
+                line = _snippet(e, [t for t, _p in
+                                    ((t, _presence(e, t)) for t in args.query)
+                                    if _p])
+                if line:
+                    print(f"    {line}")
         print(f"recall: {len(scored)} partial hit(s) for "
               f"{' '.join(args.query)!r} (--any: ranked by terms matched)")
         return 0
@@ -236,8 +256,13 @@ def main(argv: list[str] | None = None) -> int:
     # Equal ranks: current authority (implemented/) outranks frozen
     # evidence (archived/), then path order (F4).
     hits.sort(key=lambda h: (-h[0], "/archived/" in h[1], h[1]))
+    by_source = {e.source: e for e in entries}
     for rank, source, where in hits:
         print(f"{source} — matched in {where}")
+        if args.snippet and (e := by_source.get(source)):
+            line = _snippet(e, args.query)
+            if line:
+                print(f"    {line}")
     print(f"recall: {len(hits)} hit(s) for {' '.join(args.query)!r}")
     return 0
 

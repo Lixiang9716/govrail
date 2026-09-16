@@ -34,11 +34,9 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import os
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 try:  # package context (`gov ...`)
@@ -270,7 +268,7 @@ def _add_locked(args: argparse.Namespace, src, path: Path, fmt: str,
     # The alternatives rule, checked BEFORE the write rather than by the
     # gate one commit later (a table header column covers every row).
     if fmt in ("sections", "dir") and not ALT_RX.search(body):
-        print(f"decision add: REFUSED — the draft records no options or "
+        print("decision add: REFUSED — the draft records no options or "
               "rejected alternatives (被否/选项/alternatives); a decision "
               "without what it beat invites re-litigation "
               "(.gov/rules.md rule 3)", file=sys.stderr)

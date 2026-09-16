@@ -310,7 +310,7 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
     drift = verify_plane.violations(project)
     if drift:
         print("gov preset: REFUSED — the governance plane drifted from its "
-              f"seal before this apply:", file=sys.stderr)
+              "seal before this apply:", file=sys.stderr)
         for d in drift:
             print(f"  {d}", file=sys.stderr)
         print("  accept the new state explicitly (gov verify-plane --write) "

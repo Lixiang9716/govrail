@@ -33,6 +33,23 @@ PROG = "hooks"
 
 def run_pre_commit() -> int:
     anchor_to_git_root(f"{PROG} pre-commit")
+    # Out-of-band seal check FIRST: the staged gate list comes from
+    # gates.json, and a tampered config could disable the plane gate to
+    # silence its own detection. verify-plane reads the seal and the
+    # config bytes directly — nothing from gates.json is trusted yet.
+    try:
+        from . import verify_plane
+    except ImportError:  # direct-script execution (self-test scratch)
+        import verify_plane
+    drift = verify_plane.violations()
+    if drift:
+        print(f"{PROG} pre-commit: REFUSED — the governance plane drifted "
+              "from its seal:", file=sys.stderr)
+        for d in drift:
+            print(f"  {d}", file=sys.stderr)
+        print("  restore the files or accept explicitly: "
+              "gov verify-plane --write", file=sys.stderr)
+        return 1
     try:
         _modes, gate_list, _concurrency, _default = gates_mod.load_config("gates.json")
     except gates_mod.ConfigError as e:

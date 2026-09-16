@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from pathlib import Path
 
 from . import __version__ as _pkg_version
@@ -84,7 +83,6 @@ def _mapping_note(sections, installed: tuple, installed_str: str) -> None:
     """#92's wheel-lag residual, said out loud: a section added after its
     release ships in the NEXT wheel (docs-only commits cut no wheel), so
     the installed wheel can legitimately carry no section for itself."""
-    import re as _re
     newest = None
     for section in sections:
         v = _version_tuple(section.split()[0])

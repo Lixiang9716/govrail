@@ -158,8 +158,8 @@ def _cost_report(early: list[dict], late: list[dict], window: int) -> int:
             tag = str(run.get("caller") or "(untagged)")
             cost = run["cost"]
             if not isinstance(cost, dict) or not cost:
-                print(f"trend: skipping malformed cost field in a history "
-                      f"line (expected a unit=value object)", file=sys.stderr)
+                print("trend: skipping malformed cost field in a history "
+                      "line (expected a unit=value object)", file=sys.stderr)
                 continue
             entry = per.setdefault(tag, {"runs": 0, "early": {}, "late": {}})
             entry["runs"] += 1
@@ -315,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             runs.append(json.loads(line))
         except json.JSONDecodeError:
-            print(f"trend: skipping a malformed history line", file=sys.stderr)
+            print("trend: skipping a malformed history line", file=sys.stderr)
     runs = runs[-args.last:]
 
     halves: tuple[list[dict], list[dict]] | None = None

@@ -163,7 +163,6 @@ class TestFailLoud:
             "comment": sorted(good.comment),
             "string": sorted(good.string),
         }
-        import gov.langs as langs_pkg
         from importlib.resources import files
         target = files("gov").joinpath("langs/_bad.json")
         import json as _json

@@ -1,6 +1,5 @@
 import json
 import re
-from pathlib import Path
 
 import gov.whatsnew as wn
 
@@ -67,7 +66,6 @@ from unittest import mock
 
 def test_mapping_note_when_wheel_lags(tmp_path, monkeypatch, capsys):
     """#92 wheel-lag residual: an unsectioned wheel says the mapping."""
-    from unittest import mock
     import gov.whatsnew as wn
     with mock.patch("gov.whatsnew._pkg_version", "9.9.9"):
         assert wn.main(["--since", "9.9.8"]) == 0

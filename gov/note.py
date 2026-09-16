@@ -16,6 +16,7 @@ the check to both ends of the writing window:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import date
@@ -121,6 +122,60 @@ def _new(args: argparse.Namespace) -> int:
     return 0
 
 
+def _iter_implemented():
+    """(path, class, title) for every implemented note, path order."""
+    root = NOTES_IMPLEMENTED
+    if not root.is_dir():
+        return
+    for p in sorted(root.rglob("*.md")):
+        try:
+            first = p.read_text(encoding="utf-8-sig").splitlines()[0]
+        except (OSError, IndexError):
+            first = ""
+        title = first.lstrip("# ").strip() if first.startswith("# ") else p.stem
+        yield p, p.parent.name, title
+
+
+def _list(args: argparse.Namespace) -> int:
+    anchor_to_git_root("note")
+    rows = [(p.as_posix(), cls, title) for p, cls, title in _iter_implemented()
+            if getattr(args, "note_class", None) in (None, cls)]
+    if getattr(args, "json", False):
+        print(json.dumps(
+            [{"path": rel, "class": cls, "title": title}
+             for rel, cls, title in rows], indent=2, ensure_ascii=False))
+        return 0
+    if not rows:
+        print("note: no implemented notes"
+              + (f" in class '{args.note_class}'" if args.note_class else ""))
+        return 0
+    for rel, cls, title in rows:
+        print(f"{rel} — {title}")
+    print(f"note: {len(rows)} note(s)")
+    return 0
+
+
+def _show(args: argparse.Namespace) -> int:
+    anchor_to_git_root("note")
+    ref = args.ref
+    candidates = [p for p, _cls, _t in _iter_implemented()
+                  if ref in p.as_posix() or p.stem.startswith(ref)
+                  or p.name.startswith(ref)]
+    if not candidates:
+        print(f"note: no implemented note matches '{ref}'", file=sys.stderr)
+        raise SystemExit(2)
+    if len(candidates) > 1:
+        names = ", ".join(sorted(c.as_posix() for c in candidates))
+        print(f"note: '{ref}' is ambiguous ({names})", file=sys.stderr)
+        raise SystemExit(2)
+    try:
+        print(candidates[0].read_text(encoding="utf-8-sig"), end="")
+    except OSError as e:
+        print(f"note: cannot read {candidates[0]}: {e}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _check(_: argparse.Namespace) -> int:
     anchor_to_git_root("note")
     from . import audit_notes as an
@@ -165,9 +220,18 @@ def main(argv: list[str] | None = None) -> int:
     p_new.set_defaults(func=_new)
     p_check = sub.add_parser("check", help="format + placement + D-refs, now")
     p_check.set_defaults(func=_check)
+    p_list = sub.add_parser("list", help="list implemented notes (path — title)")
+    p_list.add_argument("--class", dest="note_class", default=None,
+                        help=f"filter to one class ({', '.join(CLASSES)})")
+    p_list.add_argument("--json", action="store_true",
+                        help="one JSON array on stdout")
+    p_list.set_defaults(func=_list)
+    p_show = sub.add_parser("show", help="print one implemented note (id or path prefix)")
+    p_show.add_argument("ref", help="filename, stem, or path substring (e.g. 2026-09-15-plane)")
+    p_show.set_defaults(func=_show)
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
-        parser.error("a subcommand is required (new|check)")
+        parser.error("a subcommand is required (new|check|list|show)")
     return args.func(args)
 
 
