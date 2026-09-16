@@ -3004,7 +3004,6 @@ def doctor_triage(base):
     assert v["status"] == "sound" and v["problems"] == []
     assert "gov doctor: environment sound" in r.stderr, r.stderr
     (p / "gates.json").write_text("{ not json", encoding="utf-8")
-    verify_plane_baseline(p)
     r = gov("doctor", cwd=p, expect=1)
     assert "problem:" in r.stdout, r.stdout
     v = json.loads(gov("doctor", "--json", cwd=p, expect=1).stdout)
@@ -3146,6 +3145,9 @@ def gates_schema_refusal(base):
         {"id": "str-cmd", "command": "not-an-array"}]}
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
+    # the precheck judges the seal over the raw bytes BEFORE the parse:
+    # record the broken bytes so the pinned CONFIG ERROR surfaces
+    verify_plane_baseline(p)
     r = gov("run", "--mode", "all", cwd=p, expect=2)
     assert "str-cmd" in r.stderr and "non-empty array" in r.stderr, r.stderr
     assert "PASS" not in r.stdout, "no gate ran past a config refusal"
@@ -3725,11 +3727,8 @@ def verify_plane_baseline(p):
     the precheck judges the seal over these bytes BEFORE parsing, so a
     schema-refusal scenario needs its (deliberately broken) config
     recorded or it never reaches the config error it pins."""
-    try:
-        from . import verify_plane as _vp
-    except ImportError:
-        import verify_plane as _vp
-    _vp.baseline(p)
+    from gov.verify_plane import baseline as _baseline
+    _baseline(p)
 
 SCENARIOS = {
     "locale_bites": locale_bites,
