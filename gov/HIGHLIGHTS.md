@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.32.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- gov note list --stale + release identity closure
+
 ## 0.31.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - rule 8 — wait on conditions, not on clocks
