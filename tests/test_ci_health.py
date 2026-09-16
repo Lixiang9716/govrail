@@ -189,3 +189,26 @@ def test_release_automation_is_end_to_end():
     assert "auto-merge" in hl_text.lower(), (
         "the release PR must be armed for auto-merge — CI green should "
         "merge, tag, and publish without a human")
+
+
+def test_pytest_runs_are_parallelized():
+    """The suite is subprocess-heavy (gov invocations, scratch repos):
+    xdist workers overlap the waits instead of paying them serially.
+    Serial was 53s; -n 4 is 20s. A new pytest step without -n re-pays
+    the serial cost on every PR."""
+    import re
+    ci = _load("ci.yml")
+    offenders = []
+    for name, job in ci["jobs"].items():
+        for step in job.get("steps", []):
+            run = step.get("run", "")
+            if "pip install" in run:
+                continue
+            for line in run.splitlines():
+                if re.match(r"^\s*(python -m )?pytest\b", line) \
+                        and re.search(r"-n\s", line) is None:
+                    offenders.append(f"{name}: {line.strip()}")
+    assert not offenders, (
+        "pytest invoked without -n (xdist) — the suite is "
+        "subprocess-heavy and loses ~2.5x wall clock serially:\n"
+        + "\n".join(offenders))

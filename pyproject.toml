@@ -40,7 +40,7 @@ Changelog = "https://github.com/Lixiang9716/govrail/blob/master/CHANGELOG.md"
 gov = "gov.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest", "build", "ruff>=0.6", "pyyaml"]
+dev = ["pytest", "pytest-xdist", "build", "ruff>=0.6", "pyyaml"]
 
 [tool.setuptools.dynamic]
 version = { attr = "gov.__version__" }

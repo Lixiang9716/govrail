@@ -2,6 +2,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from gov import __version__, cli
 
 
@@ -455,7 +457,13 @@ def test_adopt_new_fail_loud_edges(tmp_path, capsys):
     assert "needs an initialized project" in capsys.readouterr().err
 
 
-def test_cd_flag_targets_another_tree(tmp_path, capsys):
+@pytest.fixture
+def cwd_restored(monkeypatch):
+    """-C chdirs the PROCESS by design; restore the caller's cwd after."""
+    monkeypatch.chdir(Path.cwd())
+
+
+def test_cd_flag_targets_another_tree(tmp_path, capsys, cwd_restored):
     """#121: `gov -C <path> <cmd>` acts on that tree and names the root."""
     import subprocess
     wt = tmp_path / "wt-x"
@@ -479,7 +487,7 @@ def test_cd_flag_targets_another_tree(tmp_path, capsys):
     assert (wt / "sub" / ".gov" / "manifest.json").exists()
 
 
-def test_cd_flag_chainable_git_semantics(tmp_path, capsys):
+def test_cd_flag_chainable_git_semantics(tmp_path, capsys, cwd_restored):
     wt = tmp_path / "wt-y"
     (wt / "a" / "b").mkdir(parents=True)
     assert cli.main(["-C", str(wt), "-C", "a", "-C", "b",
@@ -489,11 +497,11 @@ def test_cd_flag_chainable_git_semantics(tmp_path, capsys):
     assert (wt / "a" / "b" / ".gov" / "manifest.json").exists()
 
 
-def test_cd_flag_nonexistent_path_fails_loud(tmp_path, capsys):
+def test_cd_flag_nonexistent_path_fails_loud(tmp_path, capsys, cwd_restored):
     assert cli.main(["-C", str(tmp_path / "nope"), "doctor"]) == 2
     assert "no such directory" in capsys.readouterr().err
 
 
-def test_cd_flag_requires_path(tmp_path, capsys):
+def test_cd_flag_requires_path(tmp_path, capsys, cwd_restored):
     assert cli.main(["-C"]) == 2
     assert "requires a directory path" in capsys.readouterr().err
