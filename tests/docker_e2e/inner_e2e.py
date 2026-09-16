@@ -3004,6 +3004,7 @@ def doctor_triage(base):
     assert v["status"] == "sound" and v["problems"] == []
     assert "gov doctor: environment sound" in r.stderr, r.stderr
     (p / "gates.json").write_text("{ not json", encoding="utf-8")
+    verify_plane_baseline(p)
     r = gov("doctor", cwd=p, expect=1)
     assert "problem:" in r.stdout, r.stdout
     v = json.loads(gov("doctor", "--json", cwd=p, expect=1).stdout)
@@ -3717,6 +3718,18 @@ def lease_unreadable_never_stolen(base):
     r = gov("acquire", "race/x", "--agent", "new", cwd=p)
     assert "took over an expired lease" in r.stdout, r.stdout
 
+
+
+def verify_plane_baseline(p):
+    """Record the current config bytes into the seal (--write's core):
+    the precheck judges the seal over these bytes BEFORE parsing, so a
+    schema-refusal scenario needs its (deliberately broken) config
+    recorded or it never reaches the config error it pins."""
+    try:
+        from . import verify_plane as _vp
+    except ImportError:
+        import verify_plane as _vp
+    _vp.baseline(p)
 
 SCENARIOS = {
     "locale_bites": locale_bites,

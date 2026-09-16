@@ -114,7 +114,7 @@ def tree_state() -> tuple[str | None, str | None, bool]:
 
 
 def build_receipt(gates_records: list[dict], tag: str,
-                  selection: dict) -> dict:
+                  selection: dict, config_path: str | None = None) -> dict:
     """Assemble one receipt from a run's per-gate records.
 
     ``gates_records`` is the run's JSON record list (same shape as the
@@ -132,6 +132,9 @@ def build_receipt(gates_records: list[dict], tag: str,
         "dirty": dirty,
         "tag": tag,
         "selection": selection,
+        # N6: which config the run executed — a green receipt must not be
+        # usable as an endorsement for a --config bypass run
+        **({"config": config_path} if config_path else {}),
         "gates": [
             {"gate": r.get("gate", ""), "outcome": r.get("outcome", ""),
              "blocking": bool(r.get("blocking", False))}

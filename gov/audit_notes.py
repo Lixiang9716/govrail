@@ -59,7 +59,7 @@ FLAGS: dict[str, set[str]] = {
     "init": {"--project", "--hooks", "--pre-commit", "--ci", "--upgrade",
              "--json", "--adopt", "--adopt-new", "--preview", "--preset"},
     "uninstall": {"--project", "--force"},
-    "run": {"--config", "--mode", "--base", "--gate", "--every-gate",
+    "run": {"--config", "--allow-unsealed-config", "--mode", "--base", "--gate", "--every-gate",
             "--merge", "--tag", "--no-record", "--receipt", "--json",
             "--fail-fast", "--verbose", "--cost"},
     "self-test": {"--scope", "--case"},
