@@ -65,12 +65,14 @@ sleep 是为真实物理时间节拍（如租约 TTL 到期）计时。
 2. 发布标签会自动触发 PyPI 发布——工作流校验标签与包版本一致。PyPI
    索引可能滞后发布约一分钟；发布后立刻 `pip install -U` 可能拿不到
    新 wheel——先重试，再怀疑发布。
-3. 发布 PR 存续期间，工作流会把缺失的 HIGHLIGHTS 小节起草到 PR 分支
-   上（`gov verify-doc-sync --write`：条目逐字复制自 CHANGELOG，每个
-   标题自声明为草稿，D46）——发布合并时 CHANGELOG + 版本 + HIGHLIGHTS
-   一起落地，doc-sync gate 在 master 上永不红。草稿只满足配对，不满足
-   文笔：合并前后把小节条目改写成面向用法的内容（HIGHLIGHTS 的真正
-   载荷），在此之前标题会明确标注 "draft"。
+3. 发布 PR 存续期间，工作流会起草缺失的 HIGHLIGHTS 小节
+   （`gov verify-doc-sync --write`：条目逐字复制自 CHANGELOG，每个
+   标题自声明为草稿，D46）并把它 amend 进 release 提交本身——分支头
+   是一个完整提交（CHANGELOG + 版本 + HIGHLIGHTS 同在），任何 CI 运行
+   都不可能捕获到半成品 SHA；起草 job 还会自动取消被取代的待批 run，
+   唯一可批准的就是完整那份。草稿只满足配对，不满足文笔：合并前后把
+   小节条目改写成面向用法的内容（HIGHLIGHTS 的真正载荷），在此之前
+   标题会明确标注 "draft"。
 
 ### 发布 PR 可能需要一次点击
 
@@ -78,8 +80,9 @@ sleep 是为真实物理时间节拍（如租约 TTL 到期）计时。
 GitHub 会把它的 CI 运行挂在 "action_required"（机器人 PR 的 workflow
 运行需要维护者批准；该设置只存在于仓库界面）。遇到时二选一：
 
-- 打开 PR 的检查页点击 **Approve and run**——CI 运行，`gates` 检查
-  出报告，PR 正常合并；或
+- 打开 PR 的检查页，对起草 job 完成 amend **之后**创建的那次运行点击
+  **Approve and run**（创建时的旧 run 会被自动取消；若见到两个待批，
+  旧的那个是过期的）——CI 运行，`gates` 检查出报告，PR 正常合并；或
 - 以 owner 通道合并（`gh pr merge <n> --squash --admin`）——管理员
   不受本仓库必需检查约束，这是有意为之的范围设定：每个非管理员 PR
   （无论人或 agent）仍然必须通过 `gates`。

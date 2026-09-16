@@ -73,13 +73,15 @@ expiry).
    by ~a minute; a first `pip install -U` right after may miss the fresh
    wheel — retry before suspecting the release.
 3. While the release PR is open, the workflow drafts its missing HIGHLIGHTS
-   sections onto the PR branch (`gov verify-doc-sync --write`: bullets
-   copied verbatim from CHANGELOG, each heading self-declared as a draft,
-   D46) — so the release merge lands CHANGELOG + version + HIGHLIGHTS
-   together and the doc-sync gate never goes red on master. The draft
-   satisfies pairing, not prose: rewrite the section's bullets for usage
-   (what HIGHLIGHTS actually carries) before or after the merge; until
-   then the heading says "draft" out loud.
+   sections (`gov verify-doc-sync --write`: bullets copied verbatim from
+   CHANGELOG, each heading self-declared as a draft, D46) and AMENDS them
+   into the release commit itself — the branch head is one complete commit
+   (CHANGELOG + version + HIGHLIGHTS together), so no CI run can capture a
+   half-drafted SHA. The drafting job also cancels superseded pending runs,
+   so the only approvable run is the complete one. The draft satisfies
+   pairing, not prose: rewrite the section's bullets for usage (what
+   HIGHLIGHTS actually carries) before or after the merge; until then the
+   heading says "draft" out loud.
 
 ### The release PR may need one click
 
@@ -88,8 +90,11 @@ GitHub holds its CI run in "action_required" (workflow runs from bot PRs
 need a maintainer's approval; that setting exists only in the repository UI).
 When it happens, either:
 
-- open the PR's checks and click **Approve and run** — CI runs, the `gates`
-  check reports, and the PR merges normally; or
+- open the PR's checks and click **Approve and run** on the run created
+  AFTER the drafting job's amend (the pre-draft creation-time run is
+  cancelled automatically; if you ever see two pending, the older one is
+  stale) — CI runs, the `gates` check reports, and the PR merges
+  normally; or
 - merge with the owner bypass (`gh pr merge <n> --squash --admin`) — admins
   are not subject to the required checks on this repository, which is scoped
   deliberately: every non-admin PR (human or agent) still requires `gates`.
