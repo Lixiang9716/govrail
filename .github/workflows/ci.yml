@@ -5,10 +5,14 @@ on:
   pull_request:
 
 jobs:
-  gates:
+  gates-cell:
     # The host matrix (P2): the wheel's supported floor is 3.10 and CI
     # owns the full matrix (rule 1) — the Docker cells cover it for the
     # wheel, and the host suite now covers it for the source checkout.
+    # The job is named gates-cell because the REQUIRED check is the
+    # stable `gates` summary below: matrix jobs rename their checks per
+    # cell ("gates (3.10)"...), and a renamed required check is one that
+    # can never be satisfied again (found live: #192 needed --admin).
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -35,6 +39,14 @@ jobs:
         run: gov self-test
       - name: Full gate DAG
         run: gov run --mode all
+
+  gates:
+    # The REQUIRED check's stable name (branch protection points here):
+    # green iff every matrix cell is green.
+    needs: gates-cell
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "all matrix cells green"
 
   backport-shadow:
     # Issue #138: a py2-era `argparse` backport (PyPI argparse==1.4.0)
