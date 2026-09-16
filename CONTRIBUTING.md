@@ -83,20 +83,22 @@ expiry).
    HIGHLIGHTS actually carries) before or after the merge; until then the
    heading says "draft" out loud.
 
-### The release PR may need one click
+### The release chain is automated end to end
 
-The `chore(master): release x.y.z` PR is authored by the release-please bot.
-GitHub holds its CI run in "action_required" (workflow runs from bot PRs
-need a maintainer's approval; that setting exists only in the repository UI).
-When it happens, either:
+With the `RELEASE_PAT` secret configured (one-time setup below), a
+release-worthy merge to master chains unattended: release-please opens
+the PR under a user identity (its CI starts immediately — no
+action_required hold), the drafting job amends the HIGHLIGHTS draft into
+the release commit, cancels superseded runs, arms auto-merge, and when
+the required checks pass GitHub squash-merges; the merge push runs the
+release job (tag + GitHub Release + PyPI). A red PR never auto-merges —
+the chain halts on evidence, not on hope.
 
-- open the PR's checks and click **Approve and run** on the run created
-  AFTER the drafting job's amend (the pre-draft creation-time run is
-  cancelled automatically; if you ever see two pending, the older one is
-  stale) — CI runs, the `gates` check reports, and the PR merges
-  normally; or
-- merge with the owner bypass (`gh pr merge <n> --squash --admin`) — admins
-  are not subject to the required checks on this repository, which is scoped
-  deliberately: every non-admin PR (human or agent) still requires `gates`.
-
-Prefer the first: it keeps the release PR's CI evidence real.
+**One-time setup** (repository owner): create a fine-grained PAT scoped
+to this repository only, with Contents: read/write and Pull requests:
+read/write, and store it as the `RELEASE_PAT` secret. Until it exists,
+the workflow falls back to the default token: the PR's CI run waits in
+action_required, and approving the run created after the drafting
+amend (stale pre-draft runs are cancelled automatically) is the one
+human act left. The owner bypass (`gh pr merge <n> --squash --admin`)
+remains available; prefer real CI evidence.

@@ -74,17 +74,19 @@ sleep 是为真实物理时间节拍（如租约 TTL 到期）计时。
    小节条目改写成面向用法的内容（HIGHLIGHTS 的真正载荷），在此之前
    标题会明确标注 "draft"。
 
-### 发布 PR 可能需要一次点击
+### 发布链路端到端自动
 
-`chore(master): release x.y.z` PR 由 release-please 机器人创建。
-GitHub 会把它的 CI 运行挂在 "action_required"（机器人 PR 的 workflow
-运行需要维护者批准；该设置只存在于仓库界面）。遇到时二选一：
+配置 `RELEASE_PAT` secret（见下方一次性设置）后，一次 release 级合并到
+master 的整条链路无人值守：release-please 以用户身份开 PR（其 CI 立即
+运行——不再有 action_required 挂起），起草 job 把 HIGHLIGHTS 草稿
+amend 进 release 提交、取消被取代的 run、武装 auto-merge；必需检查
+全绿后 GitHub 自动 squash 合并，合并推送触发 release job（打 tag +
+GitHub Release + 发 PyPI）。红 PR 永不自动合并——链路在证据面前停下，
+而不是在希望面前。
 
-- 打开 PR 的检查页，对起草 job 完成 amend **之后**创建的那次运行点击
-  **Approve and run**（创建时的旧 run 会被自动取消；若见到两个待批，
-  旧的那个是过期的）——CI 运行，`gates` 检查出报告，PR 正常合并；或
-- 以 owner 通道合并（`gh pr merge <n> --squash --admin`）——管理员
-  不受本仓库必需检查约束，这是有意为之的范围设定：每个非管理员 PR
-  （无论人或 agent）仍然必须通过 `gates`。
-
-优先第一种：它让发布 PR 的 CI 证据保持真实。
+**一次性设置**（仓库 owner）：创建 fine-grained PAT，范围仅本仓库，权限
+Contents: read/write 与 Pull requests: read/write，存为 `RELEASE_PAT`
+secret。在它就位前，workflow 回退到默认 token：PR 的 CI 挂在
+action_required，批准起草 amend 之后创建的那次运行（过期的旧 run 会被
+自动取消）是仅剩的人工动作。owner 通道（`gh pr merge <n> --squash
+--admin`）仍然可用；优先保留真实 CI 证据。
