@@ -2,10 +2,16 @@
 import os
 import stat
 
+import pytest
 
 from gov import atomicio
 
+posix_only = pytest.mark.skipif(
+    os.name == "nt",
+    reason="umask and POSIX mode bits are not enforced on Windows")
 
+
+@posix_only
 def test_rewrite_preserves_existing_mode(tmp_path):
     p = tmp_path / "ledger.jsonl"
     p.write_text("x\n", encoding="utf-8")
@@ -14,6 +20,7 @@ def test_rewrite_preserves_existing_mode(tmp_path):
     assert stat.S_IMODE(p.stat().st_mode) == 0o640
 
 
+@posix_only
 def test_new_file_respects_umask(tmp_path):
     """A hardcoded 0644 leaked ledgers global-readable on shared machines
     running a tighter umask (N5)."""
