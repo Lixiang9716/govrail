@@ -2802,7 +2802,7 @@ def decision_next_base_dir(base):
     # stale base: the ref carries D2/D3 the local tree lacks
     r = gov("decision", "next", "--base", "sibling", cwd=p)
     assert "D4" in r.stdout, r.stdout
-    assert "2 rows behind" in r.stderr and "D2" in r.stderr, r.stderr
+    assert "2 rows that 'sibling' lacks" in r.stderr and "D2" in r.stderr, r.stderr
     # absorb the rows: the same base is in sync — next is still D4,
     # stderr silent
     (d / "D2-b.md").write_text(row.format(2, "b"), encoding="utf-8")
@@ -2810,7 +2810,7 @@ def decision_next_base_dir(base):
     commit_all(p, "absorb D2 D3")
     r = gov("decision", "next", "--base", "sibling", cwd=p)
     assert "D4" in r.stdout, r.stdout
-    assert "rows behind" not in r.stderr, r.stderr
+    assert "rows that" not in r.stderr, r.stderr
 
 
 def lang_filter(base):
@@ -3532,7 +3532,7 @@ def decision_against_alias(base):
     r = gov("decision", "next", "--count", "2", "--against", "sibling",
             cwd=p)
     assert "D3" in r.stdout and "D4" in r.stdout, r.stdout
-    assert "1 row behind" in r.stderr, r.stderr
+    assert "1 row that 'sibling' lacks" in r.stderr, r.stderr
 
 
 def decision_bom_draft(base):
