@@ -3,11 +3,34 @@
     ".gov/pairing.json": {
       "sha256": "e5bef639ff66be81140b789404a58511bb7853171ddb312372555f0fca51b408"
     },
+    ".gov/rejections/README.md": {
+      "sha256": "b6cf8158221e72e763cd355362d53ff0a56a0cd7400f6e55c53ae1e46ee8b419"
+    },
+    ".gov/rejections/case-archive.sh": {
+      "sha256": "8a33a0c9bc535389ada42f14ef64140201bb8709732ac798271a70c7f03ae495"
+    },
+    ".gov/rejections/case-conflict-markers.sh": {
+      "sha256": "ce5e524704a7e77570c0e0be5b87422ec11a26463a9fbd88ef89c486d6d0566f"
+    },
+    ".gov/rejections/case-pre-commit-hook.sh": {
+      "sha256": "ef777c0f11b2fc4d4b9e476ff4b29e1ee991039bedc3fdb4cde3a2577ddff948"
+    },
+    ".gov/rejections/case-source-limits.sh": {
+      "sha256": "63a3996468df0b0f55d66820da7df3a04c92db4105cdbd05eaf84a9dd30db426"
+    },
     ".gov/rules.md": {
       "sha256": "8b544404b58cab5fe0b26c2d59037a35a7ad1ff777be8c6a30d914b7fcdbbf03"
+    },
+    ".gov/surfaces.json": {
+      "sha256": "eb694e30b6087b731bda67a87dceee5186f88897e9d4b638ee40c19686d50156"
     },
     "gates.json": {
       "sha256": "a8f8030e7b9345cb1d0733495fbc359d6d6b18ecba7dd8f02f0aec7e9be4b363"
     }
+  },
+  "last_rebaseline": {
+    "ts": "2026-09-16T10:15:01+00:00",
+    "caller": "lx@DESKTOP-AOFQD6F",
+    "unattended": true
   }
 }

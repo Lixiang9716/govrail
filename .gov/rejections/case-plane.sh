@@ -26,6 +26,10 @@ python3 -m gov init > out.txt 2>&1 || {
   cat out.txt >&2
   exit 1
 }
+# commit the plane: the restore step checks rules.md out of git, and an
+# untracked file has no base to restore to
+git add -A
+git -c commit.gpgsign=false commit -qm plane
 python3 -m gov verify-plane > out.txt 2>&1 || {
   echo "case-plane: a freshly sealed plane must verify green" >&2
   cat out.txt >&2
@@ -65,7 +69,7 @@ git checkout -- .gov/rules.md 2>/dev/null || git checkout -q -- .gov/rules.md
 
 # The explicit re-baseline is the only way back: it accepts the CURRENT
 # state loudly, after which the plane is green again.
-python3 -m gov verify-plane --write > out.txt 2>&1 || {
+python3 -m gov verify-plane --write --confirm-unattended > out.txt 2>&1 || {
   echo "case-plane: --write refused a restorable state" >&2
   cat out.txt >&2
   exit 1

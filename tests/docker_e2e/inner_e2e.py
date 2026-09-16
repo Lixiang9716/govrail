@@ -703,7 +703,8 @@ def surfaces_custom(base):
     gates["gates"].append(
         {"id": "ml", "command": ["true"], "paths": ["model/**"]})
     (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     (p / ".gov" / "surfaces.json").write_text(json.dumps(
         {"experiments/**": {"surface": "experiments",
                             "gates": ["source-limits"]}}), encoding="utf-8")
@@ -2027,7 +2028,8 @@ def merge_three_branch(base):
     (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
     # the edit moved gates.json off its seal — re-baseline explicitly,
     # then land BOTH on the default branch before branching
-    gov("verify-plane", "--write", cwd=p)
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)
     commit_all(p, "wire the ok gate")
     # the default branch is whatever `git init` chose — ask git
     default_branch = git("rev-parse", "--abbrev-ref",
@@ -2112,7 +2114,8 @@ def merge_conflict_cross(base):
         {"id": "ok", "command": ["true"], "paths": ["src/**"]})
     gates["modes"]["all"].append("ok")
     (p / "gates.json").write_text(json.dumps(gates), encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     default_branch = git("rev-parse", "--abbrev-ref",
                          "HEAD", cwd=p).stdout.strip()
     for name, content in (("a", "aaa\n"), ("b", "bbb\n"),
@@ -2722,7 +2725,8 @@ def preset_adoption_bundle(base):
     cfg["gates"].append({"id": "my-gate", "command": ["true"]})
     cfg["modes"]["all"].append("my-gate")
     gates.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # record the hand-wired gate
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # record the hand-wired gate
     r = gov("preset", "apply", "python-lib", cwd=p)
     assert "added 2" in r.stdout, r.stdout
     cfg = json.loads(gates.read_text(encoding="utf-8"))
@@ -3065,7 +3069,8 @@ def custom_mode_scoping(base):
     cfg["modes"]["deep"] = deep
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the mode edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the mode edit is recorded
     r = gov("run", "--mode", "deep", cwd=p)
     for gid in deep:
         assert f"PASS {gid}" in r.stdout, r.stdout
@@ -3095,7 +3100,8 @@ def change_scope_skips(base):
         {"id": "poison", "command": ["false"], "paths": ["src/**"]}]}
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     commit_all(p, "seed")
     (p / "docs" / "b.md").write_text("y\n", encoding="utf-8")
     commit_all(p, "docs change")
@@ -3192,7 +3198,8 @@ def agent_lifecycle_receipt(base):
     cfg["modes"]["all"].append("red")
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     commit_all(p, "red gate")
     gov("task", "new", "Brief against red", cwd=p)
     r = gov("task", "close", "T-0002", cwd=p, expect=1)
@@ -3207,7 +3214,8 @@ def agent_lifecycle_receipt(base):
     cfg["modes"]["all"] = [g for g in cfg["modes"]["all"] if g != "red"]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     commit_all(p, "gate fixed")
     r = gov("task", "close", "T-0002", cwd=p, expect=1)
     assert "re-brief" in r.stderr, r.stderr
@@ -3252,7 +3260,8 @@ def pairing_violation_contract(base):
             g["allowFailure"] = False
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the strictness flip is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the strictness flip is recorded
     commit_all(p, "strict pairing")
     r = gov("run", "--base", "HEAD~2", cwd=p, expect=1)
     assert "FAIL pairing" in r.stdout, r.stdout
@@ -3271,7 +3280,8 @@ def run_gate_rerun(base):
     cfg["modes"]["all"].append("boom")
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     commit_all(p, "boom wired")
     r = gov("run", "--mode", "all", cwd=p, expect=1)
     assert "rerun: gov run --gate boom" in r.stdout, r.stdout
@@ -3283,7 +3293,8 @@ def run_gate_rerun(base):
                     for g in cfg["gates"]]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the fix is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the fix is recorded
     commit_all(p, "boom fixed")
     r = gov("run", "--gate", "boom", cwd=p)
     assert "PASS boom" in r.stdout, r.stdout
@@ -3313,7 +3324,8 @@ def init_preset_from_scratch(base):
             g["command"] = ["true"]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     (p / "test_x.py").write_text(
         "def test_x():\n    assert True\n", encoding="utf-8")
     commit_all(p, "first test")
@@ -3356,7 +3368,8 @@ def gate_timeout_enforced(base):
            "modes": {"all": ["slow"]}}
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     commit_all(p, "slow gate")
     t0 = time.monotonic()
     r = gov("run", "--mode", "all", cwd=p, expect=1)
@@ -3367,7 +3380,8 @@ def gate_timeout_enforced(base):
     cfg["gates"][0]["command"] = ["true"]
     (p / "gates.json").write_text(json.dumps(cfg, indent=2) + "\n",
                                   encoding="utf-8")
-    gov("verify-plane", "--write", cwd=p)  # the hand edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=p)  # the hand edit is recorded
     commit_all(p, "fast command")
     gov("run", "--gate", "slow", cwd=p)
 
