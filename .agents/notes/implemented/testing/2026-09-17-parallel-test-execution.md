@@ -33,7 +33,13 @@ their budgets. Inner suite: ~100s -> 20s. Two invariants pin it: a CI
 pytest step without `-n` goes red, and the `-C` tests now restore cwd
 by fixture. The new invariant immediately caught its author: a step
 name containing a colon-space broke the YAML again, exactly the
-incident the CI-health suite was written for.
+incident the CI-health suite was written for. A second collision
+surfaced on the first parallel CI run — test_run_merge proves "no
+scratch left behind" by snapshotting the GLOBAL tempdir, which sees a
+sibling worker's live gov-merge-* directory — fixed at the source:
+each xdist worker gets a private TMPDIR (conftest's pytest_configure),
+so tempdir snapshots scope to the worker's own activity and gov
+subprocesses inherit the scoped area.
 
 ## Alternatives considered
 
