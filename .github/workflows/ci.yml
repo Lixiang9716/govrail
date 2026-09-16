@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [master]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   gates-cell:
@@ -14,6 +19,7 @@ jobs:
     # cell ("gates (3.10)"...), and a renamed required check is one that
     # can never be satisfied again (found live: #192 needed --admin).
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -32,12 +38,17 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
       - name: Lint (ruff — pyflakes + syntax-level pycodestyle)
+        if: matrix.python-version == '3.12'
         run: ruff check .
       - name: Unit tests
         run: pytest -q
+      # version-agnostic governance steps run ONCE (3.12): the docker
+      # cells exercise gov itself on every supported version
       - name: Rejection cases
+        if: matrix.python-version == '3.12'
         run: gov self-test
       - name: Full gate DAG
+        if: matrix.python-version == '3.12'
         run: gov run --mode all
 
   gates:
@@ -45,6 +56,7 @@ jobs:
     # green iff every matrix cell is green.
     needs: gates-cell
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - run: echo "all matrix cells green"
 
@@ -55,6 +67,7 @@ jobs:
     # add_subparsers-based command under the shadow, self-test and doctor
     # against it, on the non-editable (site-packages) install layout.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -106,6 +119,7 @@ jobs:
     # suite: fixtures are portable as of #168's follow-up, and the few
     # POSIX-exec-inherent tests skip themselves by platform, named.
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -145,6 +159,7 @@ jobs:
     # test_verify_decisions_rejects_base_collision (decode) — the same two
     # defects those PRs fixed, so the locale genuinely bites.
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       LOCPATH: ${{ github.workspace }}/locales
       LC_ALL: zh_CN.GBK
@@ -212,6 +227,7 @@ jobs:
     # flips the pytest wrapper from SKIP to run; a mirror outage in the
     # PyPI cell reports SKIP there, never red.
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     env:
       GOV_DOCKER_E2E: '1'
       GOV_DOCKER_MIRROR: docker.io  # hub is reachable from hosted runners
