@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.0](https://github.com/Lixiang9716/govrail/compare/v0.31.0...v0.32.0) (2026-09-16)
+
+
+### Features
+
+* gov note list --stale + release identity closure ([#210](https://github.com/Lixiang9716/govrail/issues/210)) ([b4cf504](https://github.com/Lixiang9716/govrail/commit/b4cf5047e901c645bffcd7f5dc98fe4f85e0cd48))
+
 ## [0.31.0](https://github.com/Lixiang9716/govrail/compare/v0.30.7...v0.31.0) (2026-09-16)
 
 
