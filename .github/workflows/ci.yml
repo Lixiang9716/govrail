@@ -27,7 +27,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install
         run: pip install -e ".[dev]"
-      - name: Lint (ruff: pyflakes + syntax-level pycodestyle)
+      - name: Lint (ruff — pyflakes + syntax-level pycodestyle)
         run: ruff check .
       - name: Unit tests
         run: pytest -q
