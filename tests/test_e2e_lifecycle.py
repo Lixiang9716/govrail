@@ -252,7 +252,8 @@ def test_act2_locks_and_merge_preflight(project):
         {"gates": [{"id": "ok",
                     "command": [sys.executable, *PASS_CMD_ARGS]}]}),
         encoding="utf-8")
-    gov("verify-plane", "--write", cwd=project)  # the edit is recorded
+    gov("verify-plane", "--write",
+                           "--confirm-unattended", cwd=project)  # the edit is recorded
     commit_all(project, "one green gate")
     git("checkout", "-q", "-b", "branch-a", cwd=project)
     (project / "left.txt").write_text("left\n", encoding="utf-8")

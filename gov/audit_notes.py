@@ -92,7 +92,7 @@ FLAGS: dict[str, set[str]] = {
     "release": {"--agent"},
     "locks": set(),
     "hooks": set(),  # the pre-commit subcommand is flagless
-    "verify-plane": {"--write"},
+    "verify-plane": {"--write", "--confirm-unattended"},
 }
 
 

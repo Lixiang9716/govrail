@@ -93,7 +93,9 @@ jobs:
           echo '{"modes": {"all": ["ok"]}, "gates": [{"id":"ok","command":["true"]}]}' > gates.json
           # the overwrite is a recorded constitution change: re-baseline
           # the seal or the out-of-band precheck refuses the close
-          gov verify-plane --write
+          # (--confirm-unattended: recorded as machine consent, caller =
+          # the CI bot identity)
+          gov verify-plane --write --confirm-unattended
           git add gates.json
           git -c user.email=t@t -c user.name=t commit -qm init
           gov task new "Close me"

@@ -118,3 +118,53 @@ def test_run_precheck_noop_for_bare_configs(tmp_path, monkeypatch):
     (tmp_path / "gates.json").write_text('{"gates": []}\n', encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     gates_mod._plane_precheck()  # no SystemExit
+
+
+def test_write_refused_without_terminal_and_recorded_with_consent(
+        tmp_path, monkeypatch, capsys):
+    """N3: --write is a recorded ritual. Without a terminal it refuses;
+    with --confirm-unattended it lands, and the receipt (caller, mode,
+    diff) is printed and recorded INSIDE the seal."""
+    import io as _io
+    import json as _json
+    from gov import verify_plane as vp
+    _init_plane(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin", _io.StringIO())  # not a tty
+    monkeypatch.setenv("GOV_CALLER", "agent-7")
+    (tmp_path / ".gov" / "pairing.json").write_text("{}\n", encoding="utf-8")
+
+    # bare --write without a terminal: refused (exit 2), nothing landed
+    assert vp.main(["--write"]) == 2
+    assert "UNATTENDED" in capsys.readouterr().err
+    seal = _json.loads((tmp_path / ".gov" / "plane-seal.json")
+                       .read_text(encoding="utf-8"))
+    assert ".gov/pairing.json" not in seal["files"]
+
+    # --confirm-unattended: recorded as machine consent under the caller
+    capsys.readouterr()
+    vp.main(["--write", "--confirm-unattended"])
+    out = capsys.readouterr().out
+    assert "+ .gov/pairing.json:" in out
+    assert "UNATTENDED machine consent" in out and "agent-7" in out
+    seal = _json.loads((tmp_path / ".gov" / "plane-seal.json")
+                       .read_text(encoding="utf-8"))
+    assert seal["last_rebaseline"]["caller"] == "agent-7"
+    assert seal["last_rebaseline"]["unattended"] is True
+
+
+def test_seal_covers_governance_behavior_files(tmp_path):
+    """N4: decisions.json / surfaces.json / .gov/rejections/** change
+    governance behavior — present means sealed, gone means named."""
+    (tmp_path / ".gov").mkdir(parents=True)
+    (tmp_path / ".gov" / "rules.md").write_text("# rules\n", encoding="utf-8")
+    (tmp_path / "gates.json").write_text("{}", encoding="utf-8")
+    (tmp_path / ".gov" / "decisions.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / ".gov" / "rejections").mkdir()
+    (tmp_path / ".gov" / "rejections" / "case-x.sh").write_text(
+        "#!/bin/sh\nexit 0\n", encoding="utf-8")
+    verify_plane.baseline(tmp_path)
+    # a rejection case goes missing: named, never silent
+    (tmp_path / ".gov" / "rejections" / "case-x.sh").unlink()
+    drift = verify_plane.violations(tmp_path)
+    assert any("case-x.sh" in d and "gone" in d for d in drift)

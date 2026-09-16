@@ -24,7 +24,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 try:  # package context (`gov ...`)
@@ -36,7 +38,12 @@ except ImportError:  # direct script execution (self-test runs files by path)
 
 PROG = "verify_plane"
 SEALED = (Path(".gov/rules.md"), Path("gates.json"))
-OPTIONAL = (Path(".gov/pairing.json"),)
+OPTIONAL = (Path(".gov/pairing.json"), Path(".gov/decisions.json"),
+            Path(".gov/surfaces.json"))
+# Governance-behavior DIRECTORIES: everything under them is sealed when
+# present (.gov/rejections carries the rejection cases — deleting one
+# silences "every gate ships a rejection case" at its root).
+SEAL_DIRS = (Path(".gov/rejections"),)
 SEAL_PATH = Path(".gov/plane-seal.json")
 
 
@@ -49,22 +56,58 @@ def _sha256(path: Path) -> str:
 
 
 def _sealed_files(root: Path) -> dict[str, Path]:
-    """The plane's config files that exist right now (core + optional)."""
+    """The plane's config files that exist right now (core + optional +
+    every file under the governance-behavior directories)."""
     files: dict[str, Path] = {}
     for rel in (*SEALED, *OPTIONAL):
         p = root / rel
         if p.is_file():
             files[rel.as_posix()] = p
+    for d in SEAL_DIRS:
+        base = root / d
+        if base.is_dir():
+            for p in sorted(base.rglob("*")):
+                if p.is_file():
+                    files[(d / p.relative_to(base)).as_posix()] = p
     return files
 
 
-def baseline(root: Path | None = None) -> None:
-    """Write the seal for the current plane state (init's first stamp)."""
+def _identity() -> str:
+    """Who is accepting the constitution: $GOV_CALLER, else user@host
+    (uid-fallback for uid-less container users, as locks does)."""
+    import getpass
+    import socket
+
+    caller = os.environ.get("GOV_CALLER", "")
+    if caller.strip():
+        return caller.strip()
+    try:
+        user = getpass.getuser()
+    except (KeyError, OSError):
+        user = f"uid{os.getuid()}"
+    return f"{user}@{socket.gethostname()}"
+
+
+def baseline(root: Path | None = None, *, caller: str | None = None,
+             unattended: bool = False) -> None:
+    """Write the seal for the current plane state (init's first stamp).
+
+    Programmatic callers (init, preset apply) land through here too —
+    they extend an intact chain by construction; the calling flow's own
+    record carries their receipt."""
     root = root or Path.cwd()
     files = _sealed_files(root)
     if not files:
         return
-    payload = {"files": {rel: {"sha256": _sha256(p)} for rel, p in sorted(files.items())}}
+    payload = {
+        "files": {rel: {"sha256": _sha256(p)}
+                  for rel, p in sorted(files.items())},
+        "last_rebaseline": {
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "caller": caller or _identity(),
+            "unattended": bool(unattended),
+        },
+    }
     atomicio.write_text(root / SEAL_PATH, json.dumps(payload, indent=2) + "\n")
 
 
@@ -121,8 +164,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--write", action="store_true",
                         help="re-baseline the seal over the current state "
-                             "(explicit, loudly-printed consent)")
+                             "(interactive consent; the diff and the caller "
+                             "are recorded into the seal)")
+    parser.add_argument("--confirm-unattended", action="store_true",
+                        help="allow --write without a terminal (agents, CI) — "
+                             "recorded as UNATTENDED machine consent under the "
+                             "caller identity; never a silent one-flag act")
     args = parser.parse_args(argv)
+    if args.confirm_unattended and not args.write:
+        parser.error("--confirm-unattended is only meaningful with --write")
     root = Path.cwd()
     files = _sealed_files(root)
 
@@ -132,17 +182,37 @@ def main(argv: list[str] | None = None) -> int:
 
     seal = root / SEAL_PATH
     if args.write:
-        changed = []
+        interactive = sys.stdin.isatty()
+        if not interactive and not args.confirm_unattended:
+            print(
+                f"{PROG}: REFUSED — accepting a new constitution is a "
+                "recorded decision, and this shell has no terminal to hold "
+                "it. Re-run from an interactive terminal, or pass "
+                "--confirm-unattended to record it as UNATTENDED machine "
+                "consent under your caller identity.", file=sys.stderr)
+            return 2
+        previous: dict[str, str] = {}
         if seal.is_file():
             try:
-                previous = set(json.loads(
-                    seal.read_text(encoding="utf-8-sig")).get("files", {}))
+                previous = {
+                    rel: (meta or {}).get("sha256", "?")
+                    for rel, meta in json.loads(
+                        seal.read_text(encoding="utf-8-sig"))
+                    .get("files", {}).items()
+                }
             except (OSError, ValueError, UnicodeDecodeError):
-                previous = set()
-            changed = sorted(set(files) - previous)
-        baseline(root)
-        detail = f" (added to the seal: {', '.join(changed)})" if changed else ""
-        print(f"{PROG}: sealed {len(files)} file(s){detail}")
+                previous = {}
+        baseline(root, unattended=not interactive)
+        for rel in sorted(set(files) | set(previous)):
+            old_h = previous.get(rel, "(absent)")
+            p = files.get(rel)
+            new_h = _sha256(p) if p else "(gone)"
+            mark = " " if old_h == new_h else "+"
+            print(f"{mark} {rel}: {old_h[:12]} -> {new_h[:12]}")
+        caller = _identity()
+        mode = "interactive" if interactive else "UNATTENDED machine consent"
+        print(f"{PROG}: sealed {len(files)} file(s) — recorded by "
+              f"{caller} ({mode})")
         return 0
 
     drift = violations(root)

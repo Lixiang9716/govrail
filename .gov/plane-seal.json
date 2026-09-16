@@ -3,11 +3,52 @@
     ".gov/pairing.json": {
       "sha256": "e5bef639ff66be81140b789404a58511bb7853171ddb312372555f0fca51b408"
     },
+    ".gov/rejections/README.md": {
+      "sha256": "b6cf8158221e72e763cd355362d53ff0a56a0cd7400f6e55c53ae1e46ee8b419"
+    },
+    ".gov/rejections/case-archive.sh": {
+      "sha256": "bcdb51e63a9bec18eeb9875a90561a88a2faad6dba22660ad1c80b679462811d"
+    },
+    ".gov/rejections/case-conflict-markers.sh": {
+      "sha256": "69997a30fa33cba0a0a8635f6031ec16d1de5460067f9211fa62e9c74f1541eb"
+    },
+    ".gov/rejections/case-decisions.sh": {
+      "sha256": "33ae71ebc8a92adb30239c3c7cc6e130d926ec21e80b4024aec608e9dd7bc354"
+    },
+    ".gov/rejections/case-doc-sync.sh": {
+      "sha256": "ea080053aa91d41c50d7b70b4cad17c22be7ebf8c028fe8ac0101892f91cef0a"
+    },
+    ".gov/rejections/case-note-presence.sh": {
+      "sha256": "c79100a9aa14584ed307734021c931abbd632e7e83139c46f06c3f5a8af6bf48"
+    },
+    ".gov/rejections/case-notes.sh": {
+      "sha256": "a64bb95128d7028f06426911ee3136dbc8e7c6e57cb449affb4c0d9d79ab61a6"
+    },
+    ".gov/rejections/case-plane.sh": {
+      "sha256": "7f597aa9c7bccfbcd5de969e5c623be0b94f8522151ec05d100bc612cf20e08c"
+    },
+    ".gov/rejections/case-pre-commit-hook.sh": {
+      "sha256": "b8f68966fe3ff6f800c968b74f05a564f6cdf42c9ff33982198e6975be5cc9f7"
+    },
+    ".gov/rejections/case-rubric.sh": {
+      "sha256": "24cee132f28c3f92aee6660e2c9286c24579ee18a9b92e656015ecc96c3966e3"
+    },
+    ".gov/rejections/case-self-test.sh": {
+      "sha256": "19b9d080e89fd4745048fb6a5f5afab73f45a2a6ee199661dd205c3ada08edd0"
+    },
+    ".gov/rejections/case-task.sh": {
+      "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
+    },
     ".gov/rules.md": {
       "sha256": "1515c2745db61046f9357c786490a053de17e364aa9b22bfd029df8b30d0c347"
     },
     "gates.json": {
       "sha256": "1b26457b829bfa7e8dcaad5521fcbe8cd98fde610172e8528511c0bd6779dad0"
     }
+  },
+  "last_rebaseline": {
+    "ts": "2026-09-16T10:20:26+00:00",
+    "caller": "lx@DESKTOP-AOFQD6F",
+    "unattended": true
   }
 }
