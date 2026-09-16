@@ -1,23 +1,45 @@
 name: CI
 
+# ── Job taxonomy (orthogonal by design) ──────────────────────────────
+# Daily development (every PR): lint, gates-cell (version matrix),
+#   governance (the dogfooding DAG, once), windows + macos (platform
+#   suites), e2e-docker (docker cells, one job per cell — a red cell is
+#   rerunnable in isolation), gates (the stable required check).
+# Release (master only): the same pipeline runs on the merge commit;
+#   publishing itself lives in release-please.yml (tag-gated).
+# Nightly (schedule): the perf scale tier — never on the PR path.
+# ─────────────────────────────────────────────────────────────────────
+
 on:
   push:
     branches: [master]
   pull_request:
+  schedule:
+    - cron: "17 3 * * *"   # daily: the nightly perf tier only
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  lint:
+    # Style + syntax-level correctness (ruff), minutes before anything
+    # heavier starts.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint (ruff — pyflakes + syntax-level pycodestyle)
+        run: ruff check .
+
   gates-cell:
-    # The host matrix (P2): the wheel's supported floor is 3.10 and CI
-    # owns the full matrix (rule 1) — the Docker cells cover it for the
-    # wheel, and the host suite now covers it for the source checkout.
-    # The job is named gates-cell because the REQUIRED check is the
-    # stable `gates` summary below: matrix jobs rename their checks per
-    # cell ("gates (3.10)"...), and a renamed required check is one that
-    # can never be satisfied again (found live: #192 needed --admin).
+    # Version matrix: the pytest suite on every supported interpreter.
+    # Version-agnostic governance steps live in the `governance` job.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -37,28 +59,37 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install
         run: pip install -e ".[dev]"
-      - name: Lint (ruff — pyflakes + syntax-level pycodestyle)
-        if: matrix.python-version == '3.12'
-        run: ruff check .
       - name: Unit tests
         run: pytest -q
-      # version-agnostic governance steps run ONCE (3.12): the docker
-      # cells exercise gov itself on every supported version
+
+  governance:
+    # The dogfooding DAG, once: rejection cases prove every gate can
+    # reject, and the full gate DAG runs green on its own repository.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -e ".[dev]"
       - name: Rejection cases
-        if: matrix.python-version == '3.12'
         run: gov self-test
       - name: Full gate DAG
-        if: matrix.python-version == '3.12'
         run: gov run --mode all
 
   gates:
     # The REQUIRED check's stable name (branch protection points here):
-    # green iff every matrix cell is green.
-    needs: gates-cell
+    # green iff lint, every version cell, and governance are green.
+    needs: [lint, gates-cell, governance]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: echo "all matrix cells green"
+      - run: echo "lint + all version cells + governance green"
 
   backport-shadow:
     # Issue #138: a py2-era `argparse` backport (PyPI argparse==1.4.0)
@@ -117,8 +148,8 @@ jobs:
     # and its own rejection proof must hold on Windows too — no fcntl
     # module, no coreutils true/false/sh on PATH. This is the reporter's
     # verified end-to-end (init / doctor / run on a fresh project) kept
-    # alive in CI, plus the full self-test (tools family) and the pytest
-    # suite: fixtures are portable as of #168's follow-up, and the few
+    # alive in CI, plus the tools-family self-test and the pytest suite:
+    # fixtures are portable as of #168's follow-up, and the few
     # POSIX-exec-inherent tests skip themselves by platform, named.
     runs-on: windows-latest
     timeout-minutes: 25
@@ -150,16 +181,36 @@ jobs:
         # rule-6 semantics decision, deliberately not taken in #168.
         run: gov self-test --scope tools
 
+  macos:
+    # The third declared platform: the pytest suite plus a fresh-project
+    # smoke, on the same single interpreter the other host jobs use.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Unit tests
+        run: pytest -q
+      - name: Fresh-project smoke (init / doctor / run)
+        run: |
+          set -e
+          d=$(mktemp -d); cd "$d"
+          git init -q .
+          git -c user.email=t@t -c user.name=t commit -qm init --allow-empty
+          gov init
+          gov doctor
+          gov run --mode all
+
   gbk-locale:
     # Issue #172: the decode wall must hold on a host that does NOT speak
-    # UTF-8. The reporter's zh-CN Windows (ANSI = GBK) is exactly that, and
-    # this job rebuilds it on Linux with a user-space GBK locale (no sudo,
-    # LOCPATH) — every subprocess text read that forgets encoding= decodes
-    # GBK there, and the first non-ASCII byte in a child's output crashes
-    # the reader thread (#168/#173's crash class). Empirical check: the
-    # pre-#168/#173 tooling under this locale failed doc-sync (encode) and
-    # test_verify_decisions_rejects_base_collision (decode) — the same two
-    # defects those PRs fixed, so the locale genuinely bites.
+    # UTF-8 (zh_CN.GBK, user-space locale, PYTHONUTF8=0 keeps the
+    # interpreter honest). The anti-vacuous probe lives in the pytest
+    # suite (locale_bites pins hostility); the tools self-test runs the
+    # plane's own contract here.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -182,12 +233,6 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
       - name: The locale must really decode GBK — fail loud otherwise
-        # A green run without a hostile locale proves nothing (rule 6).
-        # Children speak UTF-8 by design (#168); an UNPINNED GBK decode of
-        # that output must either crash or mojibake — either proves the
-        # locale bites. (The probe itself decodes BYTES by hand: the first
-        # draft used text=True and was killed by the exact reader-thread
-        # crash it demonstrates.)
         run: |
           python - <<'PY'
           import locale, os, subprocess, sys
@@ -221,15 +266,18 @@ jobs:
       - name: Full gate DAG under GBK
         run: gov run --mode all
 
-  docker-e2e:
-    # The Docker E2E matrix (D58): the wheel experienced as an adopter
-    # experiences it — python 3.10-3.13 (glibc) + alpine (musl) + a
-    # non-root cell + the cross-container drills, in clean containers
-    # built from the release artifact. Opt-in env (GOV_DOCKER_E2E=1)
-    # flips the pytest wrapper from SKIP to run; a mirror outage in the
-    # PyPI cell reports SKIP there, never red.
+  e2e-docker:
+    # The Docker E2E matrix, ONE JOB PER CELL (D58, split for orthogony):
+    # a red cell is named, rerunnable, and never masks another cell. The
+    # wheel is built fresh per cell; run.sh --cell owns build + run.
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ['3.10-slim', '3.11-slim', '3.12-slim', '3.13-slim',
+               '3.12-alpine', '3.10-bookworm', 'nonroot', 'gbk',
+               'cross', 'crossdir']
     env:
       GOV_DOCKER_E2E: '1'
       GOV_DOCKER_MIRROR: docker.io  # hub is reachable from hosted runners
@@ -238,7 +286,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install pytest (the matrix driver is a pytest wrapper)
+        run: python -m pip install pytest
+      - name: Run the cell
+        run: tests/docker_e2e/run.sh --cell ${{ matrix.cell }}
+        env:
+          GOV_E2E_EXPECTED_VERSION: ''
+
+  nightly:
+    # The perf scale tier (10k/20k-file walks): nightly, never on the PR
+    # path. GOV_E2E_NIGHTLY tiers 1 and 2 give the walker a scaling point.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install pytest
         run: python -m pip install pytest
-      - name: Run the Docker E2E matrix
-        run: python -m pytest tests/test_docker_e2e.py -v
+      - name: Run the nightly tier
+        run: tests/docker_e2e/run.sh --cell nightly
+        env:
+          GOV_DOCKER_E2E: '1'
+          GOV_DOCKER_MIRROR: docker.io
