@@ -56,6 +56,16 @@ in tests. A bare `sleep N` that hopes a state has arrived is rejected in
 review; the only lawful sleeps pace real wall-clock physics (lease TTL
 expiry).
 
+## Keeping the README's command reference current
+
+The command block in README.md (between the `gov:commands` markers) is
+generated from `gov --help` — the descriptions in `gov/cli.py` are the
+single source of truth. After changing any CLI surface, run
+`scripts/update_readme_commands.py`; CI turns a stale block, an
+unresolvable `gov ...` citation, or a help line that omits a real
+subcommand red (tests/test_docs_cli_consistency.py). Never edit the
+block by hand.
+
 ## Notes and rules
 
 - Standing orders: [.gov/rules.md](.gov/rules.md) (read before starting).

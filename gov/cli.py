@@ -900,8 +900,8 @@ _COMMANDS = {
            "--merge preflights the union of parallel branches in a "
            "scratch worktree before landing)",
     "self-test": "run governance rejection cases",
-    "receipt": "verifiable run receipts: verify a cited receipt against a "
-               "commit (issue #124/D42)",
+    "receipt": "verifiable run receipts (verify/show): verify a cited "
+               "receipt against a commit (issue #124/D42)",
     "verify-notes": "check note format",
     "verify-pairing": "check bilingual pairing (--write re-confirms; --staged "
                      "checks the index; --explain prints the schema)",
@@ -918,7 +918,8 @@ _COMMANDS = {
     "stats": "structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger",
     "check": "syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)",
     "doctor": "environment self-check (PATH, python, hooks, gates schema)",
-    "note": "note scaffold and pre-commit check (new/check)",
+    "note": "note scaffold, read side, and pre-commit check "
+            "(new/check/list/show; list --stale marks audit signals)",
     "whatsnew": "usage-oriented highlights since a version",
     "recall": "retrieve notes, decisions, and postmortems (all terms, ranked)",
     "audit-notes": "report mechanical staleness signals in implemented notes",
@@ -940,7 +941,9 @@ _COMMANDS = {
              "'hooks pre-commit' runs the gates whose 'stages' include "
              "'pre-commit' under their configured advisory/blocking contract)",
     "verify-plane": "tamper-evidence for the plane's own config "
-                    "(.gov/rules.md + gates.json; --write re-baselines)",
+                    "(rules.md, gates.json, pairing/decisions/surfaces, "
+                    ".gov/rejections/**; --write re-baselines — interactive "
+                    "consent, --confirm-unattended for agents)",
 }
 
 
