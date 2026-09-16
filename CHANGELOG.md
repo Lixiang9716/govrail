@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.31.0](https://github.com/Lixiang9716/govrail/compare/v0.30.7...v0.31.0) (2026-09-16)
+
+
+### Features
+
+* rule 8 — wait on conditions, not on clocks ([#205](https://github.com/Lixiang9716/govrail/issues/205)) ([0f8d070](https://github.com/Lixiang9716/govrail/commit/0f8d070689e980b347acf9e00424f157185906b9))
+
+
+### Bug Fixes
+
+* the stale-base wording lands on master — docker scenarios pin the clarified direction; the harness prints tracebacks on scenario failure ([e043a39](https://github.com/Lixiang9716/govrail/commit/e043a39adf0213ef7f8cd5f3df735caff4eef948))
+
 ## [0.30.7](https://github.com/Lixiang9716/govrail/compare/v0.30.6...v0.30.7) (2026-09-16)
 
 
