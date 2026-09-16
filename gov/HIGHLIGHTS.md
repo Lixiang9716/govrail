@@ -3,6 +3,11 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.7 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- N6/N7/N8 — the seal's trust chain closes around --config, stripped constitutions, and single-read ordering
+- rebuild the docker helper definition cleanly (docstring + import + call)
+
 ## 0.30.6 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - N2 unsealed-plane drift, N3 recorded re-baseline ritual, N4 wider seal, N5 umask
