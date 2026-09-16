@@ -48,6 +48,14 @@ development is heavily agent-driven. Three rules keep that honest:
   re-baseline discipline. Where the gates cannot judge a change, that
   is review work — not a formality.
 
+## Waiting for CI and async steps
+
+Wait on conditions, never on clocks (rule 8): `gh pr checks --watch`,
+`gh run watch <id> --exit-status`, and poll-until-condition-with-deadline
+in tests. A bare `sleep N` that hopes a state has arrived is rejected in
+review; the only lawful sleeps pace real wall-clock physics (lease TTL
+expiry).
+
 ## Notes and rules
 
 - Standing orders: [.gov/rules.md](.gov/rules.md) (read before starting).

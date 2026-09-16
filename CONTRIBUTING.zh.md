@@ -44,6 +44,13 @@ gov run                   # 完整 gate DAG（notes + pairing + note-presence + 
   Agent Note 格式、同样的封印重基线纪律。gate 无法评判的部分，属于
   评审工作——不是走形式。
 
+## 等待 CI 与异步步骤
+
+等条件，不等时钟（规则 8）：`gh pr checks --watch`、
+`gh run watch <id> --exit-status`、测试里"带截止时间的条件轮询"。
+指望某个状态已经发生的裸 `sleep N` 会在评审中被拒绝；唯一合法的
+sleep 是为真实物理时间节拍（如租约 TTL 到期）计时。
+
 ## 笔记与规则
 
 - 常设指令：[.gov/rules.md](.gov/rules.md)（动手前先读）。

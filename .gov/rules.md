@@ -51,3 +51,13 @@ A human-facing document is a three-file pair: source + counterpart +
 in `.gov/pairing.json` (govrail's own convention: `foo.md` + `foo.zh.md`
 + `foo.i18n.yaml`). Editing one side without re-confirming the pair fails
 the pairing gate; a PR never lands one language of a pair alone.
+
+
+## 8. Wait on conditions, not on clocks
+
+Never `sleep` hoping a state has arrived — poll the condition with a
+deadline, and fail loud when the deadline passes. A sleep may only pace
+real wall-clock physics (a lease TTL expiring, a rate-limit window),
+and even then the condition is asserted after the wait. Waiting for CI
+or another process is event-driven: `gh pr checks --watch`,
+`gh run watch --exit-status` — never a blind timed pause.
