@@ -2,7 +2,6 @@
 import os
 import stat
 
-import pytest
 
 from gov import atomicio
 
