@@ -164,3 +164,28 @@ def test_release_pr_carries_the_highlights_draft_in_its_commit():
         "— approving one re-runs the race")
     assert rp.get("permissions", {}).get("actions") == "write", (
         "cancelling workflow runs needs actions: write")
+
+
+def test_release_automation_is_end_to_end():
+    """The 0.31.0 postmortem, structural half: the release chain must be
+    closable without a human in the loop. RELEASE_PAT (falling back to
+    the default token so nothing breaks while the secret is unset)
+    pushes as a user identity — its CI run starts instead of sitting in
+    action_required; the arming step lets GitHub squash-merge the PR the
+    moment the required checks pass."""
+    rp = _load("release-please.yml")
+    jobs = rp["jobs"]
+    release_steps = jobs["release"]["steps"]
+    uses = [s.get("uses", "") for s in release_steps]
+    assert any("release-please-action" in u for u in uses)
+    token = " ".join(s.get("with", {}).get("github-token", "")
+                     for s in release_steps if "with" in s)
+    assert "secrets.RELEASE_PAT" in token and "github.token" in token, (
+        "the release action must run under RELEASE_PAT with a fallback "
+        "token — the fallback alone re-introduces the action_required "
+        "human gate")
+    hl_text = " ".join(s.get("name", "") for s in
+                       jobs["highlights"].get("steps", []))
+    assert "auto-merge" in hl_text.lower(), (
+        "the release PR must be armed for auto-merge — CI green should "
+        "merge, tag, and publish without a human")

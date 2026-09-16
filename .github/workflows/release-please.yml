@@ -24,6 +24,13 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          # RELEASE_PAT (fine-grained, this repo only, Contents+PR RW)
+          # pushes as a user identity: the CI run its PR triggers starts
+          # IMMEDIATELY instead of sitting in action_required (GitHub's
+          # hold for GITHUB_TOKEN-pushed runs — the 0.31.0 trap). Absent
+          # the secret, the fallback token keeps today's behavior: one
+          # human approval per release PR.
+          github-token: ${{ secrets.RELEASE_PAT || github.token }}
 
       - name: Checkout released commit
         if: steps.release.outputs.release_created == 'true'
@@ -141,3 +148,23 @@ jobs:
               gh api -X POST "repos/${{ github.repository }}/actions/runs/$id/cancel" || true
             fi
           done
+
+      - name: Arm auto-merge on the release PR
+        # CI green -> GitHub squash-merges automatically -> the merge push
+        # runs the release job (tag + GitHub Release + PyPI). With
+        # RELEASE_PAT the chain is end-to-end unattended; with the
+        # fallback token the run waits in action_required and approval is
+        # the only human act left. A red PR never auto-merges — arming is
+        # safe unconditionally.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: release-please--branches--master
+        run: |
+          pr=$(gh pr list --head "$BRANCH" --state open \
+                --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$pr" ]; then
+            echo "no open release PR — nothing to arm"
+            exit 0
+          fi
+          gh pr merge "$pr" --auto --squash --delete-branch \
+            && echo "auto-merge armed on #$pr"
