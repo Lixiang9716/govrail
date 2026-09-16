@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.5 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- close N2 (seal deletion = detector deletion) and harden the new modules per the 0.30.4 red-team
+
 ## 0.30.4 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - enforce the plane seal out-of-band + the P1/P2 floor
