@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.4](https://github.com/Lixiang9716/govrail/compare/v0.30.3...v0.30.4) (2026-09-16)
+
+
+### Bug Fixes
+
+* enforce the plane seal out-of-band + the P1/P2 floor ([#190](https://github.com/Lixiang9716/govrail/issues/190)) ([c425dda](https://github.com/Lixiang9716/govrail/commit/c425ddaba7e2e42fed221d3f1eb25359d119587c))
+
 ## [0.30.3](https://github.com/Lixiang9716/govrail/compare/v0.30.2...v0.30.3) (2026-09-15)
 
 
