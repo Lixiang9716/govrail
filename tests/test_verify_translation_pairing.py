@@ -243,7 +243,11 @@ def test_explain_is_read_only(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _pair(tmp_path)  # an unrecorded pair: explain must not baseline it
     _git_repo(tmp_path)
-    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    # snapshot WORKTREE files only — git's background maintenance can
+    # create .git/objects/maintenance.lock mid-test (macOS hosts), and
+    # git internals are not the test's subject
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*")
+              if p.is_file() and ".git" not in p.parts}
     assert vtp.main(["--explain"]) == 0
     out = capsys.readouterr().out
     assert "read-only" in out
@@ -252,6 +256,7 @@ def test_explain_is_read_only(tmp_path, monkeypatch, capsys):
     assert "last_confirmed" in out
     assert "{stem}.zh.md" in out  # this project's convention
     assert "docs/**/*.md" in out  # this project's include scope
-    after = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    after = {p: p.read_bytes() for p in tmp_path.rglob("*")
+             if p.is_file() and ".git" not in p.parts}
     assert after == before, "--explain must not create or modify any file"
     assert vtp.main([]) == 1  # the pair is still unrecorded: explain judged nothing
