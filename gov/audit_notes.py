@@ -79,7 +79,9 @@ FLAGS: dict[str, set[str]] = {
     "stats": {"--lang", "--record", "--json"},
     "check": {"--lang", "--strict", "--record", "--json"},
     "doctor": {"--json"},
-    "note": {"--class", "--ref"},  # on the `new` subcommand
+    # across subcommands: --class/--ref on `new`; --class/--json/--stale
+    # on `list` (a note citing `gov note list --stale` must not read as drift)
+    "note": {"--class", "--ref", "--json", "--stale"},
     "whatsnew": {"--since"},
     "recall": {"--any", "--snippet"},
     "audit-notes": {"--json"},

@@ -95,6 +95,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # The amend push must ALSO be a user identity: a default-token
+          # push re-creates the action_required hold on the run for the
+          # amended SHA and the chain stalls there. Falls back with the
+          # release action when the secret is unset.
+          token: ${{ secrets.RELEASE_PAT || github.token }}
 
       - uses: actions/setup-python@v5
         with:
@@ -157,7 +162,12 @@ jobs:
         # the only human act left. A red PR never auto-merges — arming is
         # safe unconditionally.
         env:
-          GH_TOKEN: ${{ github.token }}
+          # The PAT again: auto-merge executes as the enabling identity.
+          # A bot-enabled merge pushes under the token, and on:push
+          # workflows (the publishing release job) do not fire for
+          # token-attributed pushes — the chain would die silently at
+          # the merge.
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
           BRANCH: release-please--branches--master
         run: |
           pr=$(gh pr list --head "$BRANCH" --state open \

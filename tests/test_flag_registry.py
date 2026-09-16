@@ -31,7 +31,9 @@ LEADING_DASH_RX = re.compile(r"((?:-h|--[\w-]+)(?:,\s*(?:-h|--[\w-]+))*)(?=\s|$)
 # lives on `next`, --from/--id on `add`) — every listed surface is probed
 # and the registry must equal the union (#107).
 HELP_ARGV: dict[str, list[list[str]]] = {
-    "note": [["note", "new", "--help"]],  # --class/--ref are `note new` flags
+    # --class/--ref are `note new` flags; --class/--json/--stale are
+    # `note list`'s — the registry is the union across subcommands
+    "note": [["note", "new", "--help"], ["note", "list", "--help"]],
     "decision": [["decision", "next", "--help"],
                  ["decision", "add", "--help"]],
     # --check/--rules live on `new`; --mode/--timeout on `close`;
