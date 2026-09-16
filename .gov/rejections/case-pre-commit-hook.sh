@@ -75,6 +75,10 @@ for g in cfg["gates"]:
         g.pop("allowFailure", None)
 json.dump(cfg, open("gates.json", "w"), indent=2)
 PYEOF
+python3 -m gov verify-plane --write > /dev/null 2>&1 || {
+  echo "case-pre-commit-hook: the enforce flip could not be recorded" >&2
+  exit 1
+}
 printf 'hello v3\n' > docs/a.md
 git add docs/a.md
 if git -c commit.gpgsign=false commit -qm drift > out.txt 2>&1; then

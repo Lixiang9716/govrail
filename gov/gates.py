@@ -885,6 +885,33 @@ def _outcome_line(gate: Gate, outcome: str, in_scope: int | None = None) -> str:
     return f"{outcome} {gate.id}" + (" " + " ".join(parts) if parts else "")
 
 
+def _plane_precheck(tool: str = "gov run") -> None:
+    """Out-of-band seal check, BEFORE the config is trusted (the
+    reflexive gap, N1): the in-DAG `plane` gate is defined inside the
+    very file it seals, so a tampered gates.json could disable that
+    gate and silence its own detection. This check reads the seal and
+    the config BYTES directly and needs nothing from gates.json to
+    judge them — pre-push, CI, task close, and manual runs all pass
+    through here, so the tamper-evidence no longer depends on any
+    runner remembering to add a step. Repos without a seal are
+    unaffected; a recorded config edit is accepted via the explicit
+    `gov verify-plane --write` re-baseline, exactly like the gate's."""
+    try:
+        from . import verify_plane
+    except ImportError:  # direct-script execution (self-test scratch)
+        import verify_plane
+    drift = verify_plane.violations()
+    if drift:
+        print(f"{tool}: REFUSED — the governance plane drifted from its "
+              f"seal (checked out-of-band, before this config was trusted):",
+              file=sys.stderr)
+        for d in drift:
+            print(f"  {d}", file=sys.stderr)
+        print("  restore the files (git checkout) or accept the new state "
+              "explicitly: gov verify-plane --write", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def main(argv: list[str] | None = None) -> int:
     force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(prog="gov run", description="Run the governance gate DAG.")
@@ -970,6 +997,10 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
+    # AFTER the parse, BEFORE anything runs: an unparseable config stays
+    # a config error (2); a parseable one that drifted from its seal is
+    # the plane refusal — the reflexive gap (N1) stays closed either way.
+    _plane_precheck()
 
     explicit = [flag for flag, on in (("--gate", args.gate), ("--mode", args.mode),
                                       ("--base", args.base), ("--every-gate", args.every_gate)) if on]

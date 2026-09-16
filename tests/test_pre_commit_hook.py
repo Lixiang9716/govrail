@@ -122,6 +122,7 @@ def test_commit_of_stale_pair_fails_naming_scoped_fix(tmp_path):
     gates = tmp_path / "gates.json"
     cfg = gates.read_text(encoding="utf-8").replace('"allowFailure": true,\n', "")
     gates.write_text(cfg, encoding="utf-8")
+    assert _gov(tmp_path, "verify-plane", "--write").returncode == 0
     (tmp_path / "docs" / "a.md").write_text("hello v3\n", encoding="utf-8")
     assert _git(tmp_path, "add", "docs/a.md").returncode == 0
     r = _git(tmp_path, "-c", "commit.gpgsign=false", "commit", "-qm", "drift")
