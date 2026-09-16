@@ -31,7 +31,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 try:  # package context (`gov ...`)
-    from . import gitutil
     from .gitutil import scrubbed_env
 except ImportError:  # direct script execution (self-test runs files by path)
     from gitutil import scrubbed_env
