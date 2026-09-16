@@ -273,14 +273,24 @@ def load_config(path: str) -> tuple[dict[str, list[str]], list[Gate], int, str |
     run every enabled gate (the historical default).
     """
     try:
-        with open(path, encoding="utf-8") as f:
-            raw = json.load(f)
+        with open(path, "rb") as f:
+            raw = f.read()
     except FileNotFoundError:
         raise ConfigError(f"{path} not found")
+    except OSError as e:
+        raise ConfigError(f"{path}: {e}")
+    return load_config_from(raw, path)
+
+
+def load_config_from(raw: bytes, path: str) -> tuple[dict[str, list[str]], list[Gate], int, str | None]:
+    """Parse config BYTES (N8: the caller may have seal-verified this
+    exact buffer already — parsing must not re-read the file)."""
+    try:
+        parsed = json.loads(raw)
     except json.JSONDecodeError as e:
         raise ConfigError(f"{path} is not valid JSON: {e}")
 
-    raw = _require_object(raw, "the config root")
+    raw = _require_object(parsed, "the config root")
     # D29: unknown keys abort loud — a typo like "enable": false silently
     # parks nothing, which is exactly the quiet back door D24 closed.
     allowed_top = {"modes", "defaultMode", "concurrency", "gates"}
@@ -622,6 +632,7 @@ def run_gates(
     receipt: dict | None = None,
     receipt_path: Path | None = None,
     cost: dict[str, float] | None = None,
+    config_path: str = "gates.json",
 ) -> int:
     """Run the selected gates (every enabled gate when selection is None).
 
@@ -821,7 +832,8 @@ def run_gates(
         # .gov/history must not dirty the very receipt that describes it.
         try:
             rec = receipt_mod.build_receipt(records, receipt.get("tag", ""),
-                                            receipt.get("selection", {}))
+                                            receipt.get("selection", {}),
+                                            config_path=config_path)
         except receipt_mod.ReceiptError as exc:
             # A corrupt ledger tail must not bury this run's own report:
             # name the receipt failure, keep the exit code truthful.
@@ -858,6 +870,9 @@ def run_gates(
             run_record["caller"] = caller
         if cost:
             run_record["cost"] = cost
+        # N6 follow-up: history must distinguish "green under the sealed
+        # constitution" from "green under --config something-else".
+        run_record["config"] = config_path
         with record_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(run_record, separators=(",", ":")) + "\n")
     if rec is not None:
@@ -885,7 +900,9 @@ def _outcome_line(gate: Gate, outcome: str, in_scope: int | None = None) -> str:
     return f"{outcome} {gate.id}" + (" " + " ".join(parts) if parts else "")
 
 
-def _plane_precheck(tool: str = "gov run") -> None:
+def _plane_precheck(tool: str = "gov run", config_rel: str | None = None,
+                    config_raw: bytes | None = None,
+                    allow_unsealed_config: bool = False) -> None:
     """Out-of-band seal check, BEFORE the config is trusted (the
     reflexive gap, N1): the in-DAG `plane` gate is defined inside the
     very file it seals, so a tampered gates.json could disable that
@@ -901,7 +918,13 @@ def _plane_precheck(tool: str = "gov run") -> None:
         from . import verify_plane
     except ImportError:  # direct-script execution (self-test scratch)
         import verify_plane
-    drift = verify_plane.violations()
+    overlays = None
+    if config_rel and config_raw is not None:
+        # N8: the caller's buffer IS the config — the seal is judged over
+        # these exact bytes and the parser reuses them, closing the
+        # parse-read/seal-read TOCTOU window.
+        overlays = {config_rel: config_raw}
+    drift = verify_plane.violations(overlays=overlays)
     if drift:
         print(f"{tool}: REFUSED — the governance plane drifted from its "
               f"seal (checked out-of-band, before this config was trusted):",
@@ -911,12 +934,29 @@ def _plane_precheck(tool: str = "gov run") -> None:
         print("  restore the files (git checkout) or accept the new state "
               "explicitly: gov verify-plane --write", file=sys.stderr)
         raise SystemExit(1)
+    # N6: --config pointing outside the sealed set opts out of everything
+    # the seal just verified. In a governed repository that is a
+    # recorded-decision-level change, not a flag.
+    if config_rel is not None and config_rel not in (
+            "gates.json",) and not allow_unsealed_config:
+        from .verify_plane import _sealed_files
+        governed = _sealed_files(Path.cwd()) or (Path.cwd() / ".gov" / "rules.md").is_file()
+        if governed and Path(config_rel).resolve() != (Path.cwd() / "gates.json").resolve():
+            print(f"{tool}: REFUSED — --config {config_rel!r} is outside the "
+                  "sealed plane. A governed repository runs its sealed "
+                  "gates.json; to bless another config, seal it or pass "
+                  "--allow-unsealed-config (recorded in the run history).",
+                  file=sys.stderr)
+            raise SystemExit(1)
 
 
 def main(argv: list[str] | None = None) -> int:
     force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(prog="gov run", description="Run the governance gate DAG.")
     parser.add_argument("--config", default="gates.json")
+    parser.add_argument("--allow-unsealed-config", action="store_true",
+                        help="run with a --config outside the sealed plane "
+                             "(recorded in the run history and receipt)")
     parser.add_argument("--mode", default=None,
                         help="mode name from gates.json (overrides defaultMode)")
     parser.add_argument("--base", default=None,
@@ -993,15 +1033,32 @@ def main(argv: list[str] | None = None) -> int:
             receipt=args.receipt, tag=caller, cost=args.cost,
             no_record=args.no_record)
 
+    # N8: ONE read of the config bytes; the seal is verified over this
+    # exact buffer BEFORE parsing, so a drifted constitution refuses as
+    # the plane (1) even when it is also syntactically broken, and a
+    # concurrent writer cannot split "tampered bytes parsed / clean
+    # bytes seal-checked".
     try:
-        modes, gates, concurrency, default_mode = load_config(args.config)
+        config_raw = Path(args.config).read_bytes()
+    except FileNotFoundError:
+        print(f"config error: {args.config} not found", file=sys.stderr)
+        return 2
+    except OSError as e:
+        print(f"config error: cannot read {args.config}: {e}", file=sys.stderr)
+        return 2
+    try:
+        config_rel = Path(args.config).resolve().relative_to(
+            Path.cwd().resolve()).as_posix()
+    except ValueError:
+        config_rel = Path(args.config).resolve().as_posix()
+    _plane_precheck(config_rel=config_rel, config_raw=config_raw,
+                    allow_unsealed_config=args.allow_unsealed_config)
+    try:
+        modes, gates, concurrency, default_mode = load_config_from(
+            config_raw, args.config)
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
-    # AFTER the parse, BEFORE anything runs: an unparseable config stays
-    # a config error (2); a parseable one that drifted from its seal is
-    # the plane refusal — the reflexive gap (N1) stays closed either way.
-    _plane_precheck()
 
     explicit = [flag for flag, on in (("--gate", args.gate), ("--mode", args.mode),
                                       ("--base", args.base), ("--every-gate", args.every_gate)) if on]
@@ -1117,7 +1174,7 @@ def main(argv: list[str] | None = None) -> int:
                      caller=caller or None,
                      receipt=receipt_info,
                      receipt_path=receipt_mod._receipt_path(),
-                     cost=cost)
+                     cost=cost, config_path=args.config)
 
 
 if __name__ == "__main__":

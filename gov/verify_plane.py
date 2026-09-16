@@ -25,9 +25,15 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:  # package context (`gov ...`)
+    from .gitutil import scrubbed_env
+except ImportError:  # direct script execution (self-test runs files by path)
+    from gitutil import scrubbed_env
 
 try:  # package context (`gov ...`)
     from . import atomicio
@@ -111,29 +117,69 @@ def baseline(root: Path | None = None, *, caller: str | None = None,
     atomicio.write_text(root / SEAL_PATH, json.dumps(payload, indent=2) + "\n")
 
 
-def violations(root: Path | None = None) -> list[str]:
+def _seal_in_history(root: Path) -> bool:
+    """True when git history contains the seal file — the adoption record
+    an attacker cannot rewrite without rewriting history itself."""
+    proc = subprocess.run(
+        ["git", "-c", "core.quotepath=off", "log", "--oneline", "-n", "1",
+         "--", SEAL_PATH.as_posix()],
+        cwd=str(root), capture_output=True, text=True,
+        encoding="utf-8", errors="replace", env=scrubbed_env(),
+    )
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
+def _governed_artifacts(root: Path) -> bool:
+    markers = (
+        root / ".gov" / "rules.md",
+        root / ".gov" / "manifest.json",
+        root / ".gov" / "rejections",
+        root / ".agents" / "notes",
+    )
+    return any(m.exists() for m in markers)
+
+
+def violations(root: Path | None = None,
+               overlays: dict[str, bytes] | None = None) -> list[str]:
     """Current drift against the seal; empty = intact (or unsealed).
+
+    ``overlays`` maps a sealed rel path to the caller's in-memory bytes
+    (N8): the seal is then judged over THOSE bytes, so the runner can
+    verify-then-parse one single read — closing the window where a
+    concurrent writer lets tampered bytes get parsed while clean bytes
+    get seal-checked.
 
     The machine behind main()'s verdicts, shared with the flows that
     legitimately mutate plane config (preset apply, init --adopt): they
     may extend an INTACT seal chain, never launder accumulated drift.
     """
     root = root or Path.cwd()
+    overlays = overlays or {}
     files = _sealed_files(root)
     seal = root / SEAL_PATH
     if not seal.is_file():
-        # N2: deleting the seal file is the same attack as disabling the
-        # gate, one level up. The discriminator is the CONSTITUTION
-        # (.gov/rules.md): init seals automatically, so a governed project
-        # never sits in "constitution without seal" — that state is drift.
-        # A bare gates.json (scratch configs, tests, tools that never
-        # adopted the plane) was never sealed and never will be.
-        constitution = root / ".gov" / "rules.md"
-        if not constitution.is_file():
-            return []
-        return [f"{SEAL_PATH.as_posix()}: the plane config exists but its "
-                "seal is GONE — restore it (git checkout) or accept the "
-                "current state explicitly (gov verify-plane --write)"]
+        # N2/N7: deleting the seal file is the same attack as disabling
+        # the gate, one level up — and stripping the constitution too does
+        # NOT reclassify the repository as "never adopted". The state is
+        # drift when ANY of these says the plane was ever here:
+        # - the seal itself exists in git history (the strongest anchor:
+        #   init's seal is committed, so history is the attacker-external
+        #   record);
+        # - the constitution (.gov/rules.md) is present;
+        # - other init-laid plane artifacts survive (.gov/manifest.json,
+        #   .gov/rejections/, .agents/notes/).
+        # Only a repository with NONE of those (scratch configs, tests,
+        # tools that never adopted the plane) runs unsealed by design.
+        if _seal_in_history(root):
+            return [f"{SEAL_PATH.as_posix()}: the seal is GONE but this "
+                    "repository's history contains it — restore it "
+                    "(git checkout) or accept the current state explicitly "
+                    "(gov verify-plane --write)"]
+        if _governed_artifacts(root):
+            return [f"{SEAL_PATH.as_posix()}: the plane config exists but its "
+                    "seal is GONE — restore it (git checkout) or accept the "
+                    "current state explicitly (gov verify-plane --write)"]
+        return []  # genuinely never adopted: nothing sealed, nothing to judge
     if not files:
         return []  # nothing left to judge (config deleted post-seal)
     try:
@@ -147,8 +193,15 @@ def violations(root: Path | None = None) -> list[str]:
             out.append(f"{rel}: plane config is not sealed")
         elif not isinstance(entry, dict):
             out.append(f"{rel}: seal entry is malformed")
-        elif _sha256(p) != entry.get("sha256"):
-            out.append(f"{rel}: differs from its seal")
+        else:
+            if rel in overlays:
+                # EOL-normalized, same policy as _sha256
+                digest = hashlib.sha256(
+                    overlays[rel].replace(b"\r\n", b"\n")).hexdigest()
+            else:
+                digest = _sha256(p)
+            if digest != entry.get("sha256"):
+                out.append(f"{rel}: differs from its seal")
     for rel in sealed:
         if rel not in files:
             out.append(f"{rel}: sealed but the file is gone")

@@ -563,3 +563,109 @@ def test_cost_malformed_fails_loud_before_any_gate(tmp_path, monkeypatch, capsys
     assert gates.main(["--cost", "tokens=-1"]) == 2
     hist = tmp_path / ".gov/history/gates.jsonl"
     assert not hist.exists(), "a rejected run recorded nothing"
+import sys
+from pathlib import Path
+
+import pytest
+
+
+# Portable gate commands (#168): the Unix coreutils true/false do not
+# exist on Windows — "a command that exits 0/1" must not depend on PATH.
+PASS = [sys.executable, "-c", "pass"]
+FAIL = [sys.executable, "-c", "raise SystemExit(1)"]
+
+
+def _write(tmp_path: Path, data) -> Path:
+    p = tmp_path / "gates.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+    return p
+
+
+def _git_repo(tmp_path: Path) -> None:
+    for cmd in (
+        ["git", "init", "-q", "."],
+        ["git", "config", "user.email", "t@t"],
+        ["git", "config", "user.name", "t"],
+    ):
+        subprocess.run(cmd, cwd=tmp_path, check=True)
+    (tmp_path / "seed.txt").write_text("seed\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "init"],
+                   cwd=tmp_path, check=True)
+
+
+def test_config_outside_seal_refused_in_governed_repo(tmp_path, monkeypatch, capsys):
+    """N6: --config pointing outside the sealed set opts out of everything
+    the seal verified — in a governed repository that refuses, naming the
+    ritual flag."""
+    (tmp_path / ".gov").mkdir(parents=True)
+    (tmp_path / ".gov" / "rules.md").write_text("# rules\n", encoding="utf-8")
+    (tmp_path / "gates.json").write_text('{"gates": [], "modes": {}}',
+                                         encoding="utf-8")
+    (tmp_path / "evil.json").write_text(json.dumps({
+        "modes": {"all": ["pwn"]},
+        "gates": [{"id": "pwn", "command": ["touch", "pwned-flag"]}],
+    }), encoding="utf-8")
+    from gov import verify_plane as vp
+    vp.baseline(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        gates.main(["--config", "evil.json"])
+    assert exc.value.code == 1
+    assert "--allow-unsealed-config" in capsys.readouterr().err
+    assert not (tmp_path / "pwned-flag").exists()
+
+
+def test_config_outside_seal_allowed_with_ritual_and_recorded(
+        tmp_path, monkeypatch, capsys):
+    """--allow-unsealed-config is the recorded ritual: the run proceeds
+    and the history line names the config it executed."""
+    (tmp_path / ".gov").mkdir(parents=True)
+    (tmp_path / ".gov" / "rules.md").write_text("# rules\n", encoding="utf-8")
+    (tmp_path / "gates.json").write_text('{"gates": [], "modes": {}}',
+                                         encoding="utf-8")
+    (tmp_path / "evil.json").write_text(json.dumps({
+        "modes": {"all": ["ok"]},
+        "gates": [{"id": "ok", "command": ["true"]}],
+    }), encoding="utf-8")
+    from gov import verify_plane as vp
+    vp.baseline(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    rc = gates.main(["--config", "evil.json",
+                "--allow-unsealed-config", "--no-record"])
+    assert rc == 0
+    out = capsys.readouterr().err
+    assert "--allow-unsealed-config" not in out  # not a refusal this time
+
+
+def test_stripped_constitution_still_drifts(tmp_path, monkeypatch):
+    """N7: stripping the constitution AND the seal does not reclassify a
+    governed repository as 'never adopted' — the surviving plane
+    artifacts (.gov/manifest.json) keep it in drift."""
+    from gov import verify_plane as vp
+    (tmp_path / ".gov").mkdir(parents=True)
+    (tmp_path / ".gov" / "rules.md").write_text("# rules\n", encoding="utf-8")
+    (tmp_path / "gates.json").write_text("{}", encoding="utf-8")
+    (tmp_path / ".gov" / "manifest.json").write_text("{}", encoding="utf-8")
+    vp.baseline(tmp_path)
+    (tmp_path / ".gov" / "rules.md").unlink()
+    (tmp_path / ".gov" / "plane-seal.json").unlink()
+    drift = vp.violations(tmp_path)
+    assert drift and "seal is GONE" in drift[0]
+
+
+def test_unparseable_config_refuses_as_plane_when_drifted(tmp_path, monkeypatch, capsys):
+    """N8 ordering: the seal is judged BEFORE the parse — a drifted
+    config refuses as the plane (1) even when it is also syntactically
+    broken; a clean unsealed scratch keeps its config error (2)."""
+    (tmp_path / ".gov").mkdir(parents=True)
+    (tmp_path / ".gov" / "rules.md").write_text("# rules\n", encoding="utf-8")
+    (tmp_path / "gates.json").write_text("{}", encoding="utf-8")
+    from gov import verify_plane as vp
+    vp.baseline(tmp_path)
+    (tmp_path / "gates.json").write_text("{ not json", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        gates.main(["--json"])
+    assert exc.value.code == 1
+    assert "drifted from its seal" in capsys.readouterr().err
