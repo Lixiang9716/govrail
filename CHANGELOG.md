@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.5](https://github.com/Lixiang9716/govrail/compare/v0.30.4...v0.30.5) (2026-09-16)
+
+
+### Bug Fixes
+
+* close N2 (seal deletion = detector deletion) and harden the new modules per the 0.30.4 red-team ([5b89590](https://github.com/Lixiang9716/govrail/commit/5b89590986286d531440deeb1829c01b51d71175))
+
 ## [0.30.4](https://github.com/Lixiang9716/govrail/compare/v0.30.3...v0.30.4) (2026-09-16)
 
 
