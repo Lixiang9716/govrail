@@ -3,6 +3,11 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.31.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- rule 8 — wait on conditions, not on clocks
+- the stale-base wording lands on master — docker scenarios pin the clarified direction; the harness prints tracebacks on scenario failure
+
 ## 0.30.7 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - N6/N7/N8 — the seal's trust chain closes around --config, stripped constitutions, and single-read ordering
