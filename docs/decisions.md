@@ -1,5 +1,14 @@
 # 治理模板 · 待决清单
 
+> **English abstract** — this file is the project's decision log: one
+> numbered entry (D0, D1, …) per settled decision, each recording what
+> the decision beat. It is the working record in Chinese; entries are
+> addressable as `D<n>` from notes, gates, and `gov recall`, and
+> `gov verify-decisions` checks numbering and the alternatives record.
+> Translate or summarize entries incrementally if a decision matters to
+> an English-reading contributor — the log itself stays one file.
+
+
 核心诉求 B：让 agent 开发的质量靠机器（门禁）守住、决策靠记录（笔记）留下，且轻到能一条命令装进任何项目。
 
 待决项按依赖顺序排列，状态分 `待定` / `已决`。
