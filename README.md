@@ -106,6 +106,46 @@ gov release reports/summary.md --agent w1  # release a lease you hold (never on 
 gov locks                      # list current leases (diagnostic only)
 ```
 
+The full command surface, verbatim from `gov --help`:
+
+<!-- gov:commands BEGIN — generated from `gov --help`; run scripts/update_readme_commands.py, never edit by hand -->
+```text
+commands:
+  init             inject the plane into a project (--hooks/--ci add runners; --hooks --pre-commit adds the opt-in commit-stage gates; --adopt-new merges new shipped gates; --upgrade shows template drift)
+  uninstall        reverse init
+  run              run the project's gate DAG (args forwarded to gates.py; --receipt records a tamper-evident run receipt, #124; --merge preflights the union of parallel branches in a scratch worktree before landing)
+  self-test        run governance rejection cases
+  receipt          verifiable run receipts (verify/show): verify a cited receipt against a commit (issue #124/D42)
+  verify-notes     check note format
+  verify-pairing   check bilingual pairing (--write re-confirms; --staged checks the index; --explain prints the schema)
+  verify-note-presence warn when a non-trivial diff carries no note (e.g. --base <ref>, --strict)
+  verify-rubric    check the review rubric's structure (ids, fields, parity)
+  verify-archive   verify the archived-notes seal (pinned sha256 per file)
+  verify-decisions verify the decisions table (numbering, alternatives, orphans; --base checks branch collisions)
+  decision         decision-row tooling (next free D-number; atomic validated add)
+  verify-doc-sync  CHANGELOG ↔ HIGHLIGHTS pairing (every version has a section; --write drafts the missing ones from CHANGELOG)
+  verify-conflict-markers fail when changed files carry git conflict markers (e.g. --base <ref>, --staged)
+  review           assemble the review dossier for a diff (scope, notes, recall, rubric)
+  trend            gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)
+  stats            structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger
+  check            syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)
+  doctor           environment self-check (PATH, python, hooks, gates schema)
+  note             note scaffold, read side, and pre-commit check (new/check/list/show; list --stale marks audit signals)
+  whatsnew         usage-oriented highlights since a version
+  recall           retrieve notes, decisions, and postmortems (all terms, ranked)
+  audit-notes      report mechanical staleness signals in implemented notes
+  change-scope     report touched surfaces (e.g. --base <ref>)
+  archive-notes    seal the archived-notes manifest
+  task             task cards for subagent briefs (new/check/close/claim/release/list; rules@hash pin + checklist + green-run receipt; claim/release lease a card so two workers cannot take one)
+  preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
+  acquire          take a lease lock on a resource (cross-process, cross-duration; busy exits 3; --wait S polls, --ttl S bounds the lease)
+  release          release a lease you hold (--agent must match the holder)
+  locks            list current lease locks in the git common dir (diagnostic only, never an admission decision)
+  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
+  verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
+```
+<!-- gov:commands END -->
+
 `init` is non-invasive and idempotent: it creates `.gov/rules.md`, adds
 `gates.json`, the notes README, and the agent skills (recall-first,
 pre-push-checks, code-review, archive-agent-notes) only when missing,

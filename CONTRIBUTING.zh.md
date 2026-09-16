@@ -51,6 +51,14 @@ gov run                   # 完整 gate DAG（notes + pairing + note-presence + 
 指望某个状态已经发生的裸 `sleep N` 会在评审中被拒绝；唯一合法的
 sleep 是为真实物理时间节拍（如租约 TTL 到期）计时。
 
+## 保持 README 命令参考与实际一致
+
+README.md 中的命令区块（`gov:commands` 标记之间）由 `gov --help` 生成——
+描述的唯一真相源是 `gov/cli.py`。改动任何 CLI 面后运行
+`scripts/update_readme_commands.py`；区块过期、文档引用了不存在的
+`gov ...` 命令/旗标、或某命令的 help 行漏列真实子命令，CI 都会变红
+（tests/test_docs_cli_consistency.py）。不要手改该区块。
+
 ## 笔记与规则
 
 - 常设指令：[.gov/rules.md](.gov/rules.md)（动手前先读）。
