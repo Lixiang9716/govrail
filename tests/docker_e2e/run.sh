@@ -96,7 +96,7 @@ FAILED=0
 # EOL-suite cell needs a pre-baked image, which is nightly territory,
 # not a per-PR cell.
 CELLS="3.10-slim 3.11-slim 3.12-slim 3.13-slim 3.12-alpine 3.10-bookworm"
-SPECIAL="gbk cross crossdir crossalloc pypi nightly"
+SPECIAL="gbk nonroot cross crossdir crossalloc pypi nightly"
 if [ -n "$CELL" ]; then
   case " $SPECIAL " in
     *" $CELL "*) CELLS="" ;;  # dedicated blocks below own this cell
@@ -115,6 +115,18 @@ for cell in $CELLS; do
   build_cell "$base" "$cell" || { FAILED=1; continue; }
   run_cell "$cell" "$cell"
 done
+
+# the non-root adopter AS ITS OWN --cell (the CI matrix splits cells so
+# a red cell reruns in isolation): file ownership and permission edges
+if [ "$CELL" = "nonroot" ]; then
+  build_cell "python:3.12-slim" "3.12-slim" || { FAILED=1; }
+  echo "== cell nonroot (user 1000)"
+  out=$(docker run --rm --user 1000:1000 -w /tmp \
+    "$IMAGE_PREFIX:3.12-slim" python /usr/local/bin/inner_e2e.py 2>&1)
+  echo "$out" | sed 's/^/    /'
+  if echo "$out" | grep -q "FAIL"; then echo "== cell nonroot: FAIL"; FAILED=1
+  else echo "== cell nonroot: PASS"; fi
+fi
 
 # non-root adopter on one cell: file ownership and permission edges
 if [ -z "$CELL" ] || [ "$CELL" = "3.12-slim" ]; then

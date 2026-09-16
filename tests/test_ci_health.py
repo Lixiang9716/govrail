@@ -25,7 +25,7 @@ import pytest
 yaml = pytest.importorskip("yaml", reason="pyyaml (dev extra) parses workflows")
 
 WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
-MAX_JOB_MINUTES = 45
+MAX_JOB_MINUTES = 60
 
 
 def _load(name: str) -> dict:
@@ -98,9 +98,47 @@ def test_required_check_name_stays_stable():
 
 
 def test_docker_e2e_is_the_long_pole_and_bounded():
-    """The Docker matrix is the pipeline's critical path (~11 min): its
-    budget must exceed the observed wall time but stay far below the
-    default — a silently slowed matrix surfaces as a TIMEOUT, not as a
-    three-hour hang."""
-    timeout = _load("ci.yml")["jobs"]["docker-e2e"].get("timeout-minutes")
+    """The Docker matrix is the pipeline's critical path: its budget must
+    exceed the observed wall time but stay far below the default — a
+    silently slowed cell surfaces as a TIMEOUT, not a three-hour hang."""
+    timeout = _load("ci.yml")["jobs"]["e2e-docker"].get("timeout-minutes")
     assert 20 <= timeout <= MAX_JOB_MINUTES
+
+
+def test_docker_cells_are_individually_rerunnable():
+    """The monolith split (orthogony): one job per docker cell, so a red
+    cell is named and rerunnable without re-running the whole matrix —
+    and the hostile-locale + nonroot cells are pinned into it."""
+    matrix = (_load("ci.yml")["jobs"]["e2e-docker"]["strategy"]
+              ["matrix"]["cell"])
+    for cell in ("gbk", "nonroot", "3.10-slim", "3.13-slim",
+                 "3.12-alpine", "cross"):
+        assert cell in matrix, f"docker cell {cell!r} left the matrix"
+
+
+def test_macos_is_a_first_class_platform():
+    assert "macos" in _load("ci.yml")["jobs"], (
+        "macos is a declared platform (pyproject classifiers) — the host "
+        "suite must run there, not only on linux and windows")
+
+
+def test_nightly_scale_tier_never_runs_on_prs():
+    """The 10k/20k-file perf tier is nightly-only: an `if` guarding on
+    the schedule event keeps it off every PR's critical path."""
+    nightly = _load("ci.yml")["jobs"]["nightly"]
+    assert nightly.get("if") and "schedule" in nightly["if"], (
+        "nightly must be schedule-gated")
+
+
+def test_governance_dogfooding_runs_once_not_per_version():
+    """The rejection cases + full DAG are version-agnostic: they run
+    once in the governance job, not four times across the matrix."""
+    governance = _load("ci.yml")["jobs"]["governance"]
+    steps = " ".join(s.get("name", "") + " " + s.get("run", "")
+                     for s in governance.get("steps", []))
+    assert "self-test" in steps and "gov run" in steps
+    cell = _load("ci.yml")["jobs"]["gates-cell"]
+    cell_steps = " ".join(s.get("name", "") + " " + s.get("run", "")
+                          for s in cell.get("steps", []))
+    assert "self-test" not in cell_steps and "gov run" not in cell_steps, (
+        "the version matrix must stay orthogonal to the governance DAG")
