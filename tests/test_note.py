@@ -92,3 +92,37 @@ def test_show_resolves_prefix_and_refuses_ambiguity(tmp_path, monkeypatch, capsy
         note_mod.main(["show", "2026-01-0"])
     assert exc.value.code == 2
     assert "ambiguous" in capsys.readouterr().err
+
+
+def test_list_stale_marks_only_signaled_notes(tmp_path, monkeypatch, capsys):
+    """--stale is the programmatic audit -> archive handoff: only notes
+    whose text carries mechanical signals (dead command, dangling D-ref)
+    are listed, each with its first signal; --json carries them all."""
+    import json as _json
+    from gov import note as note_mod
+    impl = tmp_path / ".agents" / "notes" / "implemented" / "bug-fix"
+    impl.mkdir(parents=True)
+    (impl / "2026-01-01-clean.md").write_text(
+        "# Agent Note: clean\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    (impl / "2026-01-02-stale.md").write_text(
+        "# Agent Note: stale\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nuses `gov nonexist-command`\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert note_mod.main(["list", "--stale"]) == 0
+    out = capsys.readouterr().out
+    assert "2026-01-02-stale.md" in out and "[stale:" in out
+    assert "2026-01-01-clean.md" not in out
+    capsys.readouterr()
+    assert note_mod.main(["list", "--stale", "--json"]) == 0
+    rows = _json.loads(capsys.readouterr().out)
+    assert len(rows) == 1 and rows[0]["path"].endswith("stale.md")
+    assert rows[0]["signals"] and any("nonexist-command" in s for s in rows[0]["signals"])
+    # without --stale both list, and clean notes carry no signals key
+    capsys.readouterr()
+    assert note_mod.main(["list", "--json"]) == 0
+    rows = _json.loads(capsys.readouterr().out)
+    assert len(rows) == 2
+    assert all("signals" not in r for r in rows)

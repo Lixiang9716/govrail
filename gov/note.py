@@ -136,22 +136,56 @@ def _iter_implemented():
         yield p, p.parent.name, title
 
 
+def _stale_signals(text: str) -> list[str]:
+    """Audit-notes' mechanical staleness signals for one note's text —
+    the programmatic half of the audit -> archive handoff (dead commands,
+    unknown flags, dangling D-refs), reused so the two commands can never
+    disagree on what 'stale' means."""
+    try:
+        from . import audit_notes as an
+    except ImportError:  # direct script execution
+        import audit_notes as an
+    commands = an._known_commands()
+    if commands is None:
+        print("note: needs package mode — run as `gov note list`", file=sys.stderr)
+        raise SystemExit(2)
+    return an._flags_note(text, commands, an._known_decisions())
+
+
 def _list(args: argparse.Namespace) -> int:
     anchor_to_git_root("note")
     rows = [(p.as_posix(), cls, title) for p, cls, title in _iter_implemented()
             if getattr(args, "note_class", None) in (None, cls)]
+    stale_only = getattr(args, "stale", False)
+    signals_by_path: dict[str, list[str]] = {}
+    if stale_only:
+        for rel, _cls, _title in rows:
+            try:
+                text = (Path.cwd() / rel).read_text(encoding="utf-8-sig")
+            except OSError:
+                continue
+            sigs = _stale_signals(text)
+            if sigs:
+                signals_by_path[rel] = sigs
+        rows = [r for r in rows if r[0] in signals_by_path]
     if getattr(args, "json", False):
         print(json.dumps(
-            [{"path": rel, "class": cls, "title": title}
+            [{"path": rel, "class": cls, "title": title,
+              **({"signals": signals_by_path[rel]} if rel in signals_by_path else {})}
              for rel, cls, title in rows], indent=2, ensure_ascii=False))
         return 0
     if not rows:
         print("note: no implemented notes"
+              + (" carrying staleness signals" if stale_only else "")
               + (f" in class '{args.note_class}'" if args.note_class else ""))
         return 0
     for rel, cls, title in rows:
-        print(f"{rel} — {title}")
-    print(f"note: {len(rows)} note(s)")
+        line = f"{rel} — {title}"
+        if rel in signals_by_path:
+            line += f" [stale: {signals_by_path[rel][0]}]"
+        print(line)
+    print(f"note: {len(rows)} note(s)"
+          + (f", {len(signals_by_path)} with staleness signals" if stale_only else ""))
     return 0
 
 
@@ -225,6 +259,11 @@ def main(argv: list[str] | None = None) -> int:
                         help=f"filter to one class ({', '.join(CLASSES)})")
     p_list.add_argument("--json", action="store_true",
                         help="one JSON array on stdout")
+    p_list.add_argument("--stale", action="store_true",
+                        help="only notes carrying audit-notes staleness "
+                             "signals (dead commands, unknown flags, "
+                             "dangling D-refs) — the audit -> archive "
+                             "handoff, machine-readable")
     p_list.set_defaults(func=_list)
     p_show = sub.add_parser("show", help="print one implemented note (id or path prefix)")
     p_show.add_argument("ref", help="filename, stem, or path substring (e.g. 2026-09-15-plane)")
