@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.0](https://github.com/Lixiang9716/govrail/compare/v0.32.0...v0.33.0) (2026-09-16)
+
+
+### Features
+
+* the README command reference is generated from gov --help ([#212](https://github.com/Lixiang9716/govrail/issues/212)) ([0f85c97](https://github.com/Lixiang9716/govrail/commit/0f85c97436b5a165fe297c60c62f942111d19769))
+
 ## [0.32.0](https://github.com/Lixiang9716/govrail/compare/v0.31.0...v0.32.0) (2026-09-16)
 
 

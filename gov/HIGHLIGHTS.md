@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.33.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- the README command reference is generated from gov --help
+
 ## 0.32.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - gov note list --stale + release identity closure
