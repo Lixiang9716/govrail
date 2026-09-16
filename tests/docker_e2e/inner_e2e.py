@@ -3856,6 +3856,8 @@ def main(argv):
                 failures += 1
                 print(f"E2E {name}: FAIL — {type(e).__name__}: {e}",
                       flush=True)
+                import traceback as _tb
+                _tb.print_exc()
     print(f"inner e2e: {len(names) - failures}/{len(names)} passed")
     return 1 if failures else 0
 
