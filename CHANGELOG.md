@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.30.6](https://github.com/Lixiang9716/govrail/compare/v0.30.5...v0.30.6) (2026-09-16)
+
+
+### Bug Fixes
+
+* N2 unsealed-plane drift, N3 recorded re-baseline ritual, N4 wider seal, N5 umask ([#196](https://github.com/Lixiang9716/govrail/issues/196)) ([8474cd4](https://github.com/Lixiang9716/govrail/commit/8474cd4d2a2a195eec9a5a03692bf8f308fd85ed))
+
 ## [0.30.5](https://github.com/Lixiang9716/govrail/compare/v0.30.4...v0.30.5) (2026-09-16)
 
 
