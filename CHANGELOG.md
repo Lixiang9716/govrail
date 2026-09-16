@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.7](https://github.com/Lixiang9716/govrail/compare/v0.30.6...v0.30.7) (2026-09-16)
+
+
+### Bug Fixes
+
+* N6/N7/N8 — the seal's trust chain closes around --config, stripped constitutions, and single-read ordering ([#198](https://github.com/Lixiang9716/govrail/issues/198)) ([270478f](https://github.com/Lixiang9716/govrail/commit/270478f275b52a0ea3ee21091b6d761bd10883b6))
+* rebuild the docker helper definition cleanly (docstring + import + call) ([#203](https://github.com/Lixiang9716/govrail/issues/203)) ([65bf351](https://github.com/Lixiang9716/govrail/commit/65bf351004b6de8bd5de0a3987fe8545da4f1e70))
+
 ## [0.30.6](https://github.com/Lixiang9716/govrail/compare/v0.30.5...v0.30.6) (2026-09-16)
 
 
