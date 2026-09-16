@@ -1,5 +1,7 @@
 # Contributing
 
+English | [中文](CONTRIBUTING.zh.md)
+
 govrail is a governance plane for agent-driven development, and it governs its
 own development — so contributing means following the same rules it injects
 into other projects.
@@ -45,14 +47,6 @@ development is heavily agent-driven. Three rules keep that honest:
   the same rejection cases, the same Agent Note format, the same seal
   re-baseline discipline. Where the gates cannot judge a change, that
   is review work — not a formality.
-
-### AI 贡献政策（中文摘要）
-
-欢迎并预期 AI 辅助开发——本仓库自身即由 agent 深度驱动。三条规则：一、
-PR 描述必须披露哪些部分由 agent 完成，未披露的 agent 产出可能被直接
-拒绝；二、合并由人负责——开 PR 者为记录在案的作者，须能解释每处改动并
-负责回滚；三、gate 不在乎代码是谁敲的——agent 改动同样要通过 rejection
-case、Agent Note 格式与封印重基线纪律。
 
 ## Notes and rules
 

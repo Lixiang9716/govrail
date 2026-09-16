@@ -14,4 +14,4 @@ orphaned references; `gov recall` searches these entries.
 ## D0 — Adopt the govrail governance plane
 
 - **Decision**: gates + notes + receipts as the working discipline
-- **选项**：prose-only agent rules (not checkable); ad-hoc conventions (drift silently)
+- **Alternatives**: prose-only agent rules (not checkable); ad-hoc conventions (drift silently)
