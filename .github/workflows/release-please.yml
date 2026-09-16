@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write  # cancel superseded pending CI runs on the release branch
 
 jobs:
   release:
@@ -65,13 +66,19 @@ jobs:
           twine upload dist/*
 
   # D46: while the release PR is open, draft its missing HIGHLIGHTS
-  # sections (gov verify-doc-sync --write) straight onto the PR branch,
-  # so the release merge lands CHANGELOG + version + HIGHLIGHTS together
-  # and doc-sync never goes red on master (the post-release gap hit
-  # 0.19.0 through 0.22.0, four hand-chased reds). The draft is a
-  # verbatim copy from CHANGELOG under a self-declared draft heading —
-  # the usage rewrite stays human. On the merge push release_created is
-  # true and this job skips: the section must already ship in the merge.
+  # sections (gov verify-doc-sync --write) and AMEND them into the
+  # release commit itself. The draft is a verbatim copy from CHANGELOG
+  # under a self-declared draft heading — the usage rewrite stays human.
+  #
+  # Why amend and not a follow-up commit: the release PR's creation
+  # fires a pull_request CI run on the pre-draft SHA, and for bot PRs
+  # that run waits in action_required — a stale, doomed run a maintainer
+  # could approve (0.31.0 shipped exactly this way). Amending makes the
+  # branch head a SINGLE complete commit (CHANGELOG + version +
+  # HIGHLIGHTS together), and the cancel step below removes every
+  # pending run on a superseded SHA, so the only approvable run is the
+  # complete one. On the merge push release_created is true and this
+  # job skips: the section must already ship in the merge.
   highlights:
     timeout-minutes: 10
     runs-on: ubuntu-latest
@@ -86,12 +93,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Draft missing HIGHLIGHTS sections on the release PR
+      - name: Draft HIGHLIGHTS into the release commit (amend)
+        id: draft
         env:
           BRANCH: release-please--branches--master
         run: |
           if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
             echo "no release PR branch — nothing to draft"
+            echo "amended=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git fetch origin "$BRANCH"
@@ -100,10 +109,35 @@ jobs:
           gov verify-doc-sync --write
           if git diff --quiet -- gov/HIGHLIGHTS.md; then
             echo "HIGHLIGHTS already covers every pending version"
+            echo "amended=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "govrail-release-bot"
           git config user.email "bot@users.noreply.github.com"
           git add gov/HIGHLIGHTS.md
-          git commit -m "docs: HIGHLIGHTS sections drafted from CHANGELOG (D37, D46)"
-          git push origin "$BRANCH"
+          # into the release commit itself — the PR head is born complete
+          git commit --amend --no-edit
+          git push --force-with-lease origin "$BRANCH"
+          echo "amended=true" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Cancel superseded pending CI runs (pre-draft SHA)
+        # The amended push fires a fresh pull_request run on the complete
+        # SHA; the creation-time run (pre-draft) may still sit in
+        # action_required. Approving it re-runs the race — cancel every
+        # pending run that is not on the amended head.
+        if: steps.draft.outputs.amended == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: release-please--branches--master
+          KEEP_SHA: ${{ steps.draft.outputs.head_sha }}
+        run: |
+          for id in $(gh api --paginate \
+              "repos/${{ github.repository }}/actions/runs?branch=$BRANCH&status=action_required" \
+              --jq '.workflow_runs[].id'); do
+            sha=$(gh api "repos/${{ github.repository }}/actions/runs/$id" --jq .head_sha)
+            if [ "$sha" != "$KEEP_SHA" ]; then
+              echo "cancelling superseded run $id (pre-draft ${sha:0:7})"
+              gh api -X POST "repos/${{ github.repository }}/actions/runs/$id/cancel" || true
+            fi
+          done

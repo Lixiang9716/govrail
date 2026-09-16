@@ -142,3 +142,25 @@ def test_governance_dogfooding_runs_once_not_per_version():
                           for s in cell.get("steps", []))
     assert "self-test" not in cell_steps and "gov run" not in cell_steps, (
         "the version matrix must stay orthogonal to the governance DAG")
+
+
+def test_release_pr_carries_the_highlights_draft_in_its_commit():
+    """The release race (found live on the 0.31.0 release): the PR's
+    creation fired CI on a pre-draft SHA and the late drafting push
+    could not heal a bot-PR's action_required run. The drafting step
+    must AMEND the draft into the release commit, and superseded
+    pending runs must be cancelled so only the complete SHA is
+    approvable."""
+    rp = _load("release-please.yml")
+    jobs = rp["jobs"]
+    assert "highlights" in jobs, "the drafting job disappeared"
+    run_text = " ".join(
+        s.get("run", "") for s in jobs["highlights"].get("steps", []))
+    assert "--amend" in run_text, (
+        "the HIGHLIGHTS draft must join the release commit itself "
+        "(--amend), not ride a late follow-up commit")
+    assert "action_required" in run_text and "/cancel" in run_text, (
+        "superseded pending runs on the pre-draft SHA must be cancelled "
+        "— approving one re-runs the race")
+    assert rp.get("permissions", {}).get("actions") == "write", (
+        "cancelling workflow runs needs actions: write")
