@@ -29,12 +29,16 @@ def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
     try:
         mode = path.stat().st_mode & 0o777
     except OSError:
-        # New file: respect the admin's umask (shared machines run 0640 —
-        # a hardcoded 0644 would leak ledgers global-readable). The
-        # get-umask dance is the standard recipe; the window is one call.
-        umask = os.umask(0)
-        os.umask(umask)
-        mode = 0o666 & ~umask
+        if os.name == "nt":
+            mode = 0o644  # Windows enforces no POSIX mode bits
+        else:
+            # New file: respect the admin's umask (shared machines run
+            # 0640 — a hardcoded 0644 would leak ledgers global-readable).
+            # The get-umask dance is the standard recipe; the window is
+            # one call.
+            umask = os.umask(0)
+            os.umask(umask)
+            mode = 0o666 & ~umask
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name,
                                suffix=".tmp")
     try:
