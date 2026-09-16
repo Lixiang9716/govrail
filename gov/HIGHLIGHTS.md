@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.30.4 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- enforce the plane seal out-of-band + the P1/P2 floor
+
 ## 0.30.3 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - close the audited defect report — 47 findings across the plane
