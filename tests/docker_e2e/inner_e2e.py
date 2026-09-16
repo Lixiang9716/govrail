@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from concurrent.futures import as_completed as _as_completed
 
 # The plane's runtime contract, applied to THIS process (the fixture
 # writes every file the scenarios then assert on): under the hostile
@@ -58,14 +59,11 @@ def commit_all(cwd, msg):
     git("-c", "commit.gpgsign=false", "commit", "-qm", msg, cwd=cwd)
 
 
-_PROJECT_SEQ = 0
-
-
 def fresh_project(base):
-    global _PROJECT_SEQ
-    _PROJECT_SEQ += 1
-    p = Path(base) / f"proj-{_PROJECT_SEQ}"
-    p.mkdir(parents=True)
+    # mkdtemp, not a global counter: the scenario runner executes in a
+    # process pool, and a shared counter hands two workers the same
+    # proj-N path (the reason parallel runs need unique dirs per call).
+    p = Path(tempfile.mkdtemp(dir=str(base), prefix="proj-"))
     git("init", "-q", ".", cwd=p)
     git("config", "user.email", "t@t", cwd=p)
     git("config", "user.name", "t", cwd=p)
@@ -3839,6 +3837,26 @@ SCENARIOS = {
 }
 
 
+# Scenarios whose assertions measure WALL TIME (perf budgets, timeout
+# deadlines). They run serially, alone, BEFORE the pool starts — running
+# them beside other scenarios would feed the pool's load into their
+# clocks and turn budgets into coin flips.
+TIMING_SENSITIVE = (
+    "perf_smoke", "perf_kilo", "perf_night", "perf_night_budgets",
+    "gate_timeout_enforced",
+)
+
+
+def _run_one(name, base):
+    """Run one scenario; (name, error) — None error means pass."""
+    try:
+        SCENARIOS[name](base)
+        return name, None
+    except Exception as e:  # noqa: BLE001 — the report IS the product
+        import traceback as _tb
+        return name, (e, _tb.format_exc())
+
+
 def main(argv):
     names = argv or list(SCENARIOS)
     unknown = [n for n in names if n not in SCENARIOS]
@@ -3848,17 +3866,36 @@ def main(argv):
         return 2
     failures = 0
     with tempfile.TemporaryDirectory(prefix="gov-e2e-") as base:
-        for name in names:
-            try:
-                SCENARIOS[name](base)
+        serial = [n for n in names if n in TIMING_SENSITIVE]
+        parallel = [n for n in names if n not in TIMING_SENSITIVE]
+
+        def report(name, err):
+            nonlocal failures
+            if err is None:
                 print(f"E2E {name}: PASS", flush=True)
-            except Exception as e:  # noqa: BLE001 — the report IS the product
-                failures += 1
-                print(f"E2E {name}: FAIL — {type(e).__name__}: {e}",
-                      flush=True)
-                import traceback as _tb
-                _tb.print_exc()
-    print(f"inner e2e: {len(names) - failures}/{len(names)} passed")
+                return
+            failures += 1
+            e, tb = err
+            print(f"E2E {name}: FAIL — {type(e).__name__}: {e}", flush=True)
+            print(tb, flush=True)
+
+        for name in serial:
+            report(*_run_one(name, base))
+
+        want = int(os.environ.get("GOV_E2E_JOBS")
+                   or min(os.cpu_count() or 1, 8))
+        jobs = max(1, min(want, len(parallel) or 1))
+        if parallel and jobs > 1:
+            from concurrent.futures import ProcessPoolExecutor
+            with ProcessPoolExecutor(max_workers=jobs) as pool:
+                futs = {pool.submit(_run_one, n, base): n for n in parallel}
+                for fut in _as_completed(futs):
+                    report(*fut.result())
+        else:
+            for name in parallel:
+                report(*_run_one(name, base))
+    print(f"inner e2e: {len(names) - failures}/{len(names)} passed "
+          f"({jobs} worker(s) for {len(parallel)} parallel scenario(s))")
     return 1 if failures else 0
 
 
