@@ -49,7 +49,6 @@ from __future__ import annotations
 import argparse
 import glob as _glob
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -74,13 +73,10 @@ DEFAULT_CONFIG: dict[str, list[str]] = {
 
 def _blob_hash(path: Path) -> str:
     """Return the git blob SHA for a file (works on the working tree)."""
-    proc = subprocess.run(
-        ["git", "hash-object", str(path)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8", errors="replace",
-        check=True,
-    )
+    proc = gitutil.git("hash-object", str(path))
+    if proc.returncode != 0:
+        raise RuntimeError(f"git hash-object {path}: "
+                           f"{(proc.stderr or proc.stdout).strip()}")
     return proc.stdout.strip()
 
 
@@ -253,11 +249,7 @@ def _resolve_source(arg: str, cfg: dict[str, list[str]]) -> Path:
 
 def _last_commit(path: Path) -> str:
     """Short hash of the commit that last touched a path ('' if untracked)."""
-    proc = subprocess.run(
-        ["git", "log", "-1", "--format=%h", "--", str(path)],
-        capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-    )
+    proc = gitutil.git("log", "-1", "--format=%h", "--", str(path))
     return proc.stdout.strip() if proc.returncode == 0 else ""
 
 
@@ -354,13 +346,17 @@ def _previous_record(src: Path) -> dict[str, str]:
 
 
 def _staged_files() -> list[str] | None:
-    """Paths staged in the index (deleted paths dropped); None = git failed.
+    """Paths staged in the index (deletions INCLUDED); None = git failed.
 
     gitutil's listing: quotepath off, NUL-split — a non-ASCII staged name
     must reach the pair matchers as itself, not as git's quoted escape
-    (which matched nothing and silently checked no pair at all).
+    (which matched nothing and silently checked no pair at all). Staged
+    deletions stay in the list: a one-sided `git rm` of a counterpart is
+    exactly the unpaired landing --staged exists to stop (the hash
+    comparison flags the missing side; dropping the path here used to
+    green-light the delete).
     """
-    proc = gitutil.git("diff", "--cached", "--name-only", "-z", "--diff-filter=d")
+    proc = gitutil.git("diff", "--cached", "--name-only", "-z")
     if proc.returncode != 0:
         print(f"verify_translation_pairing: --staged failed: "
               f"{(proc.stderr or proc.stdout).strip()}", file=sys.stderr)
@@ -390,6 +386,20 @@ def _staged_sources(staged: list[str], cfg: dict[str, list[str]]) -> list[Path]:
                 if p.name.endswith(lit):
                     stem = p.name[: -len(lit)]
                     hit = by_path.get(p.with_name(stem + ".md").as_posix())
+                    break
+        if hit is None:
+            # The record's counterpart field is the authoritative name for
+            # an explicitly registered pair (--write en:foo.md zh:foo_CN.md):
+            # the convention derivations above match only naming-convention
+            # pairs, so a staged counterpart under a custom name used to
+            # silently check NOTHING here — the exact capability the
+            # docstring advertises. Reverse-resolve: if this staged path IS
+            # somebody's recorded counterpart, that somebody is in scope.
+            for src in _sources(cfg):
+                rec = _record_path(src)
+                if rec.is_file() and _parse_record(rec).get(
+                        "counterpart") == p.name and src.parent == p.parent:
+                    hit = src
                     break
         if hit is not None:
             involved[hit] = None
