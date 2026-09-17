@@ -286,11 +286,52 @@ def test_preview_on_an_uninitialized_project_refuses_and_writes_nothing(
         tmp_path, capsys):
     """`--preview` promises "show what would land, write nothing", and the
     fresh-init path ignored it: the flag fell through and wrote the whole
-    plane — thirteen files — reported as a preview. It refuses now."""
+    plane — thirteen files — reported as a preview. It refuses now; the
+    composition check names the real rule first (preview rides with
+    --adopt), the state check names the missing manifest second."""
     assert cli.init(tmp_path, preview=True) == 2
     err = capsys.readouterr().err
-    assert "--preview needs an initialized project" in err
+    assert "--preview rides with --adopt" in err
     assert list(tmp_path.iterdir()) == [], "a refused preview left files"
+
+
+def test_bare_preview_on_an_initialized_project_refuses(tmp_path, capsys):
+    """The review blocker: on an initialized project a bare `--preview`
+    answered "already initialized", exit 0 — the flag silently dropped
+    one branch over from where #235 fixed it."""
+    assert cli.init(tmp_path) == 0
+    capsys.readouterr()
+    assert cli.init(tmp_path, preview=True) == 2
+    assert "--preview rides with --adopt" in capsys.readouterr().err
+    assert (tmp_path / ".gov" / "manifest.json").exists(), \
+        "the refused preview disturbed the initialized project"
+
+
+def test_upgrade_with_preview_refuses(tmp_path, capsys):
+    """`--upgrade --preview` ran the report as if --preview existed; the
+    upgrade report is already read-only, and a silently ignored modifier
+    is a lie about what ran."""
+    assert cli.init(tmp_path) == 0
+    capsys.readouterr()
+    assert cli.init(tmp_path, upgrade=True, preview=True) == 2
+    assert "--preview rides with --adopt" in capsys.readouterr().err
+
+
+def test_preset_with_preview_refuses(tmp_path, capsys):
+    """`--preset X --preview` applied the preset with the flag dropped."""
+    assert cli.init(tmp_path, preset="agent-heavy", preview=True) == 2
+    assert "--preview rides with --adopt" in capsys.readouterr().err
+    assert not (tmp_path / ".gov").exists(), "a refused preview wrote a plane"
+
+
+def test_adopt_on_an_uninitialized_project_refuses(tmp_path, capsys):
+    """`--adopt X` on a bare directory fell through to a plain fresh init
+    with the adoption target quietly dropped — a fresh init already
+    installs the current templates, so there is nothing to adopt into."""
+    assert cli.init(tmp_path, adopt=[".gov/rejections/README.md"]) == 2
+    err = capsys.readouterr().err
+    assert "--adopt needs an initialized project" in err
+    assert not (tmp_path / ".gov").exists(), "a refused adopt wrote a plane"
 
 
 def test_upgrade_report_clean_project(tmp_path, capsys):
