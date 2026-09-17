@@ -103,9 +103,12 @@ def lifecycle(base):
         encoding="utf-8")
     gov("verify-notes", cwd=p)
     commit_all(p, "note")
-    # the template DAG is green
+    # the template DAG is green (count derived: the template grows
+    # gates — D55 added check — and a memorized number rots silently)
+    n_gates = len(json.loads(
+        (p / "gates.json").read_text(encoding="utf-8"))["modes"]["all"])
     r = gov("run", cwd=p)
-    assert "7 gates" in r.stdout
+    assert f"{n_gates} gates" in r.stdout
     # conflict markers are red, then resolved
     (p / "tangled.md").write_text(
         "a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> side\n", encoding="utf-8")
@@ -2893,12 +2896,13 @@ def worktree_ledgers(base):
 
 
 def note_new_scaffold(base):
-    """`gov note new` scaffolds the plane's own memory: the skeleton
-    passes verify-notes AS WRITTEN, a --ref is validated against the
-    decisions table BEFORE any file lands (unknown ref refused, file
-    count unchanged), a govrail:Dn reference is recorded-not-validated
-    (D34's one legal cross-project namespace), and an unknown class
-    names the closed set."""
+    """`gov note new` scaffolds the plane's own memory. D3: the skeleton
+    does NOT pass verify-notes as written — a placeholder left in place
+    fails the gate naming the section, and the filled note passes. A
+    --ref is validated against the decisions table BEFORE any file lands
+    (unknown ref refused, file count unchanged), a govrail:Dn reference
+    is recorded-not-validated (D34's one legal cross-project namespace),
+    and an unknown class names the closed set."""
     p = fresh_project(base)
     gov("init", cwd=p)
     docs = p / "docs"
@@ -2907,10 +2911,19 @@ def note_new_scaffold(base):
         "## D1 — adopted\n\n- **选项**：x\n", encoding="utf-8")
     r = gov("note", "new", "--class", "testing", "--ref", "D1",
             "Scaffold flow", cwd=p)
-    assert "wrote " in r.stdout, r.stdout
+    assert "fill the three sections" in r.stdout, r.stdout
     made = list((p / ".agents" / "notes" / "implemented" / "testing")
                 .glob("*-scaffold-flow.md"))
     assert len(made) == 1, made
+    # the unfilled scaffold is red, naming the hollow sections (D3)
+    r = gov("verify-notes", cwd=p, expect=1)
+    assert "placeholder" in r.stdout and "## Decision" in r.stdout, r.stdout
+    made[0].write_text(
+        "# Agent Note: Scaffold flow\n\nStatus: implemented\n\n"
+        "Related: D1\n\n## Problem\nthe scaffold passed the gates "
+        "unfilled\n\n## Decision\nplaceholders now fail the gate\n\n"
+        "## Alternatives considered\ntrusting the author to fill it "
+        "later — that was the defect\n", encoding="utf-8")
     gov("verify-notes", cwd=p)
     gov("note", "check", cwd=p)
     # an unknown D-ref is refused before any file is written
@@ -2924,6 +2937,14 @@ def note_new_scaffold(base):
     r = gov("note", "new", "--class", "process", "--ref", "govrail:D54",
             "External ref", cwd=p)
     assert "recorded, not validated" in r.stdout, r.stdout
+    ext = next((p / ".agents" / "notes" / "implemented" / "process")
+               .glob("*-external-ref.md"))
+    ext.write_text(
+        "# Agent Note: External ref\n\nStatus: implemented\n\n"
+        "Related: govrail:D54\n\n## Problem\nneed the tool's own "
+        "decisions\n\n## Decision\nexternal refs are recorded, not "
+        "validated\n\n## Alternatives considered\nduplicating the table "
+        "locally\n", encoding="utf-8")
     gov("verify-notes", cwd=p)
     # an unknown class names the closed set
     r = gov("note", "new", "--class", "nonsense", "X", cwd=p, expect=2)

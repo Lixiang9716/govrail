@@ -361,9 +361,11 @@ def test_apply_converges_mode_membership_for_already_adopted_gates(
                       "command": ["python3", "-m", "pytest", "-q"]},
                      {"id": "build", "label": "hand-wired",
                       "command": ["python3", "-m", "build"]}]
-    cfg["modes"]["all"] = ["plane", "my-own-first", "notes", "pairing",
-                           "note-presence", "conflict-markers", "archive",
-                           "task"]
+    tpl_all = json.loads(
+        (Path(__file__).resolve().parent.parent
+         / "gov" / "templates" / "gates.json").read_text(encoding="utf-8")
+    )["modes"]["all"]
+    cfg["modes"]["all"] = ["my-own-first"] + tpl_all
     gates_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     with pytest.raises(gates_mod.ConfigError):
         gates_mod.load_config(str(gates_path))  # the drill's D24 state

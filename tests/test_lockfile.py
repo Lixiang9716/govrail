@@ -55,7 +55,8 @@ def test_second_process_blocks_until_release(tmp_path):
              "else:\n"
              "    print('free')\n",
              str(lock)],
-            capture_output=True, text=True, timeout=30)
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=30)
         assert child.stdout.strip() == "busy"
 
 

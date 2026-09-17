@@ -87,3 +87,45 @@ def test_uppercase_extension_valid_note_still_passes(tmp_path, monkeypatch):
     (d / "2026-01-01-c.MD").write_text(VALID, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     assert verify_notes.main([]) == 0
+
+
+def _scaffold() -> str:
+    from gov import note as nt
+    return nt.SKELETON.format(
+        title="t", related="",
+        ph_problem=nt.PLACEHOLDERS["## Problem"],
+        ph_decision=nt.PLACEHOLDERS["## Decision"],
+        ph_alternatives=nt.PLACEHOLDERS["## Alternatives considered"])
+
+
+def test_note_new_scaffold_fails_as_written(tmp_path):
+    """The D3 flip: `gov note new`'s own output no longer passes the
+    gate unfilled — every hollow section is named."""
+    errs = verify_notes.check_note(_note(tmp_path, _scaffold()))
+    assert len(errs) == 3 and all("placeholder" in e for e in errs), errs
+
+
+def test_partial_fill_names_only_hollow_sections(tmp_path):
+    text = _scaffold()
+    text = text.replace("(pain, stated to stand without the solution)",
+                        "the gate could not tell a real note from an empty one")
+    errs = verify_notes.check_note(_note(tmp_path, text))
+    assert len(errs) == 2, errs
+    assert all("## Decision" in e or "## Alternatives considered" in e
+               for e in errs)
+
+
+def test_empty_section_fails(tmp_path):
+    text = VALID.replace("## Problem\np\n", "## Problem\n")
+    errs = verify_notes.check_note(_note(tmp_path, text))
+    assert any("'## Problem' section is empty" in e for e in errs), errs
+
+
+def test_gate_rejects_scaffold_in_tree(tmp_path, monkeypatch):
+    """Through main(): a scaffold dropped into implemented/ turns the
+    gate red naming the note — the pre-push hook cannot be slept past."""
+    d = tmp_path / ".agents" / "notes" / "implemented" / "process"
+    d.mkdir(parents=True)
+    (d / "2026-01-01-s.md").write_text(_scaffold(), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert verify_notes.main([]) == 1

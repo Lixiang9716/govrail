@@ -176,6 +176,33 @@ def test_verify_notes_rejects_missing_section() -> None:
         _case("verify_notes.py", root, 1, "a note missing Alternatives must fail")
 
 
+def test_verify_notes_rejects_hollow_skeleton() -> None:
+    """D3: the `note new` scaffold's own output — placeholders and all —
+    used to pass verify-notes AS WRITTEN, making the empty shell the
+    path of least resistance. The gate now names every hollow section."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        notes = root / ".agents" / "notes" / "implemented"
+        (notes / "bug-fix").mkdir(parents=True)
+        try:
+            from .note import PLACEHOLDERS, SKELETON
+        except ImportError:  # run as a script by the tools family
+            from note import PLACEHOLDERS, SKELETON
+        (notes / "bug-fix" / "2026-01-01-h.md").write_text(
+            SKELETON.format(
+                title="h", related="",
+                ph_problem=PLACEHOLDERS["## Problem"],
+                ph_decision=PLACEHOLDERS["## Decision"],
+                ph_alternatives=PLACEHOLDERS["## Alternatives considered"]),
+            encoding="utf-8")
+        result = _run("verify_notes.py", root)
+        assert result.returncode == 1, "the unfilled scaffold must fail"
+        assert result.stdout.count("placeholder") == 3, result.stdout
+        assert "'## Problem'" in result.stdout, result.stdout
+        assert "'## Decision'" in result.stdout, result.stdout
+        assert "'## Alternatives considered'" in result.stdout, result.stdout
+
+
 def test_gates_rejects_duplicate_id() -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -1689,6 +1716,7 @@ def test_text_subprocess_decodes_are_pinned() -> None:
 
 CASES = [
     test_verify_notes_rejects_missing_section,
+    test_verify_notes_rejects_hollow_skeleton,
     test_gates_rejects_duplicate_id,
     test_gates_rejects_cycle,
     test_gates_rejects_unknown_needs,

@@ -56,7 +56,8 @@ def gov(*args, cwd=None, expect=0, timeout=300):
 
 def git(*args, cwd, check=True):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True,
-                          text=True, check=check)
+                          text=True, encoding="utf-8", errors="replace",
+                          check=check)
 
 
 def commit_all(cwd, msg):
@@ -137,8 +138,13 @@ def test_act1_adopt_and_govern(project):
     gov("verify-note-presence", cwd=project)
 
     # --- the full template DAG is green ----------------------------------
+    # the count is derived, not memorized: the template grows gates
+    # (D55 added check) and a memorized number goes stale silently
+    import json as _json
+    n_gates = len(_json.loads(
+        (project / "gates.json").read_text(encoding="utf-8"))["modes"]["all"])
     r = gov("run", cwd=project)
-    assert "7 gates" in r.stdout and "7 pass" in r.stdout
+    assert f"{n_gates} gates" in r.stdout and f"{n_gates} pass" in r.stdout
 
     # --- conflict markers: red with file:line, then resolved -------------
     (project / "tangled.md").write_text(

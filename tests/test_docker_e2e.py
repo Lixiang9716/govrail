@@ -18,7 +18,8 @@ RUN_SH = HERE / "docker_e2e" / "run.sh"
 def _docker_ready() -> bool:
     try:
         r = subprocess.run(["docker", "info", "--format", "ok"],
-                           capture_output=True, text=True, timeout=30)
+                           capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=30)
         return r.returncode == 0 and "ok" in r.stdout
     except (OSError, subprocess.TimeoutExpired):
         return False

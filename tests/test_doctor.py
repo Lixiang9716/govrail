@@ -113,9 +113,12 @@ def test_all_shipped_gates_adopted_is_ok(tmp_path, monkeypatch, capsys):
     parked via enabled:false — parking is adoption, the loud mechanism)
     and the check goes quiet-ok."""
     monkeypatch.chdir(tmp_path)
-    gates_ = [{"id": i, "command": PASS} for i in
-              ("notes", "pairing", "note-presence",
-               "conflict-markers", "archive", "task", "plane", "rubric")]
+    tpl = json.loads((Path(__file__).resolve().parent.parent
+                      / "gov" / "templates" / "gates.json"
+                      ).read_text(encoding="utf-8"))
+    gates_ = [{"id": g["id"], "command": PASS} for g in tpl["gates"]
+              if g["id"] != "decisions"]
+    gates_.append({"id": "rubric", "command": PASS})  # hand-shipped, not in the template
     gates_.append({"id": "decisions",
                    "command": ["gov", "verify-decisions"]})
     gates_.append({"id": "doc-sync", "command": PASS,
