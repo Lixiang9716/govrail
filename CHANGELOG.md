@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.35.0](https://github.com/Lixiang9716/govrail/compare/v0.34.12...v0.35.0) (2026-09-17)
+
+
+### Features
+
+* the govrail router skill — when/when-not judgment for the whole command surface, injected first ([#262](https://github.com/Lixiang9716/govrail/issues/262)) ([dd51044](https://github.com/Lixiang9716/govrail/commit/dd51044b502b2f78cf4db2c998c86c463303fd60))
+
 ## [0.34.12](https://github.com/Lixiang9716/govrail/compare/v0.34.11...v0.34.12) (2026-09-17)
 
 
