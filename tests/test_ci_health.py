@@ -18,6 +18,7 @@ violation is a local red, not a 0-second GitHub failure.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -237,3 +238,38 @@ def test_derived_truths_regenerate_in_ci():
     assert "derive" in needs, (
         "derive must feed the required gates summary — drift that "
         "cannot block a merge is advisory drift")
+
+
+def test_ci_is_path_aware():
+    """Docs-only changes (nothing the wheel or e2e image ships) run the
+    doc-facing set, not the world: the platform suites, hostile locale,
+    shadow install, and ten docker cells skip; ONE pytest cell (3.12)
+    stays unconditional so the required `gates` summary can never
+    starve — the #193 lesson holds under path-awareness."""
+    ci = _load("ci.yml")
+    jobs = ci["jobs"]
+    assert "changes" in jobs, "the path classifier job disappeared"
+    classify = json.dumps(jobs["changes"])
+    assert "dorny/paths-filter" in classify and "gov/**" in classify, (
+        "the classifier must name the wheel/e2e path set")
+    # heavy jobs skip on docs-only
+    for job in ("backport-shadow", "windows", "macos", "gbk-locale",
+                "e2e-docker"):
+        cond = jobs[job].get("if", "")
+        assert "docs_only" in cond, (
+            f"{job} runs unconditionally — a prose edit pays its full "
+            "price; gate it on the classifier")
+    # one pytest cell always runs — at STEP level (the matrix context
+    # is unavailable in a job-level if; actionlint enforces this)
+    cell = jobs["gates-cell"]
+    assert "docs_only" not in cell.get("if", ""), (
+        "job-level matrix conditions are invalid GitHub syntax — the "
+        "docs_only gate belongs on the cell's steps")
+    step_ifs = [s.get("if", "") for s in cell.get("steps", [])]
+    assert any("docs_only" in c and "'3.12'" in c for c in step_ifs), (
+        "gates-cell must keep one unconditional cell (3.12) — the "
+        "required summary starves otherwise")
+    for job in ("lint", "derive", "governance"):
+        assert "docs_only" not in jobs[job].get("if", "none"), (
+            f"{job} is doc-relevant by design; do not skip it for "
+            "docs-only changes")
