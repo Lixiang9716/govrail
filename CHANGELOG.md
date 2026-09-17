@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.1](https://github.com/Lixiang9716/govrail/compare/v0.34.0...v0.34.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* red-team round 4 — TTL minted at acquisition, staged reads the record's counterpart, the unregistered case runs, and the self-test watchdog ([#229](https://github.com/Lixiang9716/govrail/issues/229)) ([db20a84](https://github.com/Lixiang9716/govrail/commit/db20a848da389f50f3ee05d575c6c08fd01d5009))
+
 ## [0.34.0](https://github.com/Lixiang9716/govrail/compare/v0.33.1...v0.34.0) (2026-09-17)
 
 

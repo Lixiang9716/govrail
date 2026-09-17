@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.1 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- red-team round 4 — TTL minted at acquisition, staged reads the record's counterpart, the unregistered case runs, and the self-test watchdog
+
 ## 0.34.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - --write announces a one-sided re-confirm — rule 7's consent moment
