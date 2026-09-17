@@ -24,6 +24,13 @@ TEMPLATE = HERE / "gov" / "templates" / "pre-push"
 ZERO = "0" * 40
 SHA = "1234567890abcdef1234567890abcdef12345678"
 
+# The hook is a POSIX sh script: Windows executes hooks through git's
+# own sh, never as a Win32 process, so driving it directly from Python
+# is a POSIX-shaped test. The parsing contract is covered by the POSIX
+# CI jobs and the docker e2e cells.
+pytestmark = pytest.mark.skipif(
+    os.name == "nt", reason="POSIX sh hook; Windows runs it via git's sh")
+
 
 @pytest.fixture()
 def hooked(tmp_path, monkeypatch):
@@ -97,8 +104,6 @@ def test_single_range_scopes_to_its_base(hooked):
     assert _calls(hooked[1]) == [f"run --base {SHA}"]
 
 
-@pytest.mark.skipif(os.name == "nt" and not os.environ.get("GOV_E2E"),
-                    reason="needs a POSIX git push; covered by the docker cells")
 def test_real_git_deletion_push_is_relayed_verbatim(tmp_path, monkeypatch):
     """The wire-format anchor: run an actual deletion push through a
     recording hook and assert git really sends what the parser assumes.
