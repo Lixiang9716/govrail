@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.10](https://github.com/Lixiang9716/govrail/compare/v0.34.9...v0.34.10) (2026-09-17)
+
+
+### Bug Fixes
+
+* the containment anchor comes from the process, never from the protected path (N15) ([#248](https://github.com/Lixiang9716/govrail/issues/248)) ([50cab4e](https://github.com/Lixiang9716/govrail/commit/50cab4e608917d4147dabee54ffb17d3f330800b))
+
 ## [0.34.9](https://github.com/Lixiang9716/govrail/compare/v0.34.8...v0.34.9) (2026-09-17)
 
 

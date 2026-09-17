@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.10 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- the containment anchor comes from the process, never from the protected path (N15)
+
 ## 0.34.9 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - containment walks the whole state path — the directory variant of the ledger escape, and AGENTS.md stops being written through
