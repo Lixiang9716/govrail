@@ -137,6 +137,7 @@ def _check_placement(root: Path) -> tuple[list[str], list[Path]]:
 
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("verify_notes")
+    argv = list(sys.argv[1:]) if argv is None else argv
     if argv:
         # This command is flagless. It used to ignore argv entirely and
         # answer a mistyped invocation with a GREEN verdict — 31 of 32
