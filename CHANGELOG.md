@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.5](https://github.com/Lixiang9716/govrail/compare/v0.34.4...v0.34.5) (2026-09-17)
+
+
+### Bug Fixes
+
+* init --preview requires --adopt, and --adopt requires an initialized project ([#237](https://github.com/Lixiang9716/govrail/issues/237)) ([04671a6](https://github.com/Lixiang9716/govrail/commit/04671a615a241cfc3cdc5db482a330af7c756312))
+
 ## [0.34.4](https://github.com/Lixiang9716/govrail/compare/v0.34.3...v0.34.4) (2026-09-17)
 
 
