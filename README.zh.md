@@ -11,6 +11,8 @@
 
 平面提供两个机制：**门禁**（任何能被命令检查的承诺都变成机械检查）和**笔记**（每个非平凡改动记录决策、被打败的方案与后果）。双语配对让对外展示文档保持同步。
 
+![治理平面：agent 提议、平面验证、仓库保留已验证历史](docs/images/plane.svg)
+
 ## 它改变了什么
 
 | 没有 govrail | 有 govrail |
@@ -22,6 +24,15 @@
 看一个被治理的项目长什么样：[examples/demo-project](examples/demo-project)——
 演练每个功能的活标本（量规、拒绝用例、表面映射、决策表）。
 任务导向食谱：[docs/cookbook.md](docs/cookbook.zh.md)。
+
+## 一个改动如何发布
+
+![发布流水线：路径感知的 PR CI，之后直达 PyPI 的无人值守发布链](docs/images/pipeline.svg)
+
+规则 1 的运行形态：按 diff 跑最小充分集（散文编辑不付平台矩阵的钱），
+CI 拥有全矩阵；release 级合并端到端自动发布——草稿 amend 进 release
+提交、武装 auto-merge、打 tag 发 PyPI 全程无人。红 PR 永不合并；
+链路在证据面前停下，而不是在希望面前。
 
 ## 安装
 

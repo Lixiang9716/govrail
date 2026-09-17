@@ -18,6 +18,8 @@ becomes a mechanical check) and **notes** (every non-trivial change records the
 decision, what it beat, and the consequences). Bilingual pairing keeps the
 external-presentation docs in sync.
 
+![The governance plane: agents propose, the plane verifies, the repository keeps verified history](docs/images/plane.svg)
+
 ## What it changes
 
 | Without govrail | With govrail |
@@ -28,6 +30,16 @@ external-presentation docs in sync.
 
 See a governed project in [examples/demo-project](examples/demo-project) — a living specimen exercising every feature (rubric, rejection cases,
 surfaces, decisions). Task-oriented recipes: [docs/cookbook.md](docs/cookbook.md).
+
+## How a change ships
+
+![Shipping pipeline: path-aware PR CI, then the unattended release chain to PyPI](docs/images/pipeline.svg)
+
+Rule 1 in motion: the smallest sufficient set runs per diff (a prose
+edit never pays the platform matrix), CI owns the full matrix, and a
+release-worthy merge publishes end to end — draft amended into the
+release commit, auto-merge armed, tag and PyPI unattended. A red PR
+never merges; the chain halts on evidence, not on hope.
 
 ## Install
 
