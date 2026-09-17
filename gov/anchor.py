@@ -74,3 +74,15 @@ def history_path(rel: str = "gates.jsonl") -> Path:
     except OSError:
         pass
     return Path(".gov/history") / rel
+
+
+def ledger_root(ledger: Path) -> Path | None:
+    """The checkout root that owns a history-path ledger.
+
+    `<main>/.gov/history/<name>` → `<main>` — a STRUCTURAL fact of the
+    checkout, never derived from the protected path: a linked directory
+    makes git's walk-up answer for the attacker (N15). Fewer than three
+    components (the cwd-relative fallback shape) means no repository is
+    known here — None, and containment degrades to the final component.
+    """
+    return ledger.parents[2] if len(ledger.parents) >= 3 else None

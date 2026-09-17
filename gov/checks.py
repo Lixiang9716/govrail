@@ -393,12 +393,15 @@ def _record(reports: list[FileReport]) -> Path:
         "kind": "check",
         "checks": per_rule,
     }
+    line = json.dumps(record, separators=(",", ":")) + "\n"
     try:
         from . import atomicio
-        atomicio.append_line(path, json.dumps(record, separators=(",", ":")) + "\n")
+        from .anchor import ledger_root
+        atomicio.append_line(path, line, root=ledger_root(path))
     except ImportError:  # direct-module execution
         import atomicio
-        atomicio.append_line(path, json.dumps(record, separators=(",", ":")) + "\n")
+        from anchor import ledger_root
+        atomicio.append_line(path, line, root=ledger_root(path))
     return path
 
 

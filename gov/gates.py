@@ -49,10 +49,12 @@ from typing import Any
 # script (self-test scratch dirs), where the package context is absent.
 try:
     from . import receipt as receipt_mod
+    from . import anchor as anchor_mod
     from . import atomicio, gitutil, pathmatch
     from .root import anchor_to_git_root, force_utf8_stdio
 except ImportError:  # direct-script execution (python gov/gates.py)
     import receipt as receipt_mod
+    import anchor as anchor_mod
     import atomicio, gitutil, pathmatch
     from root import anchor_to_git_root, force_utf8_stdio
 
@@ -910,7 +912,12 @@ def run_gates(
         # Trend data, not evidence (D44): a refused append warns and the
         # run continues; nothing was written anywhere.
         try:
-            atomicio.assert_contained(record_path)
+            # the boundary is the ledger's own checkout (structural:
+            # <main>/.gov/history/gates.jsonl), not the protected path's
+            # opinion of its repository — a linked directory would make
+            # git's walk-up answer for the attacker (N15)
+            atomicio.assert_contained(
+                record_path, root=anchor_mod.ledger_root(record_path))
             fd = os.open(record_path,
                          os.O_WRONLY | os.O_CREAT | os.O_APPEND
                          | getattr(os, "O_NOFOLLOW", 0), 0o644)

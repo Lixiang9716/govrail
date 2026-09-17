@@ -731,7 +731,10 @@ def test_history_directory_symlink_warns_and_writes_nothing(tmp_path,
     linked outside — the final-component check cannot see it, the
     parent-chain containment does."""
     import subprocess as sp
-    outside = tmp_path / "outside"
+    # N15: the escape target lives OUTSIDE the worktree — git's walk-up
+    # from it finds no repository, which is exactly how the path-derived
+    # anchor stepped aside. The runner's own repo is the boundary now.
+    outside = tmp_path.parent / f"{tmp_path.name}-outside-h2"
     outside.mkdir()
     sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
     assert cli.init(tmp_path) == 0
@@ -741,5 +744,6 @@ def test_history_directory_symlink_warns_and_writes_nothing(tmp_path,
     capsys.readouterr()
     assert gates.main([]) == 0
     err = capsys.readouterr().err
-    assert "NOT recorded" in err and "symlink" in err
+    assert "NOT recorded" in err
+    assert ("outside the repository" in err) or ("symlink" in err)
     assert list(outside.iterdir()) == [], "the external dir gained a file"

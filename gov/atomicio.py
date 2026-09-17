@@ -65,14 +65,15 @@ def _atomic_replace(path: Path, data: bytes, mode: int,
         raise
 
 
-def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
+def write_text(path: Path, text: str, *, fsync: bool = True,
+               root: Path | None = None) -> None:
     """Atomically (re)write ``path`` with ``text``.
 
     The temp file inherits the existing file's mode when the file exists
     (a rewrite must not change who could read it) and the umask's answer
     otherwise.
     """
-    assert_contained(path)
+    assert_contained(path, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_replace(path, text.encode("utf-8"), _target_mode(path), fsync)
 
@@ -101,44 +102,60 @@ def assert_not_symlink(path: Path) -> None:
             "or point it at a path you manage.")
 
 
-def assert_contained(path: Path) -> None:
-    """Refuse a symlink on ANY component of a state path.
+def assert_contained(path: Path, root: Path | None) -> None:
+    """Refuse a state path that lives — or walks — outside ``root``.
 
-    O_NOFOLLOW and a final-component lstat are blind to a LINKED
-    DIRECTORY: `.gov/history` pointing outside the repository turned
-    every ledger open into an outside write with no flag tripped —
-    the round-10 review's probes, on the write half the first fix's
-    "reads-only" scoping got wrong. The plane's state lives inside the
-    work tree that owns the path; every component between that root and
-    the final component must be a real directory. Outside any
-    repository there is no inside: nothing to contain, nothing to
-    refuse."""
+    ``root`` is the containment boundary and comes from the PROCESS: the
+    anchored runner's repository, or the ledger's own checkout derived
+    from the common dir. It is NEVER resolved from the protected path —
+    a linked directory makes git's walk-up answer for the attacker
+    ("not a repository" → step aside → the write couriers on), which is
+    N7's anchor-pollution lesson at this layer (N15, probed).
+
+    Two judgments, both read-only:
+
+    - ``realpath`` the path: where would a write LAND? Outside ``root``
+      → refuse. This kills the directory variant outright.
+    - lstat every component between ``root`` and the final: a link ON
+      the way is refused even when it happens to point somewhere inside.
+
+    ``root=None``: nothing is known about a repository here — the
+    final-component refusal is all that remains.
+
+    """
     assert_not_symlink(path)
-    try:
-        from .gitutil import toplevel
-    except ImportError:  # direct-module execution
-        from gitutil import toplevel
-    root = toplevel(str(path.parent))
     if root is None:
         return
-    cur = path if path.is_absolute() else Path.cwd() / path
-    stop = Path(root)
-    cur = cur.parent
-    while cur != stop and cur != cur.parent:
+    root_real = os.path.realpath(root)
+    real = os.path.realpath(path)
+    if real != root_real and not real.startswith(root_real + os.sep):
+        raise SymlinkRefused(
+            f"{path}: resolves to {real} — outside the repository "
+            f"({root_real}); the plane's state stays inside the "
+            "repository (N10)")
+    # the walk runs on the ORIGINAL lexical components — realpath would
+    # resolve the very links being judged, and the walk would find only
+    # clean directories (N15's second lesson, same probe)
+    rel = os.path.relpath(path, root)
+    cur = Path(root)
+    for comp in rel.split(os.sep):
+        if comp in (".", ""):
+            continue
+        cur = cur / comp
         if cur.is_symlink():
             raise SymlinkRefused(
                 f"{cur}: is a symlink on a state path — refusing; the "
                 "plane's state stays inside the repository (N10)")
-        cur = cur.parent
 
 
-def append_line(path: Path, data: str, *, fsync: bool = True) -> None:
+def append_line(path: Path, data: str, *, fsync: bool = True,
+                root: Path | None = None) -> None:
     """Append one UTF-8 chunk through O_NOFOLLOW, symlink-refusing.
 
     The single append policy for every ledger: one file descriptor, one
     O_APPEND write loop (partial-write safe), fsync before close, and
     the final component may not be a symlink."""
-    assert_contained(path)  # before the mkdir: a linked parent is the hole
+    assert_contained(path, root)  # before the mkdir: a linked parent is the hole
     path.parent.mkdir(parents=True, exist_ok=True)
     assert_not_symlink(path)
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
@@ -153,11 +170,12 @@ def append_line(path: Path, data: str, *, fsync: bool = True) -> None:
         os.close(fd)
 
 
-def write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:
+def write_bytes(path: Path, data: bytes, *, fsync: bool = True,
+                root: Path | None = None) -> None:
     """Atomically (re)write ``path`` with bytes — BINARY, never text
     mode: a text-mode write translates \n to \r\n on Windows, and the
     hook/workflow templates must land byte-identical to their sources
     for uninstall's byte-level comparisons."""
-    assert_contained(path)
+    assert_contained(path, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_replace(path, data, _target_mode(path), fsync)

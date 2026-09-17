@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from . import (archive_notes, atomicio, audit_notes, change_scope, decision,
-               gates, hookcmd, locks, recall, review, stats, task,
+               gates, gitutil, hookcmd, locks, recall, review, stats, task,
                verify_archive, verify_conflict_markers, verify_decisions,
                verify_doc_sync, verify_plane)
 from . import checks, doctor, note, presets, receipt, self_test, trend, whatsnew
@@ -1001,7 +1001,7 @@ def uninstall(project: Path, force: bool = False) -> int:
             kept.pop()
         if kept:
             atomicio.write_text(ag, "\n".join(kept) + "\n",
-                                encoding="utf-8")
+                                root=gitutil.toplevel(str(project)))
         else:
             ag.unlink()
 
