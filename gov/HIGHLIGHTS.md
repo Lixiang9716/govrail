@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.5 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- init --preview requires --adopt, and --adopt requires an initialized project
+
 ## 0.34.4 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - init --upgrade/--preview refuse on a project with no manifest
