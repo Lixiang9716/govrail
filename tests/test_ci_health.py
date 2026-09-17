@@ -249,8 +249,7 @@ def test_ci_is_path_aware():
     ci = _load("ci.yml")
     jobs = ci["jobs"]
     assert "changes" in jobs, "the path classifier job disappeared"
-    filt = json.dumps(jobs["changes"])  # ensure import below
-    classify = str(jobs["changes"])
+    classify = json.dumps(jobs["changes"])
     assert "dorny/paths-filter" in classify and "gov/**" in classify, (
         "the classifier must name the wheel/e2e path set")
     # heavy jobs skip on docs-only
