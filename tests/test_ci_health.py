@@ -252,6 +252,19 @@ def test_ci_is_path_aware():
     classify = json.dumps(jobs["changes"])
     assert "dorny/paths-filter" in classify and "gov/**" in classify, (
         "the classifier must name the wheel/e2e path set")
+    # A doc change's own BOOKKEEPING (pairing include, seal re-baseline,
+    # ritual ledger) lives under .gov/ — a bare '.gov/**' filter
+    # reclassifies every bilingual doc edit as code and re-buys the
+    # full matrix (the CoC PR ran the world for adding a conduct file).
+    # Only .gov/rejections/** is pytest-consumed; rules.md's
+    # live==template pin lives in the always-run 3.12 cell, and the
+    # seal/pairing/ritual state is judged by the always-run governance
+    # job. Found live: #221.
+    assert ".gov/rejections/**" in classify, (
+        "the pytest-consumed rejection cases must stay in the code set")
+    assert '".gov/**"' not in classify, (
+        "a bare .gov/** filter re-captures doc bookkeeping — pair/seal/"
+        "ritual edits under .gov/ are doc-change side effects, not code")
     # heavy jobs skip on docs-only
     for job in ("backport-shadow", "windows", "macos", "gbk-locale",
                 "e2e-docker"):

@@ -44,7 +44,7 @@ jobs:
               - 'tests/**'
               - 'scripts/**'
               - 'examples/**'
-              - '.gov/**'
+              - '.gov/rejections/**'
               - '.github/workflows/**'
               - 'gates.json'
               - 'pyproject.toml'
