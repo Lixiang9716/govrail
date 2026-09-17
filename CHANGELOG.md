@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.0](https://github.com/Lixiang9716/govrail/compare/v0.33.1...v0.34.0) (2026-09-17)
+
+
+### Features
+
+* --write announces a one-sided re-confirm — rule 7's consent moment ([#226](https://github.com/Lixiang9716/govrail/issues/226)) ([5ae192e](https://github.com/Lixiang9716/govrail/commit/5ae192e1d56ecdc6cc317ba4a5e25359593b1add))
+
 ## [0.33.1](https://github.com/Lixiang9716/govrail/compare/v0.33.0...v0.33.1) (2026-09-17)
 
 
