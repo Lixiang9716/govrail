@@ -27,6 +27,13 @@ earlier rounds found, in places earlier rounds did not look:
   slipped past; the trend views crashed on a non-object ledger line
   instead of skipping it; strict attribution rejected a change whose
   note already existed elsewhere.
+- **A decode that could not fail.** `gitutil.empty_tree` pinned the
+  codec and not the failure mode, so on the gbk-locale runner git's
+  localized diagnostic — the "not a repository" answer the function
+  already falls back from — raised `UnicodeDecodeError` inside
+  `subprocess` instead of reaching that fallback. It surfaced only
+  after the gbk job's report was restored; before that the job said
+  "exit code 1" and nothing else.
 
 ## Decision
 
@@ -35,7 +42,12 @@ temp-and-rename or an exclusive create; deletion requires a positive
 ownership mark (the gov marker, a mapped template, a shipped-gate
 registry) and nothing is deleted when the mapping is unknown; a
 reader reads the bytes once — seal, parse, and hook all consult the
-same buffer. Alongside those: archive manifests guard their shape,
+same buffer; a text-mode spawn pins HOW it decodes, `encoding=` and
+`errors=` together, because a child that speaks the locale instead of
+UTF-8 must not be able to crash the reader (`tests/
+test_encoding_differential.py` holds the plane to both, the shipped
+rule's message already asks for both). Alongside those: archive
+manifests guard their shape,
 `require` overrides no longer accept trivial prefixes, non-object seal
 JSON is a named exit 2, four verify mains wrap unexpected exceptions as
 exit 2 so a crash is never mistaken for a rejection, `run_gates`

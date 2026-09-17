@@ -6,9 +6,12 @@ These tests pin the fix with a REAL quoted-path repository, not mocks.
 """
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 
 from gov import gitutil
 
@@ -121,3 +124,63 @@ def test_tracked_names_nul_safe(tmp_path, monkeypatch):
     names, err = gitutil.tracked_names("HEAD", "docs")
     assert err is None
     assert names == ["docs/中文.md"]
+
+
+def test_changed_files_outside_a_repository_reports_an_error(tmp_path, monkeypatch):
+    """A non-repository answers with git's words, never a traceback.
+
+    The zero-commit path consults git for the empty tree before diffing,
+    and that consult is where a decode crash took the gbk-locale job
+    down: the caller's own error report (which prints whatever git said)
+    never got the chance to run."""
+    monkeypatch.chdir(tmp_path)
+    files, err = gitutil.changed_files("HEAD")
+    assert files == []
+    assert err  # git's message, handed to the caller — not raised here
+
+
+_GBK_DIAGNOSTIC = b"\xd6\xc2\xc3\xfc\xb4\xed\xce\xf3"  # "致命错误", GBK
+
+
+def _hostile_git(bindir: Path) -> None:
+    """A `git` first on PATH whose diagnostics come back in GBK.
+
+    That is what git does by itself on a zh-CN host: its messages follow
+    the LOCALE, not the plane's pins. The shim is the locale, nothing
+    else — it fails every invocation the way localized git fails one."""
+    bindir.mkdir(parents=True, exist_ok=True)
+    shim = bindir / "git"
+    shim.write_text(
+        f"#!{sys.executable}\n"
+        "import sys\n"
+        f"sys.stderr.buffer.write({_GBK_DIAGNOSTIC!r})\n"
+        "sys.exit(128)\n",
+        encoding="utf-8")
+    shim.chmod(0o755)
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="shadowing a console app on PATH needs a .cmd shim; the class "
+           "this pins is locale-driven and covered by the POSIX jobs")
+def test_empty_tree_survives_a_locale_encoded_diagnostic(tmp_path, monkeypatch):
+    """git's stderr is not always UTF-8, and the empty tree must still
+    answer: ``mktree`` refusing is the DOCUMENTED path (read-only stores,
+    non-repositories) whose fallback is the format's constant. A strict
+    decode turned it into UnicodeDecodeError inside subprocess."""
+    bindir = tmp_path / "bin"
+    _hostile_git(bindir)
+    monkeypatch.setenv(
+        "PATH", str(bindir) + os.pathsep + os.environ.get("PATH", ""))
+
+    # Anti-vacuous probe: if the shim is not the `git` this process
+    # spawns, the assertion below proves nothing about the plane's spawn.
+    probe = subprocess.run(["git", "rev-parse", "--show-object-format"],
+                           capture_output=True)
+    assert probe.returncode == 128, "the PATH shim is not shadowing git"
+
+    gitutil.empty_tree.cache_clear()
+    try:
+        assert gitutil.empty_tree() == "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+    finally:
+        gitutil.empty_tree.cache_clear()

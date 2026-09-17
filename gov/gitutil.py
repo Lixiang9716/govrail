@@ -104,6 +104,13 @@ def empty_tree() -> str:
     proc = subprocess.run(
         ["git", "mktree"],
         input="", text=True, capture_output=True, encoding="utf-8",
+        # git's own DIAGNOSTICS follow the locale, not this module's pins:
+        # on a zh-CN GBK host the "not a git repository" report arrives as
+        # GBK bytes, and a strict decode raised UnicodeDecodeError inside
+        # subprocess — a crash where the fallback below was the answer
+        # (caught by the gbk-locale job, which localizes git). #172's rule,
+        # over the plane's own git plumbing.
+        errors="replace",
         env=scrubbed_env(),
     )
     if proc.returncode == 0:
