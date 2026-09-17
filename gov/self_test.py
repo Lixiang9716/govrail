@@ -1453,15 +1453,27 @@ def test_failure_classifier_labels_tool_vs_environment() -> None:
     """
     # First prove the env-only probe's failure is real: under the shadow
     # path it reproduces; this is the #138 shape (a promoted site dir).
+    # The old form caught its own sentinel AssertionError in the same
+    # except that judged the probe's — the "proof" was vacuously true on
+    # the success path and inverted on the failure path. A distinct
+    # sentinel type makes each branch honest.
+    class _ProbeDidNotReproduce(Exception):
+        pass
+
     saved = os.environ.get("PYTHONPATH")
     try:
         os.environ["PYTHONPATH"] = "/tmp/gov-selftest-shadow-probe/x"
         try:
             _probe_env_only_failure()
-            raise AssertionError("the env-only probe failed to reproduce "
-                                 "under a shadowed PYTHONPATH")
-        except AssertionError as e:
-            assert "shadowed PYTHONPATH" in str(e)
+        except Exception:  # noqa: BLE001 — any failure IS the reproduction
+            pass
+        else:
+            raise _ProbeDidNotReproduce(
+                "the env-only probe did NOT fail under a shadowed "
+                "PYTHONPATH — its classification as environment-suspect "
+                "is vacuous, the probe is broken (rule 6)")
+    except _ProbeDidNotReproduce:
+        raise
     finally:
         if saved is None:
             os.environ.pop("PYTHONPATH", None)
