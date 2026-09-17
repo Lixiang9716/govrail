@@ -101,6 +101,32 @@ def _commit_all(root, msg="wip"):
     )
 
 
+def test_require_config_overrides_trivial_prefix(tmp_path, monkeypatch, capsys):
+    """Strict attribution's `require` beats a built-in trivial prefix:
+    docs/ sits in TRIVIAL_PREFIXES, so the old filter dropped require-
+    matched docs files before attribution ever saw them — the config
+    could never fire (a vacuous gate, rules 5/6)."""
+    monkeypatch.chdir(tmp_path)
+    _git_repo(tmp_path)
+    gov = tmp_path / ".gov"
+    gov.mkdir(exist_ok=True)
+    (gov / "note-presence.json").write_text('{"require": ["docs/**"]}',
+                                            encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir(exist_ok=True)
+    (docs / "guide.md").write_text("v2\n", encoding="utf-8")
+    assert vnp.main(["--strict"]) == 1  # required path with no note naming it
+    out = capsys.readouterr().out
+    assert "required path(s)" in out and "docs/guide.md" in out
+    # a note that NAMES the path satisfies the attribution
+    d = tmp_path / ".agents" / "notes" / "implemented" / "feature"
+    d.mkdir(parents=True)
+    (d / "2026-09-01-guide.md").write_text(
+        "# Agent Note: guide\n\n## Problem\np\n\n## Decision\nrewrote "
+        "docs/guide.md\n\n## Alternatives considered\na\n", encoding="utf-8")
+    assert vnp.main(["--strict"]) == 0
+
+
 def test_auto_base_reviews_committed_clean_work(tmp_path, monkeypatch, capsys):
     """F1: clean tree + committed no-note work must not pass silently."""
     monkeypatch.chdir(tmp_path)
@@ -258,3 +284,59 @@ def test_warning_tells_which_absence_it_is(tmp_path, monkeypatch, capsys):
     _note(tmp_path)
     assert vnp.main([]) == 0  # any note file in the diff passes the gate
     assert "ok" in capsys.readouterr().out
+
+
+def test_uppercase_extension_note_counts_as_note(tmp_path, monkeypatch, capsys):
+    """H-7: BYPASS.MD under implemented/<class>/ is a note for presence
+    purposes (the definition verify-notes format-checks), not a silent
+    non-file; garbage content is verify-notes' job to reject."""
+    monkeypatch.chdir(tmp_path)
+    _git_repo(tmp_path)
+    (tmp_path / "app.py").write_text("print('v2')\n", encoding="utf-8")
+    d = tmp_path / ".agents" / "notes" / "implemented" / "feature"
+    d.mkdir(parents=True)
+    (d / "BYPASS.MD").write_text("garbage\n", encoding="utf-8")
+    assert vnp.main(["--strict"]) == 0
+    assert "1 note file(s)" in capsys.readouterr().out
+
+
+def test_non_markdown_file_under_notes_dir_is_not_a_note(tmp_path, monkeypatch, capsys):
+    """H-7: a file under the notes dir counts only when it is a note —
+    junk.txt satisfies neither the letter nor the spirit of the gate."""
+    monkeypatch.chdir(tmp_path)
+    _git_repo(tmp_path)
+    (tmp_path / "app.py").write_text("print('v2')\n", encoding="utf-8")
+    d = tmp_path / ".agents" / "notes" / "implemented" / "feature"
+    d.mkdir(parents=True)
+    (d / "junk.txt").write_text("x\n", encoding="utf-8")
+    assert vnp.main(["--strict"]) == 1
+    assert "no note file appears anywhere in this diff" in capsys.readouterr().out
+
+
+def test_strict_attribution_existing_note_covers_required_change(tmp_path, monkeypatch, capsys):
+    """H-8: with {"require": [...]} configured, a changed file already
+    named by an EXISTING implemented note passes with no new note in the
+    diff — strict attribution judges coverage, not diff novelty."""
+    monkeypatch.chdir(tmp_path)
+    _git_repo(tmp_path)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "engine.py").write_text("v1\n", encoding="utf-8")
+    gov = tmp_path / ".gov"
+    gov.mkdir(exist_ok=True)
+    (gov / "note-presence.json").write_text(
+        json.dumps({"require": ["src/**"]}), encoding="utf-8")
+    d = tmp_path / ".agents" / "notes" / "implemented" / "feature"
+    d.mkdir(parents=True)
+    (d / "2026-08-28-engine.md").write_text(
+        "# Agent Note: engine\n\nStatus: implemented\n\n"
+        "## Problem\np\n\n## Decision\nd — the parser lives in src/engine.py\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    _commit_all(tmp_path, "baseline: an existing note names src/engine.py")
+    (src / "engine.py").write_text("v2\n", encoding="utf-8")  # dirty, no new note
+    assert vnp.main(["--strict"]) == 0
+    assert "ok" in capsys.readouterr().out
+    # a required path no existing note names still trips the advisory
+    (src / "other.py").write_text("x = 1\n", encoding="utf-8")
+    assert vnp.main(["--strict"]) == 1
+    assert "src/other.py" in capsys.readouterr().out

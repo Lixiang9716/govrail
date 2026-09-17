@@ -3,7 +3,7 @@
 
 A receipt binds one ``gov run`` to the exact tree it verified:
 
-    {v, id, ts, commit, dirty, tag, selection, gates, prev, hash}
+    {v, id, ts, commit, dirty, tag, selection, gates, prev, config?, hash}
 
 Every field except ``hash`` is canonically serialized (sorted keys,
 compact separators) and sha256'd; the record's ``prev`` carries the
@@ -34,17 +34,28 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:  # POSIX: the lawful guard-flock class (see gov/locks.py) — held for
+    # one append only, never across a process lifetime.
+    import fcntl
+except ImportError:  # pragma: no cover - Windows has no fcntl module
+    fcntl = None  # the guard section degrades to unserialized (fail-open)
+
 GENESIS = "GENESIS"
 RECEIPT_VERSION = 1
 GREEN_OUTCOMES = ("PASS",)
 # Only these fields feed the hash; ``hash`` itself is the digest.
+# ``config`` (N6) rides in the hashed core when present — a ledger line's
+# config field is evidence, so laundering it must break the chain. Receipts
+# older than the field omit it entirely and hash/verify exactly as before.
 _HASHED = ("v", "id", "ts", "commit", "tree", "dirty", "tag",
-           "selection", "gates", "prev")
+           "selection", "gates", "prev", "config")
+_REQUIRED = tuple(k for k in _HASHED if k != "config")
 
 
 class ReceiptError(Exception):
@@ -58,7 +69,11 @@ def canonical(record: dict) -> str:
 
 
 def compute_hash(record: dict) -> str:
-    core = {k: record[k] for k in _HASHED}
+    # ``config`` enters the digest only when the record carries it, so a
+    # pre-config receipt (no field at all) hashes byte-identically to
+    # before; a record WITH the field can no longer have that field
+    # edited behind the hash.
+    core = {k: record[k] for k in _HASHED if k in record}
     return hashlib.sha256(canonical(core).encode("utf-8")).hexdigest()
 
 
@@ -150,6 +165,47 @@ def build_receipt(gates_records: list[dict], tag: str,
     return record
 
 
+def append_receipt(record: dict, path: Path | None = None) -> dict:
+    """Bind ``record`` to the chain head and append it, race-free; returns
+    the finalized record.
+
+    The chain head read and the ledger append happen inside one guard
+    flock on ``<ledger>.lock`` (POSIX fcntl; where fcntl is absent the
+    section degrades to unserialized — the same fail-open contract
+    gov/locks.py documents). Without it, two concurrent ``--receipt``
+    runs both read the SAME ``prev`` and the second record breaks the
+    chain for every later ``gov receipt verify``. The append itself is a
+    single ``os.write`` over ``O_APPEND`` — one record, one write,
+    positioned at EOF atomically on POSIX.
+    """
+    target = path if path is not None else _receipt_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target.with_name(target.name + ".lock"), "a+") as guard:
+        if fcntl is not None:
+            fcntl.flock(guard, fcntl.LOCK_EX)
+        try:
+            record["prev"] = _last_hash(target)
+            record["hash"] = compute_hash(record)
+            record["id"] = "r-" + record["hash"][:12]
+            # id rides inside the hashed core, so recompute once with it
+            # set (same two-step as build_receipt).
+            record["hash"] = compute_hash(record)
+            line = (json.dumps(record, separators=(",", ":"),
+                               ensure_ascii=False) + "\n").encode("utf-8")
+            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+                         0o644)
+            try:
+                data = line
+                while data:  # honor partial writes; retries re-append at EOF
+                    data = data[os.write(fd, data):]
+            finally:
+                os.close(fd)
+        finally:
+            if fcntl is not None:
+                fcntl.flock(guard, fcntl.LOCK_UN)
+    return record
+
+
 def _last_hash(path: Path) -> str:
     """The chain head: the hash of the ledger's last valid line."""
     try:
@@ -169,7 +225,7 @@ def _parse_line(line: str, lineno: int) -> dict:
         raise ReceiptError(f"receipts line {lineno}: not valid JSON: {e}")
     if not isinstance(record, dict):
         raise ReceiptError(f"receipts line {lineno}: record must be an object")
-    missing = [k for k in _HASHED if k not in record] + (["hash"] if "hash" not in record else [])
+    missing = [k for k in _REQUIRED if k not in record] + (["hash"] if "hash" not in record else [])
     if missing:
         raise ReceiptError(
             f"receipts line {lineno}: missing field(s): {', '.join(missing)}")
@@ -210,10 +266,19 @@ def _is_green_full(record: dict) -> tuple[bool, str]:
     record also carries NOT_SELECTED/SKIPPED entries (per-gate outcomes,
     #119), and "not full by construction" is the root reason — the
     not-green entries are its consequence, not the news.
+
+    A record naming a ``config`` other than the sealed gates.json (N6:
+    ``gov run --config bypass.yaml``) is never full-green either, no
+    matter how green its outcome list looks — the run did not verify the
+    sealed plane, so the receipt must not endorse it.
     """
     gates = record.get("gates", [])
     if not gates:
         return False, "no gates ran"
+    config = record.get("config")
+    if config and config != "gates.json":
+        return False, (f"run executed an unsealed config ({config}) — "
+                       "not an endorsement of the sealed plane")
     selection = record.get("selection") or {}
     if selection.get("kind") != "all":
         return False, (f"partial run (selection: {selection.get('kind')}"

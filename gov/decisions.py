@@ -131,8 +131,19 @@ def configured_path_fmt() -> tuple[Path, str]:
     if CONFIG.is_file():
         try:
             cfg = json.loads(CONFIG.read_text(encoding="utf-8-sig"))
-        except (OSError, json.JSONDecodeError):
-            cfg = {}
+        except (OSError, json.JSONDecodeError) as e:
+            # rule 5: a corrupt config must not silently re-read the
+            # DEFAULT source — verify-decisions would then judge the wrong
+            # table and could pass green on it. Same channel as the
+            # unknown-format refusal below: named, exit 2.
+            import sys as _sys
+            print(f"decisions: cannot read {CONFIG}: {e}", file=_sys.stderr)
+            raise SystemExit(2)
+        if not isinstance(cfg, dict):
+            import sys as _sys
+            print(f"decisions: {CONFIG} must be a JSON object",
+                  file=_sys.stderr)
+            raise SystemExit(2)
         p = cfg.get("path")
         if isinstance(p, str) and p:
             path = Path(p)

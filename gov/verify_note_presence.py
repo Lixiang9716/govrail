@@ -203,6 +203,17 @@ def _notes_corpus() -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # #8: an unexpected OSError/decode/JSON failure is a broken
+    # prerequisite (exit 2, named), never indistinguishable from the
+    # advisory verdicts.
+    try:
+        return _run(argv)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        print(f"{PROG}: unexpected failure: {e}", file=sys.stderr)
+        return 2
+
+
+def _run(argv: list[str] | None = None) -> int:
     # Anchor BEFORE anything resolves a path: every surface here is
     # root-relative, and a subdirectory invocation used to mix a cwd-bound
     # untracked listing with a repo-root-bound diff into one file set.
@@ -250,27 +261,41 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{PROG}: exempt ({MANIFEST} note_presence_exempt): "
               + ", ".join(exempt_globs))
 
-    non_trivial = [f for f in files
-                   if not _is_trivially_scoped(f, cfg["trivial"])
-                   and not _is_exempt(f, exempt_globs)]
-    notes = [f for f in files if f.startswith(NOTES_DIR)]
-
     # Strict attribution: required paths need a note that NAMES them, not
-    # merely a note somewhere in the diff.
-    unattributed: list[str] = []
+    # merely a note somewhere in the diff. A require-matched file must not
+    # vanish because a built-in trivial prefix (docs/ sits in
+    # TRIVIAL_PREFIXES) also matches it: the repo's explicit
+    # {"require": ["docs/**"]} overrides the presumption of triviality —
+    # otherwise `required` could never be non-empty and the configuration
+    # was a vacuous gate (rule 5/6). Explicit manifest exemptions still
+    # win: they are the repo's louder statement about that path.
+    required: list[str] = []
     if cfg["require"]:
-        required = [f for f in non_trivial
-                    if any(_glob_regex(g).match(f) for g in cfg["require"])]
-        if required:
-            corpus = _notes_corpus()
-            for f in required:
-                if not any(f in text for text in corpus.values()):
-                    unattributed.append(f)
+        required = [f for f in files
+                    if not _is_exempt(f, exempt_globs)
+                    and any(_glob_regex(g).match(f) for g in cfg["require"])]
+
+    non_trivial = [f for f in files
+                   if f in required
+                   or (not _is_trivially_scoped(f, cfg["trivial"])
+                       and not _is_exempt(f, exempt_globs))]
+    notes = [f for f in files
+             if f.startswith(NOTES_DIR) and f.lower().endswith(".md")]
+
+    unattributed: list[str] = []
+    if required:
+        corpus = _notes_corpus()
+        for f in required:
+            if not any(f in text for text in corpus.values()):
+                unattributed.append(f)
 
     if (not non_trivial and not unattributed) or \
-            (notes and not unattributed):
-        # Nothing behavior-bearing, or the change carries its note and no
-        # required path went unattributed.
+            (notes and not unattributed) or \
+            (required and not unattributed):
+        # Nothing behavior-bearing; or the change carries its note; or no
+        # required path went unattributed — a required surface already
+        # named by an EXISTING implemented note needs no new note in this
+        # diff (strict attribution judges coverage, not diff novelty).
         print(f"{PROG}: {len(non_trivial)} non-trivial file(s), "
               f"{len(notes)} note file(s) — ok")
         return 0

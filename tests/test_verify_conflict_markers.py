@@ -128,3 +128,19 @@ def test_bad_base_fails_loud(tmp_path):
     r = _gate(tmp_path, "--base", "no-such-ref")
     assert r.returncode == 2
     assert "no-such-ref" in r.stderr
+
+
+def test_zero_commit_repo_scans_staged_files(tmp_path):
+    """A staged file in a repository with NO commits must still be
+    scanned: `git add` removes a path from ls-files --others, so the old
+    "skip the diff when there is no HEAD" read 0 files and passed green
+    with staged conflict markers."""
+    _git(tmp_path, "init", "-q", ".")
+    _git(tmp_path, "config", "user.email", "t@t")
+    _git(tmp_path, "config", "user.name", "t")
+    (tmp_path / "conflicted.md").write_text(MARKED, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    r = _gate(tmp_path)
+    assert r.returncode == 1
+    assert "conflicted.md:3" in r.stdout
+    assert "0 changed file(s) scanned" not in r.stdout

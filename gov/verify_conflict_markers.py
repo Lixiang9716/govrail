@@ -36,6 +36,7 @@ silently pass.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -119,6 +120,17 @@ def _worktree_scan(path: str) -> list[tuple[int, str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # #8: an unexpected OSError/decode failure is a broken prerequisite
+    # (exit 2, named), never indistinguishable from "markers found" (1).
+    try:
+        return _run(argv)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        print(f"{PROG}: unexpected failure scanning the diff: {e}",
+              file=sys.stderr)
+        return 2
+
+
+def _run(argv: list[str] | None = None) -> int:
     anchor_to_git_root(PROG)
     parser = argparse.ArgumentParser(
         prog="gov verify-conflict-markers",

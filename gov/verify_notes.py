@@ -88,14 +88,21 @@ def _check_placement(root: Path) -> tuple[list[str], list[Path]]:
                     f"(known: {', '.join(LIFECYCLES)}) — this is not a note, "
                     "move it or remove the directory"
                 )
-        elif entry.suffix == ".md":
+        elif entry.suffix.lower() == ".md":
+            # Case-insensitive: BYPASS.MD is a note too (a macOS/exFAT
+            # checkout or a sloppy hand-edit must not buy a format-check
+            # exemption from the extension's case).
             loose.append(entry)
             errors.append(
                 f"{entry}: notes live at implemented/<class>/<file>.md, "
                 f"not loose at the notes root (classes: {', '.join(CLASSES)})"
             )
     implemented = root / "implemented"
-    for p in sorted(implemented.rglob("*.md")) if implemented.is_dir() else []:
+    for p in sorted(implemented.rglob("*")) if implemented.is_dir() else []:
+        if not p.is_file() or p.suffix.lower() != ".md":
+            # Only notes are judged here; but a note is a note whatever
+            # case its extension wears — .MD gets the same checks.
+            continue
         rel = p.relative_to(implemented)
         if len(rel.parts) != 2:
             errors.append(
@@ -113,7 +120,9 @@ def _check_placement(root: Path) -> tuple[list[str], list[Path]]:
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("verify_notes")
     notes_root = NOTES_DIR / "implemented"
-    notes = sorted(notes_root.rglob("*.md")) if notes_root.exists() else []
+    notes = ([p for p in sorted(notes_root.rglob("*"))
+              if p.is_file() and p.suffix.lower() == ".md"]
+             if notes_root.exists() else [])
     try:
         errors, loose = _check_placement(NOTES_DIR)
         # Loose root notes get the format check too — placement is wrong,

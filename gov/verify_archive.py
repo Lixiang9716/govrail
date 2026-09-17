@@ -41,6 +41,18 @@ def _sha256(path: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # #8: an unexpected OSError/decode/JSON failure is a broken
+    # prerequisite (exit 2, named), never the "violations found" exit 1 a
+    # bare traceback's exit code would be confused with.
+    try:
+        return _run(argv)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        print(f"verify_archive: unexpected failure reading the archive: "
+              f"{e}", file=sys.stderr)
+        return 2
+
+
+def _run(argv: list[str] | None = None) -> int:
     anchor_to_git_root("verify_archive")
     parser = argparse.ArgumentParser(
         prog="gov verify-archive",
@@ -63,10 +75,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        sealed = json.loads(MANIFEST.read_text(encoding="utf-8-sig")).get("files", {})
+        sealed_doc = json.loads(MANIFEST.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         print(f"verify_archive: cannot read the seal {MANIFEST}: {e}", file=sys.stderr)
         return 2
+    if not isinstance(sealed_doc, dict) or not isinstance(
+            sealed_doc.get("files", {}), dict):
+        # A hand-edited seal whose top level is `[]` or `42` (or whose
+        # "files" is an array) is unreadable — a named prerequisite
+        # failure (exit 2), never an AttributeError traceback (rule 5).
+        print(f"verify_archive: cannot read the seal {MANIFEST}: the seal "
+              "and its 'files' must be JSON objects", file=sys.stderr)
+        return 2
+    sealed = sealed_doc.get("files", {})
 
     violations: list[str] = []
     for rel, p in files.items():
@@ -80,11 +101,19 @@ def main(argv: list[str] | None = None) -> int:
             # indistinguishable from "cannot run at all").
             violations.append(f"{rel}: seal entry is malformed (expected an "
                               "object with a sha256) — re-seal or restore the seal")
-        elif _sha256(p) != entry.get("sha256"):
-            violations.append(
-                f"{rel}: differs from its seal — restore it (git checkout) or "
-                "re-baseline explicitly (gov archive-notes --rebaseline)"
-            )
+        else:
+            try:
+                digest = _sha256(p)
+            except OSError as e:
+                # A dangling symlink or unreadable file violates the seal
+                # (the content is gone) — a named violation, not a crash.
+                violations.append(f"{rel}: unreadable — {e}")
+            else:
+                if digest != entry.get("sha256"):
+                    violations.append(
+                        f"{rel}: differs from its seal — restore it (git checkout) or "
+                        "re-baseline explicitly (gov archive-notes --rebaseline)"
+                    )
     for rel in sealed:
         if rel not in files:
             violations.append(f"{rel}: sealed but the file is gone")

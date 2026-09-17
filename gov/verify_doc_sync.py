@@ -158,16 +158,30 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     try:
         changelog_text = CHANGELOG.read_text(encoding="utf-8-sig")
-        highlights_text = highlights_path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as e:
-        if configured and not highlights_path.exists():
+        print(f"verify_doc_sync: cannot read {CHANGELOG}: {e}", file=sys.stderr)
+        return 2
+    if not highlights_path.exists():
+        if configured:
             # Configured means intended: a declared file that does not
             # exist is a broken prerequisite, not a silent pass.
             print(f"verify_doc_sync: configured highlights file "
                   f"{highlights_path} does not exist", file=sys.stderr)
-        else:
-            print(f"verify_doc_sync: cannot read a pairing input: {e}",
-                  file=sys.stderr)
+            return 2
+        # The default path missing with no config is "the gate is not set
+        # up here" — the promise the module header makes; the old fall
+        # through to the read turned it into a permanent exit 2 an adopter
+        # could never turn green.
+        print(f"verify_doc_sync: no {highlights_path.as_posix()} and no "
+              f"{DOC_SYNC_CONFIG} — the pairing is not set up in this "
+              "repository; nothing to sync (declare your layout in "
+              f"{DOC_SYNC_CONFIG}: {{\"highlights\": \"<path>\"}})")
+        return 0
+    try:
+        highlights_text = highlights_path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"verify_doc_sync: cannot read a pairing input: {e}",
+              file=sys.stderr)
         return 2
     if not configured and highlights_path == HIGHLIGHTS:
         print(f"verify_doc_sync: syncing {CHANGELOG} against "

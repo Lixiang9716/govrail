@@ -21,14 +21,15 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from . import (archive_notes, audit_notes, change_scope, decision, gates,
-               hookcmd, locks, recall, review, stats, task, verify_archive,
-               verify_conflict_markers, verify_decisions, verify_doc_sync,
-               verify_plane)
+from . import (archive_notes, atomicio, audit_notes, change_scope, decision,
+               gates, hookcmd, locks, recall, review, stats, task,
+               verify_archive, verify_conflict_markers, verify_decisions,
+               verify_doc_sync, verify_plane)
 from . import checks, doctor, note, presets, receipt, self_test, trend, whatsnew
 from . import verify_note_presence
 from . import verify_notes, verify_rubric
@@ -46,10 +47,45 @@ HOOK_MARKER = "# govrail:"
 SKILLS = ("recall-first", "pre-push-checks", "code-review", "archive-agent-notes")
 
 
-def _copy(source, dest: Path) -> None:
+def _atomic_write(dest: Path, data: bytes) -> None:
+    """atomicio's one-write policy in bytes mode: save to a temp file in
+    the destination directory and ``os.replace`` it into place, so a
+    crash can never leave a half-written file behind (H-3 — a truncated
+    template used to be adopted as the project's own by a re-run init's
+    create-if-missing guard).
+
+    Bytes, not atomicio.write_text: the injected files are compared
+    BYTE-WISE against their shipped templates (uninstall's customized
+    check, --adopt/--upgrade provenance), and a text-mode write would
+    translate newlines on Windows until an untouched install differed
+    from its own template (the exact trap _install_ci's comment warns
+    about). Modes follow atomicio: keep the existing file's mode, else
+    respect the umask.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with source.open("rb") as f:
-        dest.write_bytes(f.read())
+    try:
+        mode = dest.stat().st_mode & 0o777
+    except OSError:
+        umask = os.umask(0)
+        os.umask(umask)
+        mode = 0o666 & ~umask
+    fd, tmp = tempfile.mkstemp(dir=str(dest.parent), prefix=dest.name,
+                               suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, dest)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _copy(source, dest: Path) -> None:
+    _atomic_write(dest, source.read_bytes())
 
 
 def _remove_empty_dirs(root: Path) -> None:
@@ -291,24 +327,29 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
     gitignore = project / ".gitignore"
     ignore_line = ".gov/history/"
     if gitignore.exists():
-        lines = gitignore.read_text(encoding="utf-8-sig",
-                                    errors="replace").splitlines()
-        if ignore_line not in lines:
-            gitignore.write_text(
-                ("\n" if lines and lines[-1].strip() else "")
-                + ignore_line + "\n", encoding="utf-8")
+        # H-1: append to the original BYTES. The old code read the lines,
+        # then wrote back ONLY the new line — silently destroying the
+        # project's existing ignores. Byte-level append keeps CRLF
+        # endings, a BOM, and any non-UTF-8 content exactly as they were
+        # (and lands atomically, like every other init write).
+        raw = gitignore.read_bytes()
+        if ignore_line not in raw.decode("utf-8-sig",
+                                         errors="replace").splitlines():
+            sep = b"" if (not raw or raw.endswith(b"\n")) else b"\n"
+            _atomic_write(gitignore,
+                          raw + sep + ignore_line.encode("utf-8") + b"\n")
     else:
         gitignore.write_text(ignore_line + "\n", encoding="utf-8")
         created.append(".gitignore")
 
-    (gov_dir / "manifest.json").write_text(
+    atomicio.write_text(
+        gov_dir / "manifest.json",
         json.dumps(
             {"version": __version__, "created": created, "gitHooks": git_hooks,
              "templates": _template_hashes(project, created)},
             indent=2,
         )
         + "\n",
-        encoding="utf-8",
     )
 
     # Seal the fresh constitution: rules.md + gates.json are tamper-
@@ -772,14 +813,19 @@ def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
             print("init: created .github/workflows/gov.yml (CI runs gov run)")
         # _install_ci itself reports the already-exists case.
 
-    manifest_path.write_text(
-        json.dumps(
-            {"version": __version__, "created": created, "gitHooks": git_hooks},
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    # Merge, not rebuild: the manifest's other keys (notably "templates",
+    # the adoption-hash record `init --adopt` writes, D34) must survive an
+    # add-on retrofit — the old three-key rewrite silently dropped them,
+    # so a later `gov init --upgrade/--preview` misread every adopted file
+    # as never-recorded.
+    manifest = dict(data) if isinstance(data, dict) else {}
+    manifest.update({
+        "version": __version__,
+        "created": created,
+        "gitHooks": git_hooks,
+    })
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n",
+                             encoding="utf-8")
     return 0
 
 
@@ -791,6 +837,10 @@ def _template_for(rel: str):
         return TEMPLATES.joinpath("notes-README.md")
     if rel == ".gov/rejections/README.md":
         return TEMPLATES.joinpath("rejections-README.md")
+    if rel == "docs/decisions.md":
+        return TEMPLATES.joinpath("decisions-table.md")
+    if rel == "docs/postmortem/README.md":
+        return TEMPLATES.joinpath("postmortem-README.md")
     if rel == ".github/workflows/gov.yml":
         return TEMPLATES.joinpath("gov.yml")
     if rel.startswith(".agents/skills/") and rel.endswith("/SKILL.md"):
@@ -836,6 +886,18 @@ def uninstall(project: Path, force: bool = False) -> int:
                 customized.append(rel)
         except OSError:
             pass
+
+    # H-4: the memory plane's seeds are the project's record, not the
+    # plane's config — a customized decisions log or postmortem README is
+    # the adopter's scar tissue and is never deleted, not even by --force
+    # (whose mandate covers the plane's own template files). A pristine
+    # seed still goes: exact reversal (D10) of what init put there.
+    memory = {"docs/decisions.md", "docs/postmortem/README.md"}
+    kept_memory = [rel for rel in customized if rel in memory]
+    for rel in kept_memory:
+        print(f"uninstall: {rel} is customized project memory — "
+              "leaving it in place", file=sys.stderr)
+    customized = [rel for rel in customized if rel not in memory]
     if customized:
         # F6: a genuine two-step — without --force this run deletes
         # nothing. The message must never promise an abort the code does
@@ -876,14 +938,35 @@ def uninstall(project: Path, force: bool = False) -> int:
 
     for rel in data.get("created", []):
         p = project / rel
-        if p.exists():
-            p.unlink()
-            _remove_empty_dirs(p.parent)
+        if not p.exists():
+            continue
+        if rel in kept_memory:
+            continue  # customized memory — named above, never deleted
+        p.unlink()
+        _remove_empty_dirs(p.parent)
 
+    # H-2: remove the hooks where they ACTUALLY run — the same resolution
+    # init used to install them (core.hooksPath / the worktree common
+    # dir). The old hardcoded .git/hooks probe let the real hook survive
+    # uninstall, so pushes kept invoking the now-gone gov and hung. And a
+    # manifest-listed name is only unlinked when it still IS a gov hook:
+    # the mirror of init's refuse-to-overwrite guard — a foreign script
+    # is the project's, never ours to delete.
+    hooks_dir, _hooks_err = _resolve_hooks_dir(project)
     for name in data.get("gitHooks", []):
-        p = project / ".git" / "hooks" / name
-        if p.exists():
-            p.unlink()
+        p = (hooks_dir or project / ".git" / "hooks") / name
+        if not p.exists():
+            continue
+        try:
+            is_gov = HOOK_MARKER in p.read_text(encoding="utf-8",
+                                                errors="replace")
+        except OSError:
+            is_gov = False
+        if not is_gov:
+            print(f"uninstall: {p} is not a gov hook — leaving it",
+                  file=sys.stderr)
+            continue
+        p.unlink()
 
     shutil.rmtree(project / ".gov", ignore_errors=True)
     print(f"uninstall: removed governance from {project}")

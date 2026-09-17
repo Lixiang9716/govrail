@@ -49,3 +49,41 @@ def test_bom_prefixed_note_passes(tmp_path, monkeypatch):
         "\ufeff".encode("utf-8") + VALID.encode("utf-8"))
     monkeypatch.chdir(tmp_path)
     assert verify_notes.main([]) == 0
+
+
+GARBAGE = "not a note at all\n"
+
+
+def test_uppercase_extension_note_is_checked_in_class_dir(tmp_path, monkeypatch, capsys):
+    """H-7: BYPASS.MD under implemented/<class>/ is a note whatever the
+    extension's case — garbage content must fail the gate, not buy a
+    silent exemption from the case-sensitive *.md scan."""
+    d = tmp_path / ".agents" / "notes" / "implemented" / "feature"
+    d.mkdir(parents=True)
+    (d / "BYPASS.MD").write_text(GARBAGE, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert verify_notes.main([]) == 1
+    err = capsys.readouterr().out
+    assert "BYPASS.MD" in err and "violation" in err
+
+
+def test_uppercase_extension_loose_note_is_flagged(tmp_path, monkeypatch, capsys):
+    """H-7: BYPASS.MD sitting loose at the notes root used to be
+    invisible to the placement check (suffix == ".md" is case-sensitive)
+    — it must be named like any other loose note."""
+    (tmp_path / ".agents" / "notes").mkdir(parents=True)
+    (tmp_path / ".agents" / "notes" / "BYPASS.MD").write_text(
+        VALID, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert verify_notes.main([]) == 1
+    assert "BYPASS.MD" in capsys.readouterr().out
+
+
+def test_uppercase_extension_valid_note_still_passes(tmp_path, monkeypatch):
+    """H-7: the case-insensitive scan is not a crackdown — a well-formed
+    note with an uppercase extension passes placement and format."""
+    d = tmp_path / ".agents" / "notes" / "implemented" / "feature"
+    d.mkdir(parents=True)
+    (d / "2026-01-01-c.MD").write_text(VALID, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert verify_notes.main([]) == 0

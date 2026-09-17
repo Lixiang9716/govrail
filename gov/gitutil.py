@@ -126,14 +126,19 @@ def empty_tree() -> str:
 def changed_files(base: str | None = None) -> tuple[list[str], str | None]:
     """Tracked diff against ``base`` plus untracked files; (files, error).
 
-    A zero-commit repository has no ``base`` to diff against (the untracked
-    listing *is* the change) — handled here so every caller shares the
-    semantics instead of re-deriving the HEAD probe.
+    A zero-commit repository has no ``HEAD``: the diff runs against the
+    empty tree instead, so STAGED files are listed. Skipping the diff (the
+    old behavior) was wrong twice over — the untracked listing below never
+    sees a path that was ``git add``ed (it leaves ``ls-files --others``),
+    so a zero-commit repo with staged content scanned 0 files and passed.
+    Handled here so every caller shares the semantics instead of
+    re-deriving the HEAD probe.
     """
     files: set[str] = set()
     commands: list[list[str]] = []
-    if base is not None and has_head():
-        commands.append(["diff", "--name-only", "-z", base])
+    if base is not None:
+        commands.append(
+            ["diff", "--name-only", "-z", base if has_head() else empty_tree()])
     commands.append(["ls-files", "--others", "--exclude-standard", "-z"])
     for args in commands:
         proc = git(*args)

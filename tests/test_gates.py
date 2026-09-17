@@ -669,3 +669,19 @@ def test_unparseable_config_refuses_as_plane_when_drifted(tmp_path, monkeypatch,
         gates.main(["--json"])
     assert exc.value.code == 1
     assert "drifted from its seal" in capsys.readouterr().err
+
+
+def test_timeout_detail_carries_captured_output(capsys):
+    """A TIMEOUT with recovered partial output names what was seen —
+    'exceeded Nms' alone buried the evidence the runner already had."""
+    gate = gates.Gate(
+        id="slow", timeout_ms=2000,
+        command=[sys.executable, "-c",
+                 "print('partial work line', flush=True); "
+                 "import time; time.sleep(30)"],
+    )
+    assert gates.run_gates([gate], None, 1, False) == 1
+    out = capsys.readouterr().out
+    assert "TIMEOUT slow" in out
+    assert "exceeded 2000ms" in out
+    assert "partial work line" in out

@@ -505,3 +505,113 @@ def test_cd_flag_nonexistent_path_fails_loud(tmp_path, capsys, cwd_restored):
 def test_cd_flag_requires_path(tmp_path, capsys, cwd_restored):
     assert cli.main(["-C"]) == 2
     assert "requires a directory path" in capsys.readouterr().err
+
+
+def test_init_preserves_existing_gitignore(tmp_path):
+    """H-1: init appends its ignore line to an existing .gitignore — the
+    rewrite used to destroy the project's own entries."""
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_text("node_modules/\n*.pyc\ndist/", encoding="utf-8")
+    assert cli.init(tmp_path) == 0
+    lines = gitignore.read_text(encoding="utf-8").splitlines()
+    assert lines[:3] == ["node_modules/", "*.pyc", "dist/"]
+    assert lines[-1] == ".gov/history/"
+    assert lines.count(".gov/history/") == 1  # appended once, idempotent
+
+
+def test_init_gitignore_edges_survive(tmp_path):
+    """H-1 edges: a byte-level append keeps CRLF endings intact, and an
+    empty file gains the line without a leading blank."""
+    crlf = tmp_path / "crlf"
+    crlf.mkdir()
+    (crlf / ".gitignore").write_bytes(b"node_modules/\r\n*.pyc\r\n")
+    assert cli.init(crlf) == 0
+    assert ((crlf / ".gitignore").read_bytes()
+            == b"node_modules/\r\n*.pyc\r\n.gov/history/\n")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    (empty / ".gitignore").write_bytes(b"")
+    assert cli.init(empty) == 0
+    assert (empty / ".gitignore").read_bytes() == b".gov/history/\n"
+
+
+def test_uninstall_removes_gov_hooks_at_resolved_path(tmp_path):
+    """H-2: uninstall removes the hooks where they actually run
+    (core.hooksPath), not just .git/hooks — a surviving hook kept
+    invoking the uninstalled gov and hung every push."""
+    import subprocess
+    _git_repo(tmp_path)
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"],
+                   cwd=tmp_path, check=True)
+    assert cli.init(tmp_path, hooks=True) == 0
+    hook = tmp_path / ".githooks" / "pre-push"
+    assert hook.exists()  # installed where hooks actually run
+    assert cli.uninstall(tmp_path) == 0
+    assert not hook.exists()
+    assert not (tmp_path / ".gov").exists()  # the rest reversed as usual
+
+
+def test_uninstall_never_deletes_foreign_hooks(tmp_path, capsys):
+    """H-2: a manifest-listed hook is only unlinked when it still is a
+    gov hook — a foreign script is named and left in place."""
+    _git_repo(tmp_path)
+    assert cli.init(tmp_path, hooks=True) == 0
+    hook = tmp_path / ".git" / "hooks" / "pre-push"
+    foreign = "#!/bin/sh\necho my own hook\n"
+    hook.write_text(foreign, encoding="utf-8")  # replaced after init
+    assert cli.uninstall(tmp_path) == 0
+    assert hook.exists()
+    assert hook.read_text(encoding="utf-8") == foreign
+    assert "not a gov hook" in capsys.readouterr().err
+
+
+def test_uninstall_preserves_customized_decision_log(tmp_path, capsys):
+    """H-4: the decisions log is project memory, not a template copy —
+    customized content survives uninstall (it used to be unlinked
+    silently), --force included."""
+    import subprocess
+    _git_repo(tmp_path)
+    assert cli.init(tmp_path) == 0
+    log = tmp_path / "docs" / "decisions.md"
+    log.write_text(
+        log.read_text(encoding="utf-8")
+        + "\n## D1 — Keep the gate\n\n- **Decision**: the gate stays.\n"
+          "- **Alternatives**: removing it (drift returns silently).\n",
+        encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "log a decision"],
+                   cwd=tmp_path, check=True)
+    assert cli.uninstall(tmp_path, force=True) == 0
+    assert log.exists()
+    assert "the gate stays" in log.read_text(encoding="utf-8")
+    assert not (tmp_path / ".gov").exists()  # the plane itself still goes
+    err = capsys.readouterr().err
+    assert "docs/decisions.md" in err and "leaving it" in err
+
+
+def test_copy_is_atomic_on_crash(tmp_path):
+    """H-3: _copy lands via temp+replace — byte-exact content, no .tmp
+    residue, no half-written stub a re-run init would adopt."""
+    dest = tmp_path / "gates.json"
+    template = cli.TEMPLATES.joinpath("gates.json")
+    cli._copy(template, dest)
+    assert dest.read_bytes() == template.read_bytes()
+    assert list(tmp_path.glob("*.tmp")) == []
+    if sys.platform != "win32":  # mode bits are a POSIX story (#168)
+        assert dest.stat().st_mode & 0o044  # not mkstemp's 0600
+
+
+def test_add_ons_preserves_manifest_keys(tmp_path):
+    """#14: an add-on retrofit merges into the manifest — the "templates"
+    adoption-hash record (`init --adopt`, D34) must survive, not be
+    dropped by a three-key rewrite."""
+    assert cli.init(tmp_path) == 0
+    manifest_p = tmp_path / ".gov" / "manifest.json"
+    manifest = json.loads(manifest_p.read_text(encoding="utf-8"))
+    manifest["templates"] = {".gov/rules.md": "deadbeef"}
+    manifest_p.write_text(json.dumps(manifest), encoding="utf-8")
+    assert cli._add_ons(tmp_path, manifest_p, hooks=False, ci=False) == 0
+    merged = json.loads(manifest_p.read_text(encoding="utf-8"))
+    assert merged["templates"] == {".gov/rules.md": "deadbeef"}
+    assert merged["version"] == __version__
+    assert "gates.json" in merged["created"]  # known keys still updated

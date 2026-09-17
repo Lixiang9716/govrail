@@ -112,3 +112,32 @@ def test_json_mode_pure_stdout(tmp_path, monkeypatch, capsys):
     assert vd.main(["--json"]) == 0
     payload = _json.loads(capsys.readouterr().out)
     assert payload["status"] == "ok" and payload["violations"] == []
+
+
+def test_corrupt_decisions_config_fails_loud(tmp_path, monkeypatch):
+    """Rule 5: a corrupt .gov/decisions.json must not silently fall back
+    to the default source — verify-decisions would judge (and green-light)
+    the wrong table. Same channel as a typo'd format: named SystemExit 2."""
+    import pytest
+    monkeypatch.chdir(tmp_path)
+    gov = tmp_path / ".gov"
+    gov.mkdir()
+    (gov / "decisions.json").write_text("{not json", encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text(_table(_d(1)), encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        vd.main([])
+    assert exc.value.code == 2
+
+
+def test_non_object_decisions_config_fails_loud(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.chdir(tmp_path)
+    gov = tmp_path / ".gov"
+    gov.mkdir()
+    (gov / "decisions.json").write_text('["docs/decisions.md"]',
+                                        encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        vd.main([])
+    assert exc.value.code == 2
