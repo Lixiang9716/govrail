@@ -43,6 +43,13 @@ except Exception:  # direct-module execution (self-test scratch dirs)
     _BUILTINS = Path(__file__).resolve().parent / "checks"
 
 PROJECT_DIR = Path(".gov/checks")
+
+try:  # package context (`gov ...`)
+    from . import gitutil
+    from .verify_conflict_markers import _changed_files, _resolve_auto_base
+except ImportError:  # direct-module execution (self-test scratch dirs)
+    import gitutil
+    from verify_conflict_markers import _changed_files, _resolve_auto_base
 IGNORE_RX = re.compile(r"gov:ignore-check[:\s]+([A-Za-z0-9/_.-]+)")
 QUERY_NODE_RX = re.compile(r"\(([_a-zA-Z][_a-zA-Z0-9]*)")
 RULE_KINDS = ("parse-errors", "query")
@@ -299,8 +306,14 @@ def check_tree(src: bytes, tree, comments: list, lang: str,
     return findings
 
 
-def run_lang(root: Path, lang: str, rules: list[Rule]) -> list[FileReport]:
-    """Check every file of the language's declared set under root."""
+def run_lang(root: Path, lang: str, rules: list[Rule],
+             only: set[str] | None = None) -> list[FileReport]:
+    """Check every file of the language's declared set under root.
+
+    ``only`` — a set of root-relative posix paths — scopes the run to the
+    change scope (the gate's shape): everything outside it is someone
+    else's commit, and a fresh adoption must not go red on code it never
+    changed (the advisory-first promise, P0-3)."""
     from . import parse
     pack = parse.load_pack(lang)
     _pack_cache[lang] = pack
@@ -309,6 +322,8 @@ def run_lang(root: Path, lang: str, rules: list[Rule]) -> list[FileReport]:
     for path, src in parse.iter_files(root, pack):
         rel = path.relative_to(root).as_posix() if path.is_absolute() \
             else path.as_posix()
+        if only is not None and rel not in only:
+            continue
         tree = parser.parse(src)
         comments = _collect_comments(tree.root_node, pack.comment)
         rep = FileReport(path=rel)
@@ -343,6 +358,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--strict", action="store_true",
                         help="warnings block too (default: only severity "
                              "error blocks)")
+    parser.add_argument("--base", default="auto", metavar="REF",
+                        help="git base whose change scope is judged "
+                             "(default: auto — the note-presence cascade: a "
+                             "dirty worktree reviews the working tree, a "
+                             "clean one reviews unpushed commits, else the "
+                             "last commit, else everything)")
+    parser.add_argument("--all", action="store_true",
+                        help="audit every supported file in the tree — the "
+                             "whole-tree sweep; legacy code is judged only "
+                             "here, never by the change-scoped default")
     parser.add_argument("--record", action="store_true",
                         help="append finding/suppression counts to "
                              ".gov/history/stats.jsonl")
@@ -408,11 +433,33 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     from . import parse
+    if args.all and args.base != "auto":
+        print("gov check: --all and --base judge different scopes — "
+              "pick one", file=sys.stderr)
+        return 2
+    scoped: set[str] | None = None
+    base = why = None
+    if not args.all:
+        base, why = (args.base, "") if args.base != "auto" \
+            else _resolve_auto_base()
+        if gitutil.toplevel() is None:
+            # Outside any repository there is no change scope to judge:
+            # the whole-tree sweep is the only honest mode, and it is
+            # ANNOUNCED (rule 5) — never a silently-widened scope.
+            print("gov check: outside any git repository — no change "
+                  "scope, auditing the whole tree", file=sys.stderr)
+        else:
+            changed, err = _changed_files(base)
+            if err:
+                print(f"gov check: cannot diff against {base!r}: {err}",
+                      file=sys.stderr)
+                return 2
+            scoped = set(changed)
     root = Path.cwd()
     reports: list[FileReport] = []
     for lang, rules in all_rules:
         try:
-            reports.extend(run_lang(root, lang, rules))
+            reports.extend(run_lang(root, lang, rules, only=scoped))
         except parse.ParseUnavailable as e:
             print(f"gov check: {e}", file=sys.stderr)
             return 2
@@ -436,11 +483,16 @@ def main(argv: list[str] | None = None) -> int:
              f"({len(blocking)} blocking), {suppressed_n} suppressed")
     else:
         emit("gov check: clean")
+    if scoped is not None:
+        emit(f"gov check: base={base}" + (f" ({why})" if why else "")
+             + f" — {len(scoped)} changed file(s) in scope")
 
     if args.json:
         print(json.dumps({
             "v": LEDGER_VERSION,
             "languages": [l for l, _ in all_rules],
+            "base": base,
+            "scope": None if scoped is None else len(scoped),
             "files": [
                 {"path": r.path,
                  "findings": [{"rule": f.rule_id, "severity": f.severity,

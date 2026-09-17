@@ -9,6 +9,9 @@
     ".gov/rejections/case-archive.sh": {
       "sha256": "bcdb51e63a9bec18eeb9875a90561a88a2faad6dba22660ad1c80b679462811d"
     },
+    ".gov/rejections/case-check.sh": {
+      "sha256": "3837284f32bb9f5b0ae82351e9dc5c064b430fc350010ab17dd462b56284fb73"
+    },
     ".gov/rejections/case-conflict-markers.sh": {
       "sha256": "69997a30fa33cba0a0a8635f6031ec16d1de5460067f9211fa62e9c74f1541eb"
     },
@@ -47,7 +50,7 @@
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-17T12:46:27+00:00",
+    "ts": "2026-09-17T13:36:45+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }
