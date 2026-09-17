@@ -256,6 +256,19 @@ def main(argv: list[str] | None = None) -> int:
             except (OSError, ValueError, UnicodeDecodeError):
                 previous = {}
         baseline(root, unattended=not interactive)
+        try:
+            from . import rituals
+        except ImportError:  # direct-script execution
+            import rituals
+        try:
+            rituals.append(root, ritual="seal-rebaseline",
+                           unattended=not interactive,
+                           files=sorted(files))
+        except OSError as e:
+            print(f"{PROG}: WARNING — the re-baseline could not be "
+                  f"recorded in the tracked ledger: {e}; the seal itself "
+                  "is updated, but the audit trail needs a manual entry",
+                  file=sys.stderr)
         for rel in sorted(set(files) | set(previous)):
             old_h = previous.get(rel, "(absent)")
             p = files.get(rel)

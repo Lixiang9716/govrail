@@ -1053,6 +1053,27 @@ def main(argv: list[str] | None = None) -> int:
         config_rel = Path(args.config).resolve().as_posix()
     _plane_precheck(config_rel=config_rel, config_raw=config_raw,
                     allow_unsealed_config=args.allow_unsealed_config)
+    if args.allow_unsealed_config:
+        # N9: the ritual's evidence must live in TRACKED storage — the
+        # gitignored run history is deletable without git residue. The
+        # ledger is tracked, so the append is a visible working-tree
+        # change; if it cannot be recorded, the ritual is refused
+        # (an unrecorded bypass is worthless — rule 5).
+        try:
+            from . import rituals
+        except ImportError:  # direct-script execution
+            import rituals
+        try:
+            rituals.append(config_rel=config_rel, ritual="unsealed-config")
+        except OSError as e:
+            print(f"gov run: REFUSED — the unsealed-config ritual could "
+                  f"not be recorded in the tracked ledger: {e}",
+                  file=sys.stderr)
+            return 2
+        print(f"gov run: ritual recorded — unsealed config "
+              f"{args.config!r} executed by caller "
+              f"{rituals._identity()} (see .gov/rituals.jsonl, tracked)",
+              file=sys.stderr)
     try:
         modes, gates, concurrency, default_mode = load_config_from(
             config_raw, args.config)
