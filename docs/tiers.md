@@ -17,3 +17,7 @@ drift.
 | How PRs are judged (the judgment gates cannot check) | [review-rubric.md](review-rubric.md) |
 | Gate definitions and modes | `gates.json` |
 | Product code knowledge | the product plane's own docs, owned by you |
+
+The register of authoritative sources — code constants,
+ledgers, seals — lives in [truth-sources.md](truth-sources.md); this
+table owns prose-tier ownership, that one owns fact ownership.
