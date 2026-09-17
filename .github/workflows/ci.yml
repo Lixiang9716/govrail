@@ -22,6 +22,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    # Path-aware testing: a change that touches nothing the wheel or
+    # the e2e image ships (docs, notes, repo prose) does not need the
+    # platform suites, the hostile locale, the shadow install, or ten
+    # docker cells — it needs lint, derive, governance, and ONE pytest
+    # cell (the doc-facing tests live there). The gates summary stays
+    # satisfiable: cell 3.12 runs unconditionally.
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'gov/**'
+              - 'tests/**'
+              - 'scripts/**'
+              - 'examples/**'
+              - '.gov/**'
+              - '.github/workflows/**'
+              - 'gates.json'
+              - 'pyproject.toml'
+      - id: classify
+        run: |
+          if [ "${{ steps.filter.outputs.code }}" = "true" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
     # Style + syntax-level correctness (ruff), minutes before anything
     # heavier starts.
@@ -40,6 +74,12 @@ jobs:
   gates-cell:
     # Version matrix: the pytest suite on every supported interpreter.
     # Version-agnostic governance steps live in the `governance` job.
+    # Docs-only changes keep ONE cell (3.12): the doc-facing pytest
+    # (pairing, template sync, docs-vs-CLI, whatsnew) still runs; the
+    # other interpreters re-test interpreter sensitivity a prose edit
+    # cannot have.
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true' || matrix.python-version == '3.12'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -63,6 +103,7 @@ jobs:
         run: pytest -q -n auto
 
   derive:
+    needs: changes
     # The derived-truth regenerator (scripts/derive_all.py): README's
     # command block <- gov --help; the demo specimen <- live/template;
     # the i18n pairing examples <- DEFAULT_CONFIG. On PRs it is a drift
@@ -102,6 +143,7 @@ jobs:
           fi
 
   governance:
+    needs: changes
     # The dogfooding DAG, once: rejection cases prove every gate can
     # reject, and the full gate DAG runs green on its own repository.
     runs-on: ubuntu-latest
@@ -131,6 +173,8 @@ jobs:
       - run: echo "lint + all version cells + governance + derive green"
 
   backport-shadow:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     # Issue #138: a py2-era `argparse` backport (PyPI argparse==1.4.0)
     # installed next to a wheel-installed gov must not break the CLI. The
     # reporter's environment, kept alive in CI: happy paths of every
@@ -183,6 +227,8 @@ jobs:
           PYTHONPATH="$SP" gov doctor 2>&1 | grep -q "pip uninstall argparse"
 
   windows:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     # Issue #168: the wheel is py3-none-any ("OS Independent"), so the CLI
     # and its own rejection proof must hold on Windows too — no fcntl
     # module, no coreutils true/false/sh on PATH. This is the reporter's
@@ -221,6 +267,8 @@ jobs:
         run: gov self-test --scope tools
 
   macos:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     # The third declared platform: the pytest suite plus a fresh-project
     # smoke, on the same single interpreter the other host jobs use.
     runs-on: macos-latest
@@ -245,6 +293,8 @@ jobs:
           gov run --mode all
 
   gbk-locale:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     # Issue #172: the decode wall must hold on a host that does NOT speak
     # UTF-8 (zh_CN.GBK, user-space locale, PYTHONUTF8=0 keeps the
     # interpreter honest). The anti-vacuous probe lives in the pytest
@@ -306,6 +356,8 @@ jobs:
         run: gov run --mode all
 
   e2e-docker:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     # The Docker E2E matrix, ONE JOB PER CELL (D58, split for orthogony):
     # a red cell is named, rerunnable, and never masks another cell. The
     # wheel is built fresh per cell; run.sh --cell owns build + run.

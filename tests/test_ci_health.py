@@ -18,6 +18,7 @@ violation is a local red, not a 0-second GitHub failure.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -237,3 +238,36 @@ def test_derived_truths_regenerate_in_ci():
     assert "derive" in needs, (
         "derive must feed the required gates summary — drift that "
         "cannot block a merge is advisory drift")
+
+
+def test_ci_is_path_aware():
+    """Docs-only changes (nothing the wheel or e2e image ships) run the
+    doc-facing set, not the world: the platform suites, hostile locale,
+    shadow install, and ten docker cells skip; ONE pytest cell (3.12)
+    stays unconditional so the required `gates` summary can never
+    starve — the #193 lesson holds under path-awareness."""
+    ci = _load("ci.yml")
+    jobs = ci["jobs"]
+    assert "changes" in jobs, "the path classifier job disappeared"
+    filt = json.dumps(jobs["changes"])  # ensure import below
+    import re as _re
+    classify = str(jobs["changes"])
+    assert "dorny/paths-filter" in classify and "gov/**" in classify, (
+        "the classifier must name the wheel/e2e path set")
+    # heavy jobs skip on docs-only
+    for job in ("backport-shadow", "windows", "macos", "gbk-locale",
+                "e2e-docker"):
+        cond = jobs[job].get("if", "")
+        assert "docs_only" in cond, (
+            f"{job} runs unconditionally — a prose edit pays its full "
+            "price; gate it on the classifier")
+    # one pytest cell always runs
+    cell = jobs["gates-cell"]
+    cond = cell.get("if", "")
+    assert "docs_only" in cond and "'3.12'" in cond, (
+        "gates-cell must keep one unconditional cell (3.12) — the "
+        "required summary starves otherwise")
+    for job in ("lint", "derive", "governance"):
+        assert "docs_only" not in jobs[job].get("if", "none"), (
+            f"{job} is doc-relevant by design; do not skip it for "
+            "docs-only changes")
