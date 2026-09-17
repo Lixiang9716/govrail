@@ -25,9 +25,20 @@ under PEP 540 UTF-8 mode (`-X utf8`), rebuilding the entry exactly —
 `-m` invocations re-enter through `__main__.__spec__.name` (a basename
 heuristic cannot tell gov's `__main__.py` from pytest's), console
 scripts re-enter through their resolved script path. Windows needs only
-the env export: its path API has been UTF-8 since PEP 529. The test
-suite takes the same treatment at collection time, so the gbk-locale
-job's `pytest -q` runs under the plane's own contract.
+the env export: its path API has been UTF-8 since PEP 529.
+
+The test suite takes the same treatment, but at `pytest_configure` with
+the capture suspended — never at conftest-import time. pytest loads the
+initial conftests *while its global capture already owns fds 1/2*
+(`_pytest/capture.py`: "trigger conftest loading but while capturing"),
+so an exec from there hands the capture's temp files to the restarted
+interpreter: the whole run's report, every failure included, lands in a
+file nobody dumps. The gbk-locale job was output-blind for exactly that
+reason — green runs said nothing, and the red one reported an exit code
+with no failure text. `pytest_configure` runs with the capture
+suspended, so the exec'd run reports into the real streams; when no exec
+happens (xdist workers enter through `-c`), the capture is resumed and
+the workers take UTF-8 from the exported env instead.
 
 ## Alternatives considered
 
@@ -39,3 +50,8 @@ it mid-process (including from inside a live pytest run); a restart
 there is a test loop, so the exec belongs at real entries only. Set
 only `PYTHONUTF8` and skip the re-exec — rejected: it fixes the
 children and abandons the process that is already running GBK-encoded.
+Re-exec at conftest import (this decision's first shape) — rejected by
+the evidence: it did hold the contract, and it also swallowed the
+report, so the gate could not say what it ran or what failed. A green
+step that cannot be read is not evidence, and a red one that cannot be
+read is not a finding.
