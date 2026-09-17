@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.12 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- gate failures and install friction learn to explain themselves (issue batch [#250](https://github.com/Lixiang9716/govrail/issues/250)/[#251](https://github.com/Lixiang9716/govrail/issues/251)/[#252](https://github.com/Lixiang9716/govrail/issues/252)/[#253](https://github.com/Lixiang9716/govrail/issues/253)/[#257](https://github.com/Lixiang9716/govrail/issues/257)/[#259](https://github.com/Lixiang9716/govrail/issues/259)/[#201](https://github.com/Lixiang9716/govrail/issues/201)/[#200](https://github.com/Lixiang9716/govrail/issues/200))
+
 ## 0.34.11 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - run's output polarity becomes documented contract; the exit-code contract gets its pin (D56 revision)
