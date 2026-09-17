@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.1](https://github.com/Lixiang9716/govrail/compare/v0.33.0...v0.33.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* ritual evidence moves to a tracked ledger (N9) ([#215](https://github.com/Lixiang9716/govrail/issues/215)) ([dc91ec4](https://github.com/Lixiang9716/govrail/commit/dc91ec4104517e95f18464c7cc1d5872e765d401))
+
 ## [0.33.0](https://github.com/Lixiang9716/govrail/compare/v0.32.0...v0.33.0) (2026-09-16)
 
 
