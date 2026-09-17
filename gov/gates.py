@@ -1072,7 +1072,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="machine-readable: stdout is exactly one JSON array "
                              "of {gate, outcome, blocking, duration_ms, detail, "
                              "selected_by, scoped_out}; the human report moves "
-                             "to stderr")
+                             "to stderr. WITHOUT --json, stdout carries the "
+                             "human report (the documented polarity; errors "
+                             "are always stderr)")
     parser.add_argument("--fail-fast", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)

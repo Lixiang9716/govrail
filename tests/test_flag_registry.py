@@ -120,11 +120,8 @@ def test_init_accepts_every_registered_flag(tmp_path):
     assert "unexpected argument '--nonexistent'" in dead.stderr
 
 
-def test_usage_documents_the_exit_contract(capsys):
-    """N14: four exit codes were in use and documented nowhere — the
-    usage text is the contract's home."""
-    cli.main([])
-    err = capsys.readouterr().err
-    assert "exit codes:" in err
-    for token in ("0 ok", "1 failure", "2 config", "3 lease busy"):
-        assert token in err, token
+def test_usage_documents_the_exit_contract():
+    """Moved to tests/test_exit_code_contract.py — the contract's pin
+    lives with the rest of the exit-code legs (one home)."""
+    import tests.test_exit_code_contract as contract
+    assert hasattr(contract, "test_help_names_the_contract")

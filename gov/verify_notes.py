@@ -137,6 +137,14 @@ def _check_placement(root: Path) -> tuple[list[str], list[Path]]:
 
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("verify_notes")
+    if argv:
+        # This command is flagless. It used to ignore argv entirely and
+        # answer a mistyped invocation with a GREEN verdict — 31 of 32
+        # commands refuse unknown flags with exit 2; this was the one
+        # that did not (found by the exit-code contract's probe).
+        print(f"verify_notes: unexpected argument '{argv[0]}' — this "
+              "command takes no flags", file=sys.stderr)
+        return 2
     notes_root = NOTES_DIR / "implemented"
     notes = ([p for p in sorted(notes_root.rglob("*"))
               if p.is_file() and p.suffix.lower() == ".md"]
