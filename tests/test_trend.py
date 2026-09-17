@@ -214,3 +214,20 @@ def test_trend_skips_non_object_history_lines(tmp_path, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "2 run(s)" in captured.out and "no cost reported" in captured.out
     assert "skipping a non-object history line" in captured.err
+
+
+def test_stats_report_skips_non_object_lines(tmp_path, monkeypatch, capsys):
+    """N12: `5` parses as JSON and died three frames later in
+    last_value — the gates.jsonl tolerance, same shape, now here."""
+    import json as _json
+    hist = tmp_path / ".gov" / "history"
+    hist.mkdir(parents=True)
+    good = {"v": 1, "ts": "t", "languages": {"python": {"lines": 10}}}
+    (hist / "stats.jsonl").write_text(
+        "5\n" + _json.dumps(good) + "\nnull\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.attr = None
+    from gov import trend as trend_mod
+    assert trend_mod.main(["--stats"]) == 0
+    err = capsys.readouterr().err
+    assert "non-object stats line" in err

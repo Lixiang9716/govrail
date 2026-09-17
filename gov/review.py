@@ -216,10 +216,10 @@ def _grade(items: list[str]) -> int:
         try:
             answer = input(f"{rid} — {title} [p/f/s/q]: ").strip().lower()
         except EOFError:
-            print("review: grade aborted (input ended)")
+            print("review: grade aborted (input ended)", file=sys.stderr)
             return 1
         if answer in ("q", "quit"):
-            print("review: grade quit")
+            print("review: grade quit", file=sys.stderr)
             return 1
         if answer in ("s", "skip", ""):
             continue

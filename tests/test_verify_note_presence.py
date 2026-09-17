@@ -340,3 +340,33 @@ def test_strict_attribution_existing_note_covers_required_change(tmp_path, monke
     (src / "other.py").write_text("x = 1\n", encoding="utf-8")
     assert vnp.main(["--strict"]) == 1
     assert "src/other.py" in capsys.readouterr().out
+
+
+def test_strict_attribution_needs_a_token_not_a_substring(tmp_path,
+                                                          monkeypatch,
+                                                          capsys):
+    """N11: "renamed mysrc/auth/login.py.bak away" must not attribute
+    src/auth/login.py — the old substring match had no boundary between
+    "my" and "src", so one fat note could silence strict mode forever."""
+    from gov import verify_note_presence
+    _git_repo(tmp_path)
+    impl = tmp_path / ".agents" / "notes" / "implemented" / "bug-fix"
+    impl.mkdir(parents=True)
+    (impl / "2026-01-01-fat.md").write_text(
+        "# Agent Note: fat\n\nStatus: implemented\n\n## Problem\np\n\n"
+        "## Decision\nrenamed mysrc/auth/login.py.bak away\n\n"
+        "## Alternatives considered\na\n", encoding="utf-8")
+    (tmp_path / "src" / "auth").mkdir(parents=True)
+    real = tmp_path / "src" / "auth" / "login.py"
+    real.write_text("value = 1\n", encoding="utf-8")
+    import subprocess as sp
+    sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    sp.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "v1"],
+           cwd=tmp_path, check=True)
+    real.write_text("value = 2\n", encoding="utf-8")  # the tracked change
+    monkeypatch.chdir(tmp_path)
+    # required: the unmodified tracked path counts as behavior-bearing,
+    # and the fat note's near-miss must NOT cover it
+    rc = verify_note_presence.main(["--strict"])
+    assert rc == 1, "the near-miss must not attribute the real path"
+    assert "src/auth/login.py" in capsys.readouterr().out

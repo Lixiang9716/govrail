@@ -463,3 +463,11 @@
 - **状态**：已决
 - **决定**：(b)。模板 gates.json 与本仓库 gates.json 都加 `check` 门（all 模式，conflict-markers 之后；不挂 pre-commit——tree-sitter 解析不够快，commit 必须快的分工不变）。语言无关与 conflict-markers 同一逻辑（"证据可能落在任何文件类型"）：规则按扩展名套用，不支持的文件类型跳过，报告行回显扫描事实（`n finding(s) (n blocking)`），不含受支持语言时的 vacuous 绿与"扫不到冲突标记的绿"同性质，不作假。**与 D28 无冲突**：check 是通用基础设施（同 conflict-markers 的地位），不是 D28 排除的类型化 starter；preset 仍管类型化内容。**dogfood 同批兑现**：本仓库 gates.json 同步 adoption，`gov check` 全仓扫出的 3 处真实 error（tests/ 里 #172 类 text-mode spawn）当场修掉——门进来的第一件事是咬到自家人；demo 标本经 sync 脚本合并门并重封 plane seal。空壳 note 的闸门（`verify-notes` 拒绝 `note new` 骨架占位节）同轮落地，属 D4 契约的执行强化，不另立决策。**变更定界修订（落地当日评审发现，同周修入）**：check 默认 `--base auto`（F1/D21 级联，与 conflict-markers 同一语义与同一实现源），门只审判变更范围；`--all` 才是审判存量代码的全树扫描。否则采用者第一次 `gov run` 就会被自己从未改动的存量代码打红——与 P0 的 advisory-first 承诺（全新安装首跑不红，`test_init_template_is_advisory_first`）正面冲突，而这正是 D55 原文欠权衡的那笔账：门的第一版当天就红过采用者的第一次运行（实证复现后修入）。被否段对 advisory 的否决不变——补的是范围，不是拔牙。
 - **被否**：(a) 维持现状——D28 回答的是"类型化内容不进默认"，被外部审查一致读成"默认不查产品代码"；同一个项被反复提出本身就是传达失败的结构性证据，要用结构修正而不是再写一遍文档解释；(c) advisory——`allowFailure` 是给"配对尚未基线"这类环境性绿的，产品代码缺陷从第一天就该是真牙，advisory 的 check 门只是把空跑写进配置好吃得更心安理得；(d) 顺手清零全部 warning——warning 是提示不是判决（`--strict` 才升级），为凑零制造 churn 恰是 Goodhart 要防的。
+
+## D56 — 机器接口纪律：--json 是接口不是附件，错误永不进 stdout
+
+- **问题**：外部审查点名（N14）：32 个子命令中 25 个无 `--json`，默认把散文写进 stdout——CI 包装漏传旗标时机器流里就是人读文本；两处错误 prose 打在 stdout（rituals 的账本解析失败报告、review 打分的中断报告，实证）；退出码实际用了 0/1/2/3 四态而 `--help` 零文档。工具的既定范式其实存在（`--json` 输出恰一个值、人读报告让位 stderr，audit_notes 等 4 处），缺的是把它变成纪律。
+- **选项**：(a) 一次性给全部 25 个命令设计并铺 `--json`；(b) 立即修流向与文档（错误一律 stderr；exit 契约写进 usage），`--json` 按消费需求增量推广，纪律以决策成文；(c) 只修具体两处流向，不立文字
+- **状态**：已决
+- **决定**：(b)。当日兑现：rituals/review 的错误报告改走 stderr；`gov --help` 载明退出码契约（0 ok · 1 failure · 2 config/usage · 3 lease busy），置于 commands 段之前——README 命令块从 `commands:` 起切片派生，机器契约行不进派生块。**`--json` 增量推广的判定**：出现第二个机器消费者（CI 步骤、包装脚本、其他工具）的命令先做；形状沿用既定范式（恰一个 JSON 值，summary/findings 分层，人读内容去 stderr），每个新 `--json` 配形状钉测试。**与审查的结构性发现（N12"修复不完整"）的呼应**：本决策把"机器接口"立为有 homes 的契约（流向规则、exit 词汇表、--json 形状范式），后续每次新增命令时 verify 清单可对照，而不是靠记忆。
+- **被否**：(a) 一次铺满——25 个命令的 JSON 形状在没有第二个机器消费者之前只能靠猜，为形状稳定而预先设计会产出没人消费的接口，还要为每个猜测养形状钉测试；(c) 只修两处流向——修实例不立纪律正是审查点名的"修复只落在最容易的调用点"模式本身，第 26 个命令会原样再犯。

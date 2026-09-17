@@ -160,7 +160,7 @@ def _install_hook(project: Path, name: str = "pre-push",
         raise RuntimeError("no hooks dir resolved — pre-flight should have refused")
     dest_dir.mkdir(parents=True, exist_ok=True)
     for dest in (hook_dir / name, dest_dir / name):
-        dest.write_bytes(data)
+        atomicio.write_bytes(dest, data)
         dest.chmod(0o755)
 
 
@@ -179,7 +179,8 @@ def _install_ci(project: Path, created: list[str]) -> None:
     # BYTES, not text mode: newline translation would make the installed
     # file differ from the rendered template on Windows, and uninstall's
     # byte-level customized check would refuse to delete its own install.
-    workflow.write_bytes(
+    atomicio.write_bytes(
+        workflow,
         template.replace("__GOV_VERSION__", __version__).encode("utf-8"))
     created.append(".github/workflows/gov.yml")
 
@@ -225,6 +226,15 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         except presets.PresetError as e:
             print(f"init: {e}", file=sys.stderr)
             return 2
+    gov_dir = project / ".gov"
+    if gov_dir.is_symlink():
+        # N10: a symlinked .gov re-points every state write — ledgers,
+        # seals, receipts — at a path outside the repository. Nothing
+        # here follows it; the adoption refuses, naming the link.
+        print(f"init: {gov_dir} is a symlink — refusing; the plane's "
+              "state must live inside the repository (remove the link "
+              "or point it at a path you manage)", file=sys.stderr)
+        return 2
     manifest_path = project / ".gov" / "manifest.json"
     if adopt_new is not None and not manifest_path.exists():
         print("init: --adopt-new needs an initialized project", file=sys.stderr)
@@ -273,6 +283,18 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         if hooks_dir is None:
             print(f"init: --hooks needs a git repository ({err})", file=sys.stderr)
             return 2
+    gitignore = project / ".gitignore"
+    ignore_line = ".gov/history/"
+    if gitignore.is_symlink():
+        # N13/N10: a user-managed .gitignore link (stow, dotfiles) must
+        # neither be read THROUGH (external content would be copied into
+        # the tracked file) nor silently replaced by a plain file.
+        # Pre-flight, like every other refusal here: fail loud BEFORE
+        # any mutation, never leave a half-initialized project.
+        print(f"init: {gitignore} is a symlink — refusing; remove the "
+              "link, or manage the ignore line yourself "
+              f"('{ignore_line}/')", file=sys.stderr)
+        return 2
     for name in (("pre-push",) if hooks and not pre_commit
                  else ("pre-push", "pre-commit") if hooks
                  else ()):
@@ -351,8 +373,6 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
     # history lines used to ride every diff and trip note-presence's
     # non-trivial listing. init owns the ignore line now (idempotent;
     # an existing .gitignore is appended to, never rewritten).
-    gitignore = project / ".gitignore"
-    ignore_line = ".gov/history/"
     if gitignore.exists():
         # H-1: append to the original BYTES. The old code read the lines,
         # then wrote back ONLY the new line — silently destroying the
@@ -366,7 +386,11 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
             _atomic_write(gitignore,
                           raw + sep + ignore_line.encode("utf-8") + b"\n")
     else:
-        gitignore.write_text(ignore_line + "\n", encoding="utf-8")
+        # N12: same atomicity as every other init write — a torn
+        # .gitignore would be frozen as project-owned by re-init's
+        # guards, the exact adoption trap H-3 closed for _copy.
+        atomicio.write_bytes(gitignore,
+                             (ignore_line + "\n").encode("utf-8"))
         created.append(".gitignore")
 
     atomicio.write_text(
@@ -1109,6 +1133,9 @@ def _usage() -> None:
     print("  -C, --path DIR   run <command> against DIR's repository "
           "(before the command;", file=sys.stderr)
     print("                   resolves the work-tree root and announces it)",
+          file=sys.stderr)
+    print("exit codes: 0 ok · 1 failure (gate red, findings, refused "
+          "run) · 2 config/usage error · 3 lease busy (acquire)",
           file=sys.stderr)
     print("commands:", file=sys.stderr)
     for name, help_text in _COMMANDS.items():

@@ -68,3 +68,54 @@ def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
         except OSError:
             pass
         raise
+
+
+class SymlinkRefused(RuntimeError):
+    """A state path is a symlink pointing somewhere else.
+
+    The plane's persistent state lives under the repository; a symlink
+    planted at a ledger path would turn every honest writer into a
+    courier appending plane data (caller identity, gate output) to a
+    file outside — or a FIFO streaming it live (N10). Writes refuse to
+    follow, naming the path.
+    """
+
+
+def assert_not_symlink(path: Path) -> None:
+    """lstat the FINAL path component; refuse a symlink there.
+
+    Belt to O_NOFOLLOW's suspenders on POSIX (the flag closes the
+    check-to-open window); on Windows, where the flag does not exist,
+    this precheck is the whole guard."""
+    if path.is_symlink():
+        raise SymlinkRefused(
+            f"{path}: is a symlink — refusing to follow; the plane's "
+            "state stays inside the repository (N10). Remove the link "
+            "or point it at a path you manage.")
+
+
+def append_line(path: Path, data: str, *, fsync: bool = True) -> None:
+    """Append one UTF-8 chunk through O_NOFOLLOW, symlink-refusing.
+
+    The single append policy for every ledger: one file descriptor, one
+    O_APPEND write loop (partial-write safe), fsync before close, and
+    the final component may not be a symlink."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    assert_not_symlink(path)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags, 0o666)  # umask shapes a new ledger's mode
+    try:
+        blob = data.encode("utf-8")
+        while blob:  # honor partial writes; each retry re-appends at EOF
+            blob = blob[os.write(fd, blob):]
+        if fsync:
+            os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:
+    """Atomically (re)write ``path`` with bytes — the newline-exact
+    shape of :func:`write_text` (hook and workflow templates must land
+    byte-identical to their sources for uninstall's comparisons)."""
+    write_text(path, data.decode("utf-8"), fsync=fsync)

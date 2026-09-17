@@ -49,11 +49,11 @@ from typing import Any
 # script (self-test scratch dirs), where the package context is absent.
 try:
     from . import receipt as receipt_mod
-    from . import gitutil, pathmatch
+    from . import atomicio, gitutil, pathmatch
     from .root import anchor_to_git_root, force_utf8_stdio
 except ImportError:  # direct-script execution (python gov/gates.py)
     import receipt as receipt_mod
-    import gitutil, pathmatch
+    import atomicio, gitutil, pathmatch
     from root import anchor_to_git_root, force_utf8_stdio
 
 BLOCKING_OUTCOMES = ("FAIL", "TIMEOUT", "MISSING")
@@ -858,6 +858,8 @@ def run_gates(
             # A corrupt ledger tail must not bury this run's own report:
             # name the receipt failure, keep the exit code truthful.
             emit(f"receipt: skipped — the receipts ledger is unreadable ({exc})")
+        except atomicio.SymlinkRefused as exc:
+            emit(f"receipt: skipped — {exc}")
     if record_path is not None:
         # D28/D29: append-only history — one line per run, the plane's
         # own philosophy. Recording is the default (the file is local
@@ -903,14 +905,24 @@ def run_gates(
         # atomically, so one encoded line lands whole.
         line = json.dumps(run_record, separators=(",", ":")).encode("utf-8") \
             + b"\n"
-        fd = os.open(record_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND,
-                     0o644)
+        # N10: the history ledger refuses a symlinked path — gate output
+        # is plane data and must not be couriered outside the repository.
+        # Trend data, not evidence (D44): a refused append warns and the
+        # run continues; nothing was written anywhere.
         try:
-            data = line
-            while data:  # honor partial writes; each retry re-appends at EOF
-                data = data[os.write(fd, data):]
-        finally:
-            os.close(fd)
+            atomicio.assert_not_symlink(record_path)
+            fd = os.open(record_path,
+                         os.O_WRONLY | os.O_CREAT | os.O_APPEND
+                         | getattr(os, "O_NOFOLLOW", 0), 0o644)
+            try:
+                data = line
+                while data:  # partial writes: each retry re-appends at EOF
+                    data = data[os.write(fd, data):]
+            finally:
+                os.close(fd)
+        except atomicio.SymlinkRefused as e:
+            print(f"gov run: {e} — this run is NOT recorded",
+                  file=sys.stderr)
     if rec is not None:
         target = receipt_path if receipt_path is not None \
             else receipt_mod._receipt_path()
@@ -920,8 +932,11 @@ def run_gates(
         # the second record broke the chain for every later verify.
         try:
             rec = receipt_mod.append_receipt(rec, target)
-        except receipt_mod.ReceiptError as exc:
-            emit(f"receipt: skipped — the receipts ledger is unreadable ({exc})")
+        except (receipt_mod.ReceiptError, atomicio.SymlinkRefused) as exc:
+            # a receipt that cannot append is not taken — named here,
+            # never faked; a symlinked ledger also means nothing leaked
+            emit(f"receipt: skipped — the receipts ledger refused the "
+                 f"append ({exc})")
         else:
             commit = rec.get("commit") or "?"
             state = " (dirty tree — will not verify as this commit)" \

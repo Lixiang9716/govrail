@@ -671,3 +671,36 @@ def test_add_ons_preserves_manifest_keys(tmp_path):
     assert merged["templates"] == {".gov/rules.md": "deadbeef"}
     assert merged["version"] == __version__
     assert "gates.json" in merged["created"]  # known keys still updated
+
+
+# --- N10/N13: init refuses to follow user-planted symlinks ------------
+
+def test_init_refuses_a_symlinked_gov_dir(tmp_path, capsys):
+    """A .gov symlink re-points every state write — ledgers, seals,
+    receipts — at a path outside the repository. Nothing follows it."""
+    import os
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / "link-target-gov").symlink_to(outside, target_is_directory=True)
+    # place the symlink AT .gov
+    os.rename(tmp_path / "link-target-gov", tmp_path / ".gov")
+    assert cli.init(tmp_path) == 2
+    err = capsys.readouterr().err
+    assert ".gov" in err and "symlink" in err
+    assert list(outside.iterdir()) == [], "a refused init wrote through"
+
+
+def test_init_refuses_a_symlinked_gitignore(tmp_path, capsys):
+    """N13/N10: a stow/dotfiles .gitignore link is neither read THROUGH
+    (external content copied into the tracked file) nor silently
+    replaced by a plain file — the adoption refuses, naming the link."""
+    real = tmp_path / "my-dotfiles-gitignore"
+    real.write_text("node_modules/\n", encoding="utf-8")
+    (tmp_path / ".gitignore").symlink_to(real)
+    assert cli.init(tmp_path) == 2
+    err = capsys.readouterr().err
+    assert ".gitignore" in err and "symlink" in err
+    # the link survives, still pointing at the managed file
+    assert (tmp_path / ".gitignore").is_symlink()
+    assert real.read_text(encoding="utf-8") == "node_modules/\n"
+    assert not (tmp_path / "gates.json").exists(), "a refused init half-wrote"

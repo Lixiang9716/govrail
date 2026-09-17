@@ -22,9 +22,14 @@ REFUSES the ritual — an unrecorded bypass is worthless.
 from __future__ import annotations
 
 import json
-import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:  # package context (`gov ...`)
+    from . import atomicio
+except ImportError:  # direct script execution
+    import atomicio
 
 try:  # package context (`gov ...`)
     from .verify_plane import _identity
@@ -51,11 +56,9 @@ def append(root: Path | None = None, *, ritual: str, **details) -> Path:
         **details,
     }, ensure_ascii=False, sort_keys=True) + "\n"
     ledger = root / LEDGER
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    with ledger.open("a", encoding="utf-8") as f:
-        f.write(line)
-        f.flush()
-        os.fsync(f.fileno())
+    # N10: the append refuses a symlinked ledger — a ritual recorded
+    # into a file outside the repository is worse than no record.
+    atomicio.append_line(ledger, line)
     return ledger
 
 
@@ -84,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             except json.JSONDecodeError:
                 print(f"{ledger}: UNPARSEABLE LINE — the ledger is "
                       "tamper-evident, not tamper-proof; investigate "
-                      "(rule 5)")
+                      "(rule 5)", file=sys.stderr)
                 return 1
     print(f"{PROG}: {n} ritual(s) recorded")
     return 0

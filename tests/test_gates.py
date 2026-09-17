@@ -668,3 +668,57 @@ def test_timeout_detail_carries_captured_output(capsys):
     assert "TIMEOUT slow" in out
     assert "exceeded 2000ms" in out
     assert "partial work line" in out
+
+
+# --- N10: the ledgers refuse to be couriered outside the repository ---
+
+def test_history_ledger_symlink_warns_and_writes_nothing(tmp_path, capsys,
+                                                         monkeypatch):
+    """A gates.jsonl symlinked outside must not receive the run record:
+    the run continues (trend data, not evidence), names the refusal on
+    stderr, and the external file gains nothing."""
+    import subprocess as sp
+    outside = tmp_path / "outside.txt"
+    outside.write_text("mine\n", encoding="utf-8")
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    assert gates.main([]) == 0 or True  # warm the anchor; may refuse non-repo
+    capsys.readouterr()
+    hist = tmp_path / ".gov" / "history"
+    hist.mkdir(parents=True)
+    record = hist / "gates.jsonl"
+    record.symlink_to(outside)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "gates.json").write_text(json.dumps(
+        {"gates": [{"id": "a", "command": PASS}]}), encoding="utf-8")
+    assert gates.main([]) == 0
+    err = capsys.readouterr().err
+    assert "NOT recorded" in err and "symlink" in err
+    assert outside.read_text(encoding="utf-8") == "mine\n"
+
+
+def test_receipt_ledger_symlink_refuses_the_receipt(tmp_path, monkeypatch,
+                                                    capsys):
+    """A receipts ledger symlinked outside: the receipt is not taken —
+    named on the output, the chain untouched, the external file intact."""
+    import subprocess as sp
+    from gov import cli
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    (tmp_path / "f.txt").write_text("x\n", encoding="utf-8")
+    sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    sp.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "i"],
+           cwd=tmp_path, check=True)
+    assert cli.init(tmp_path) == 0
+    outside = tmp_path / "outside.txt"
+    outside.write_text("mine\n", encoding="utf-8")
+    ledger = tmp_path / ".gov" / "history" / "receipts.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.symlink_to(outside)
+    monkeypatch.chdir(tmp_path)  # anchor the run to the SCRATCH repo
+    capsys.readouterr()
+    assert cli.main(["run", "--receipt"]) == 0
+    out = capsys.readouterr()
+    assert "receipt: skipped" in out.out + out.err
+    assert "symlink" in out.out + out.err
+    assert outside.read_text(encoding="utf-8") == "mine\n"

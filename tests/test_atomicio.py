@@ -38,3 +38,33 @@ def test_replace_is_atomic_content(tmp_path):
     atomicio.write_text(p, "v1\n")
     atomicio.write_text(p, "v2\n")
     assert p.read_text(encoding="utf-8") == "v2\n"
+
+
+# --- N10: the append refuses a symlinked final component --------------
+
+def test_append_line_writes_and_appends(tmp_path):
+    p = tmp_path / "ledger.jsonl"
+    atomicio.append_line(p, '{"a": 1}\n')
+    atomicio.append_line(p, '{"a": 2}\n')
+    assert p.read_text(encoding="utf-8") == '{"a": 1}\n{"a": 2}\n'
+
+
+@pytest.mark.skipif(os.name == "nt",
+                    reason="creating symlinks needs privileges on Windows")
+def test_append_line_refuses_symlink(tmp_path):
+    outside = tmp_path / "outside.txt"
+    outside.write_text("mine\n", encoding="utf-8")
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.symlink_to(outside)
+    with pytest.raises(atomicio.SymlinkRefused, match="symlink"):
+        atomicio.append_line(ledger, '{"stolen": true}\n')
+    assert outside.read_text(encoding="utf-8") == "mine\n", \
+        "the external file must not gain a byte"
+
+
+def test_write_bytes_is_atomic_and_exact(tmp_path):
+    p = tmp_path / "hook"
+    atomicio.write_bytes(p, b"#!/bin/sh\nexit 0\n")
+    assert p.read_bytes() == b"#!/bin/sh\nexit 0\n"
+    atomicio.write_bytes(p, b"#!/bin/sh\nexit 1\n")
+    assert p.read_bytes() == b"#!/bin/sh\nexit 1\n"
