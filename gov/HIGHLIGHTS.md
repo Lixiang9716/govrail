@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.8 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- state writes refuse symlinks, attribution needs token boundaries, the torn-write sites close, machine contract written (D56)
+
 ## 0.34.7 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - the check gate judges the change scope, not history — plus its rule-6 rejection case

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.8](https://github.com/Lixiang9716/govrail/compare/v0.34.7...v0.34.8) (2026-09-17)
+
+
+### Bug Fixes
+
+* state writes refuse symlinks, attribution needs token boundaries, the torn-write sites close, machine contract written (D56) ([#243](https://github.com/Lixiang9716/govrail/issues/243)) ([7f63de1](https://github.com/Lixiang9716/govrail/commit/7f63de1567d65068869d5e82fc039f00b676d807))
+
 ## [0.34.7](https://github.com/Lixiang9716/govrail/compare/v0.34.6...v0.34.7) (2026-09-17)
 
 
