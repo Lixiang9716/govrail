@@ -5,6 +5,7 @@
   "include": [
     "docs/**/*.md",
     "README.md",
-    "CONTRIBUTING.md"
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md"
   ]
 }
