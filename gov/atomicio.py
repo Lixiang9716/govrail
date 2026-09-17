@@ -72,6 +72,7 @@ def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
     (a rewrite must not change who could read it) and the umask's answer
     otherwise.
     """
+    assert_contained(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_replace(path, text.encode("utf-8"), _target_mode(path), fsync)
 
@@ -100,12 +101,44 @@ def assert_not_symlink(path: Path) -> None:
             "or point it at a path you manage.")
 
 
+def assert_contained(path: Path) -> None:
+    """Refuse a symlink on ANY component of a state path.
+
+    O_NOFOLLOW and a final-component lstat are blind to a LINKED
+    DIRECTORY: `.gov/history` pointing outside the repository turned
+    every ledger open into an outside write with no flag tripped —
+    the round-10 review's probes, on the write half the first fix's
+    "reads-only" scoping got wrong. The plane's state lives inside the
+    work tree that owns the path; every component between that root and
+    the final component must be a real directory. Outside any
+    repository there is no inside: nothing to contain, nothing to
+    refuse."""
+    assert_not_symlink(path)
+    try:
+        from .gitutil import toplevel
+    except ImportError:  # direct-module execution
+        from gitutil import toplevel
+    root = toplevel(str(path.parent))
+    if root is None:
+        return
+    cur = path if path.is_absolute() else Path.cwd() / path
+    stop = Path(root)
+    cur = cur.parent
+    while cur != stop and cur != cur.parent:
+        if cur.is_symlink():
+            raise SymlinkRefused(
+                f"{cur}: is a symlink on a state path — refusing; the "
+                "plane's state stays inside the repository (N10)")
+        cur = cur.parent
+
+
 def append_line(path: Path, data: str, *, fsync: bool = True) -> None:
     """Append one UTF-8 chunk through O_NOFOLLOW, symlink-refusing.
 
     The single append policy for every ledger: one file descriptor, one
     O_APPEND write loop (partial-write safe), fsync before close, and
     the final component may not be a symlink."""
+    assert_contained(path)  # before the mkdir: a linked parent is the hole
     path.parent.mkdir(parents=True, exist_ok=True)
     assert_not_symlink(path)
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
@@ -125,5 +158,6 @@ def write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:
     mode: a text-mode write translates \n to \r\n on Windows, and the
     hook/workflow templates must land byte-identical to their sources
     for uninstall's byte-level comparisons."""
+    assert_contained(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_replace(path, data, _target_mode(path), fsync)

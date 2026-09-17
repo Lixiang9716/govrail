@@ -704,3 +704,24 @@ def test_init_refuses_a_symlinked_gitignore(tmp_path, capsys):
     assert (tmp_path / ".gitignore").is_symlink()
     assert real.read_text(encoding="utf-8") == "node_modules/\n"
     assert not (tmp_path / "gates.json").exists(), "a refused init half-wrote"
+
+
+def test_uninstall_refuses_to_edit_a_symlinked_agents_md(tmp_path, capsys):
+    """N10: the reference line lives in the file the link points at —
+    removing it through the link is an edit to a file the plane does
+    not own. Named, exit 1, the operator decides."""
+    _git_repo(tmp_path)
+    assert cli.init(tmp_path) == 0
+    real = tmp_path / "dotfiles"
+    real.mkdir()
+    (real / "AGENTS.md").write_text(
+        "my rules\n<!-- gov:rules --> Read .gov/rules.md and follow it "
+        "before starting work.\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").unlink()
+    (tmp_path / "AGENTS.md").symlink_to(real / "AGENTS.md")
+    capsys.readouterr()
+    assert cli.uninstall(tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "AGENTS.md" in err and "symlink" in err
+    # the managed file keeps both lines — untouched
+    assert "gov:rules" in (real / "AGENTS.md").read_text(encoding="utf-8")

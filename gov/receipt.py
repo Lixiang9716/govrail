@@ -187,7 +187,7 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
     target.parent.mkdir(parents=True, exist_ok=True)
     # N10: BEFORE anything reads or writes through the path — even the
     # chain-head read must not follow a link out of the repository.
-    atomicio.assert_not_symlink(target)
+    atomicio.assert_contained(target)
     with open(target.with_name(target.name + ".lock"), "a+") as guard:
         if fcntl is not None:
             fcntl.flock(guard, fcntl.LOCK_EX)
@@ -217,7 +217,7 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
 
 def _last_hash(path: Path) -> str:
     """The chain head: the hash of the ledger's last valid line."""
-    atomicio.assert_not_symlink(path)  # N10: never read through a link
+    atomicio.assert_contained(path)  # N10: never read through a link
     try:
         lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln]
     except FileNotFoundError:

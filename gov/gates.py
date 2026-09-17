@@ -910,7 +910,7 @@ def run_gates(
         # Trend data, not evidence (D44): a refused append warns and the
         # run continues; nothing was written anywhere.
         try:
-            atomicio.assert_not_symlink(record_path)
+            atomicio.assert_contained(record_path)
             fd = os.open(record_path,
                          os.O_WRONLY | os.O_CREAT | os.O_APPEND
                          | getattr(os, "O_NOFOLLOW", 0), 0o644)

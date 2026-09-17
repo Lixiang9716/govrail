@@ -283,6 +283,15 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         if hooks_dir is None:
             print(f"init: --hooks needs a git repository ({err})", file=sys.stderr)
             return 2
+    agents_md = project / "AGENTS.md"
+    if agents_md.is_symlink():
+        # N10's .gitignore shape one file over: the reference line would
+        # be written THROUGH the link into whatever the operator's link
+        # points at — their dotfiles, not this project.
+        print(f"init: {agents_md} is a symlink — refusing; the reference "
+              "line would land in the file the link points at",
+              file=sys.stderr)
+        return 2
     gitignore = project / ".gitignore"
     ignore_line = ".gov/history/"
     if gitignore.is_symlink():
@@ -356,9 +365,9 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         if REFERENCE_MARKER not in text:
             if text and not text.endswith("\n"):
                 text += "\n"
-            ag.write_text(text + REFERENCE_LINE + "\n", encoding="utf-8")
+            atomicio.write_text(ag, text + REFERENCE_LINE + "\n")
     else:
-        ag.write_text(REFERENCE_LINE + "\n", encoding="utf-8")
+        atomicio.write_text(ag, REFERENCE_LINE + "\n")
 
     if hooks:
         _install_hook(project, "pre-push", hooks_dir)
@@ -978,12 +987,21 @@ def uninstall(project: Path, force: bool = False) -> int:
 
     ag = project / "AGENTS.md"
     if ag.exists():
+        if ag.is_symlink():
+            # N10: the reference line lives in the file the link points
+            # at — removing it is an edit to a file this plane does not
+            # own. Named, and the operator decides.
+            print(f"uninstall: {ag} is a symlink — refusing to edit "
+                  "through it; remove the reference line by hand",
+                  file=sys.stderr)
+            return 1
         kept = [line for line in ag.read_text(encoding="utf-8").splitlines()
                 if REFERENCE_MARKER not in line]
         while kept and kept[-1] == "":
             kept.pop()
         if kept:
-            ag.write_text("\n".join(kept) + "\n", encoding="utf-8")
+            atomicio.write_text(ag, "\n".join(kept) + "\n",
+                                encoding="utf-8")
         else:
             ag.unlink()
 
