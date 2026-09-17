@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.7 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- the check gate judges the change scope, not history — plus its rule-6 rejection case
+
 ## 0.34.6 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - pre-push deletion skip, hollow-note rejection, and the check gate joins the default set (D55)

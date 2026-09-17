@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.7](https://github.com/Lixiang9716/govrail/compare/v0.34.6...v0.34.7) (2026-09-17)
+
+
+### Bug Fixes
+
+* the check gate judges the change scope, not history — plus its rule-6 rejection case ([#241](https://github.com/Lixiang9716/govrail/issues/241)) ([f6252f6](https://github.com/Lixiang9716/govrail/commit/f6252f68f2ad0f05e933172765002852ec04cc48))
+
 ## [0.34.6](https://github.com/Lixiang9716/govrail/compare/v0.34.5...v0.34.6) (2026-09-17)
 
 
