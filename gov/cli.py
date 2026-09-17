@@ -218,6 +218,18 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
     if adopt_new is not None and not manifest_path.exists():
         print("init: --adopt-new needs an initialized project", file=sys.stderr)
         return 2
+    if not manifest_path.exists() and (upgrade or preview):
+        # Both flags report ON an initialized project, and the fresh-init
+        # path below ignores them while writing the whole plane: `gov init
+        # --preview` on a bare directory wrote thirteen files and called it
+        # a preview. A flag whose promise is "writes nothing" must refuse
+        # rather than do the opposite (rule 5).
+        flag = "--upgrade" if upgrade else "--preview"
+        print(f"init: {flag} needs an initialized project (no "
+              f"{manifest_path.relative_to(project).as_posix()}); a fresh "
+              "init writes the plane — drop the flag for that",
+              file=sys.stderr)
+        return 2
     if manifest_path.exists():
         if adopt_new is not None:
             return _adopt_new(project, manifest_path, adopt_new)

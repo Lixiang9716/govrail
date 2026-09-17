@@ -53,10 +53,13 @@ JSON is a named exit 2, four verify mains wrap unexpected exceptions as
 exit 2 so a crash is never mistaken for a rejection, `run_gates`
 settles on `FIRST_COMPLETED` instead of polling, receipts append under
 a guard lock with the previous entry finalized inside the lock, and
-`gov run` anchors to the git root. Deliberately deferred, with the fix
-site named: `uninit --upgrade/--preview` still writes back silently —
-the file was owned by another workstream this round, and a
-half-applied write discipline is worse than a recorded gap.
+`gov run` anchors to the git root. One finding was deferred out of this
+round and fixed in the follow-up PR, because its fix site was owned by
+another workstream here: `gov init --upgrade` / `--preview` on a project
+with no manifest dropped the flag and wrote the whole plane — thirteen
+files — while advertising "reads, never writes" and "write nothing".
+Both now refuse with a named exit 2, and the test that had pinned the
+silent write now pins the refusal (its name already said "fails loud").
 
 ## Alternatives considered
 
