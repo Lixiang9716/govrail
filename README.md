@@ -7,6 +7,8 @@ English | [中文](README.zh.md)
 [![Python](https://img.shields.io/pypi/pyversions/govrail.svg)](https://pypi.org/project/govrail/)
 [![GitHub Repo stars](https://img.shields.io/github/stars/Lixiang9716/govrail)](https://github.com/Lixiang9716/govrail/stargazers)
 
+<p align="center"><img src="docs/images/totem.svg" width="150" alt="govrail totem — a whale's tail over two rails and a seal ring: power riding governed tracks, one verdict per pass"></p>
+
 A language-agnostic governance plane for agent-driven development: coding
 agents work fast in parallel while machines — not vigilance — hold the quality
 line. The runtime is Python 3 (>= 3.10) plus the tree-sitter parsers that

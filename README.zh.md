@@ -7,6 +7,8 @@
 [![Python](https://img.shields.io/pypi/pyversions/govrail.svg)](https://pypi.org/project/govrail/)
 [![GitHub Repo stars](https://img.shields.io/github/stars/Lixiang9716/govrail)](https://github.com/Lixiang9716/govrail/stargazers)
 
+<p align="center"><img src="docs/images/totem.svg" width="150" alt="govrail 图腾——鲸尾悬于双轨与封印环之上：力量行驶在受治的轨道，每次通过只有一个判决"></p>
+
 一个语言无关的、面向 agent 驱动开发的治理平面：让 coding agent 快速并行工作，同时由机器——而非人的警惕——守住质量线。运行时是 Python 3（>= 3.10）加上为代码统计层提供解析的 tree-sitter——全部由 `pip install govrail` 安装，无需其他工具。
 
 平面提供两个机制：**门禁**（任何能被命令检查的承诺都变成机械检查）和**笔记**（每个非平凡改动记录决策、被打败的方案与后果）。双语配对让对外展示文档保持同步。
