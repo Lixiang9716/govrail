@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.6 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- pre-push deletion skip, hollow-note rejection, and the check gate joins the default set (D55)
+
 ## 0.34.5 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - init --preview requires --adopt, and --adopt requires an initialized project
