@@ -195,8 +195,6 @@ deleting its definition.
 
 ## Origin
 
-## Origin
-
 The mechanisms are distilled from the DeepSeek Harness repository, whose
 gates-over-prose axiom shaped this template. Kept: the governance plane. Left to
 you: the product plane. The locked design decisions live in
