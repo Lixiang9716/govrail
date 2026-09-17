@@ -230,3 +230,89 @@ class TestRuleFive:
         }])
         assert checks.main(["--lang", "python"]) == 2
         assert "does not compile" in capsys.readouterr().err
+
+
+# --- the change scope (D55's revision): the gate judges what changed ---
+
+def _git_repo(tmp_path, legacy_violation: bool = True):
+    import subprocess as sp
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    if legacy_violation:
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "legacy.py").write_text(
+            "import subprocess\n"
+            'subprocess.run(["ls"], capture_output=True, text=True)\n',
+            encoding="utf-8")
+    sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    sp.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "legacy"],
+           cwd=tmp_path, check=True)
+
+
+def test_auto_base_judges_the_change_never_history(tmp_path, monkeypatch,
+                                                   capsys):
+    """The advisory-first fix, at the CLI level: legacy code committed
+    before adoption is NOT judged by the change-scoped default, a
+    violating new file IS, and the scope is announced (a vacuous green
+    says '0 changed file(s) in scope' out loud)."""
+    _git_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "clean.py").write_text("value = 1\n", encoding="utf-8")
+
+    assert checks.main([]) == 0  # dirty tree -> HEAD: legacy out of scope
+    out = capsys.readouterr().out  # the human report lives on stdout
+    assert "base=HEAD" in out and "changed file(s) in scope" in out
+
+    (tmp_path / "newcode.py").write_text(
+        "import subprocess\n"
+        'subprocess.run(["git", "status"], capture_output=True, text=True)\n',
+        encoding="utf-8")
+    assert checks.main([]) == 1  # the violation is in scope
+    assert "newcode.py" in capsys.readouterr().out
+
+
+def test_all_sweeps_the_whole_tree(tmp_path, monkeypatch):
+    """--all is where legacy code is judged: the sweep reaches history
+    the change-scoped default deliberately leaves alone."""
+    _git_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "clean.py").write_text("value = 1\n", encoding="utf-8")
+    assert checks.main(["--all"]) == 1
+
+
+def test_explicit_base_overrides_the_cascade(tmp_path, monkeypatch,
+                                             capsys):
+    _git_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    # --base HEAD on a clean tree: nothing changed since HEAD
+    assert checks.main(["--base", "HEAD"]) == 0
+    assert "base=HEAD" in capsys.readouterr().out
+
+
+def test_all_and_base_are_a_pick_one(tmp_path, monkeypatch, capsys):
+    """--all and --base judge different scopes; accepting both silently
+    would make the scope depend on flag order (rule 5)."""
+    _git_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert checks.main(["--all", "--base", "HEAD"]) == 2
+    assert "pick one" in capsys.readouterr().err
+
+
+def test_first_run_after_adoption_stays_green(tmp_path, monkeypatch):
+    """The blocker, end to end: a repository whose product code carried
+    a #172-class violation before `gov init` must pass its FIRST full
+    DAG run (P0-3), and the same violation edited NOW must go red."""
+    from gov import cli
+    _git_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert cli.init(tmp_path) == 0
+    assert cli.main(["run"]) == 0, "advisory-first broken"
+
+    legacy = tmp_path / "src" / "legacy.py"
+    legacy.write_text(
+        "import subprocess\n"
+        'subprocess.run(["git", "status"], capture_output=True, text=True)\n',
+        encoding="utf-8")
+    assert cli.main(["run"]) == 1, "an in-scope violation must be judged"
