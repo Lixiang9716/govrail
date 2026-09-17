@@ -15,8 +15,12 @@ run_gov() {
     if [ -n "$GOV_BIN" ]; then
         $GOV_BIN "$@"
     elif command -v gov >/dev/null 2>&1; then
+        GOV_BIN="gov"          # propagate the resolution: gate commands
+        export GOV_BIN         # that name `gov` inherit it (#250)
         gov "$@"
     else
+        GOV_BIN="python3 -m gov"
+        export GOV_BIN
         python3 -m gov "$@"
     fi
 }

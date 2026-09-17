@@ -52,11 +52,13 @@ try:
     from . import anchor as anchor_mod
     from . import atomicio, gitutil, pathmatch
     from .root import anchor_to_git_root, force_utf8_stdio
+    from .version import __version__
 except ImportError:  # direct-script execution (python gov/gates.py)
     import receipt as receipt_mod
     import anchor as anchor_mod
     import atomicio, gitutil, pathmatch
     from root import anchor_to_git_root, force_utf8_stdio
+    from version import __version__
 
 BLOCKING_OUTCOMES = ("FAIL", "TIMEOUT", "MISSING")
 OUTCOME_ORDER = ("FAIL", "TIMEOUT", "MISSING", "SKIP", "PASS")
@@ -229,6 +231,11 @@ class Gate:
     id: str
     command: list[str]
     label: str = ""
+    # #257: the rule contract in one paragraph — shown on the failure
+    # line, so a rejected developer sees WHAT the gate demands without
+    # opening the checker's source (JSON has no comments; label is one
+    # line).
+    description: str = ""
     needs: list[str] = field(default_factory=list)
     timeout_ms: int | None = None
     allow_failure: bool = False
@@ -314,8 +321,9 @@ def load_config_from(raw: bytes, path: str) -> tuple[dict[str, list[str]], list[
     ids: set[str] = set()
     for i, g in enumerate(gates_raw):
         g = _require_object(g, f"gates[{i}]")
-        allowed_gate = {"id", "command", "label", "needs", "timeoutMs",
-                        "allowFailure", "enabled", "paths", "stages"}
+        allowed_gate = {"id", "command", "label", "description", "needs",
+                        "timeoutMs", "allowFailure", "enabled", "paths",
+                        "stages"}
         unknown = sorted(set(g) - allowed_gate)
         if unknown:
             known_id = g.get("id") or f"gates[{i}]"
@@ -361,11 +369,16 @@ def load_config_from(raw: bytes, path: str) -> tuple[dict[str, list[str]], list[
         if bad_stages:
             raise ConfigError(f"gate '{gid}': unknown stage(s): {', '.join(bad_stages)} "
                               f"(known: {', '.join(sorted(known_stages))})")
+        description = g.get("description", "")
+        if not isinstance(description, str):
+            raise ConfigError(
+                f"gate '{gid}': 'description' must be a string")
         gates.append(
             Gate(
                 id=gid,
                 command=command,
                 label=label,
+                description=description,
                 needs=list(needs),
                 timeout_ms=timeout,
                 allow_failure=allow_failure,
@@ -538,12 +551,20 @@ def _run_one(gate: Gate, live: set | None = None) -> tuple[Gate, str, str, bool,
     # "npm" resolves to npm.cmd, which CreateProcess will not execute —
     # the run used to die with a raw FileNotFoundError there.
     resolved = shutil.which(exe)
+    command = gate.command
+    if resolved is None and exe == "gov" and os.environ.get("GOV_BIN"):
+        # #250: the hooks resolve gov for themselves (GOV_BIN → PATH →
+        # python3 -m gov) and export the result; gate commands that name
+        # `gov` inherit the same resolution instead of dying MISSING in
+        # environments where the entry point is not on PATH.
+        command = [*os.environ["GOV_BIN"].split(), *gate.command[1:]]
+        resolved = shutil.which(command[0]) or command[0]
     if resolved is None:
         return gate, "MISSING", f"command not found: {exe}", True, 0
     timeout_ms = gate.timeout_ms or DEFAULT_TIMEOUT_MS
     try:
         proc = subprocess.Popen(
-            [resolved, *gate.command[1:]],
+            [resolved, *command[1:]],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -798,6 +819,17 @@ def run_gates(
             # reader should not have to remember the flag exists.
             line = f"{gid}: {first}" if first else f"{gid}:"
             emit(f"{line} (rerun: gov run --gate {gid})")
+            # #201: the failing gate's own output IS the diagnosis. The
+            # passed gates' outputs were already shown above; a failure
+            # that hides its output trains blind re-runs.
+            lines = details[gid].splitlines()
+            shown = lines[-10:]
+            omitted = len(lines) - len(shown)
+            if shown:
+                emit(f"--- output of {gid} (failed) ---")
+                emit("\n".join(shown))
+                if omitted > 0:
+                    emit(f"... ({omitted} earlier line(s) not shown)")
 
     counts = {o: sum(1 for v in outcomes.values() if v == o) for o in OUTCOME_ORDER}
     parts = [f"{n} {o.lower()}" for o, n in counts.items() if n]
@@ -961,6 +993,9 @@ def _outcome_line(gate: Gate, outcome: str, in_scope: int | None = None) -> str:
         # #21/D32: a scan over zero matched files must not read like a scan.
         parts.append(f"{in_scope} in change scope" if in_scope
                      else "0 in change scope — nothing changed matches")
+    if outcome != "PASS" and gate.description:
+        # #257: say WHAT the gate demands, right where the rejection lands
+        parts.insert(0, f"— {gate.description}")
     return f"{outcome} {gate.id}" + (" " + " ".join(parts) if parts else "")
 
 
@@ -997,6 +1032,24 @@ def _plane_precheck(tool: str = "gov run", config_rel: str | None = None,
             print(f"  {d}", file=sys.stderr)
         print("  restore the files (git checkout) or accept the new state "
               "explicitly: gov verify-plane --write", file=sys.stderr)
+        # #259: the refusal must be self-explaining across versions — a
+        # checkout initialized with an older plane (whose CI pin also
+        # names that older version) hits this the day the mechanism
+        # itself moves. Say which side is which instead of assuming the
+        # running binary is the newest thing in the room.
+        try:
+            manifest_version = json.loads(
+                Path(".gov", "manifest.json").read_text(encoding="utf-8")
+            ).get("version")
+        except (OSError, ValueError):
+            manifest_version = None
+        if manifest_version and manifest_version != __version__:
+            print(
+                f"  note: this plane was initialized with govrail "
+                f"{manifest_version}; you are running {__version__} — "
+                "the CI pin should match the manifest, and `gov init "
+                "--upgrade` shows what changed",
+                file=sys.stderr)
         raise SystemExit(1)
     # N6: --config pointing outside the sealed set opts out of everything
     # the seal just verified. In a governed repository that is a

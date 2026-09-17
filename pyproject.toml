@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "govrail"
 dynamic = ["version"]
-description = "A language-agnostic governance plane for agent-driven development: gates and notes, delivered by the gov CLI."
+description = "A language-agnostic governance plane for agent-driven development: gates and notes, delivered by the gov CLI (pip install govrail → command: gov → first step: gov init)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

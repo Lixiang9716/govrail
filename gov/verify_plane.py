@@ -338,6 +338,9 @@ def _run(argv: list[str] | None = None) -> int:
         mode = "interactive" if interactive else "UNATTENDED machine consent"
         print(f"{PROG}: sealed {len(files)} file(s) — recorded by "
               f"{caller} ({mode})")
+        # #200: the consent record must be auditable — say where it lives
+        print(f"{PROG}: consent recorded in {root / '.gov' / 'rituals.jsonl'} "
+              "(tracked; git history keeps past entries)")
         return 0
 
     drift = violations(root)

@@ -725,3 +725,11 @@ def test_uninstall_refuses_to_edit_a_symlinked_agents_md(tmp_path, capsys):
     assert "AGENTS.md" in err and "symlink" in err
     # the managed file keeps both lines — untouched
     assert "gov:rules" in (real / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_init_output_tells_the_operator_to_commit(tmp_path, capsys):
+    """#251: every recovery path assumes the generated files are in git —
+    say so before the operator's first mistake, not after."""
+    assert cli.init(tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "commit the generated governance files now" in out

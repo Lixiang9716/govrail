@@ -313,6 +313,16 @@ def _announce_wrote(record: Path, fields: dict[str, str],
     print(f"  en_commit: {fields['en_commit'] or 'untracked'}  "
           f"zh_commit: {fields['zh_commit'] or 'untracked'}"
           "  (last commit that touched each side — not HEAD)")
+    untracked = [s for s in ("en", "zh") if not fields[f"{s}_commit"]]
+    if untracked:
+        # #253: the commit stamps are frozen facts — a side stamped
+        # "untracked" stays stale forever once the first commit lands.
+        # Say so at the moment of writing, while the operator is here.
+        sides = " and ".join(("English" if s == "en" else "Chinese")
+                             for s in untracked)
+        print(f"  NOTE: {sides} side(s) not committed yet — the stamp is "
+              "'untracked' and will read stale after your first commit; "
+              "re-run --write then", file=sys.stderr)
     print(f"  last_confirmed: {fields['last_confirmed']}  (UTC ISO-8601)")
     previous = previous or {}
     if previous:

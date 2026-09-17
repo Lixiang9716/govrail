@@ -448,6 +448,12 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         else:
             print("  2. no paired docs detected — leave pairing advisory, or disable it:")
             print("     set \"enabled\": false on the pairing gate in gates.json")
+        # #251: every recovery path (git restore, --upgrade diffs, the
+        # seal's drift verdicts) assumes the generated files are in git —
+        # say so before the operator's first mistake, not after.
+        print("  also: commit the generated governance files now — every "
+              "recovery path (git restore, gov init --upgrade) assumes "
+              "they are in git")
         # The shipped gates police the GOVERNANCE plane (notes, seals,
         # receipts) — they are not your test suite. Say so at install
         # time instead of letting the slogan imply it.
