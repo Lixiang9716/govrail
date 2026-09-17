@@ -1,17 +1,16 @@
 #!/bin/sh
 # gate: conflict-markers
-# Proves the conflict-markers gate rejects (a real one, not a stub): a
-# conflicted file must go red naming file:line; the ignore token must
-# exempt a deliberate literal. Needs govrail installed (`pip install
-# govrail`) — copy this specimen into your project and run
-# `gov self-test --scope project`.
+# Proves the conflict-markers gate rejects (#104/D38): a file staged with
+# git conflict markers must go red naming file:line, the escape hatch must
+# tolerate a deliberate literal, and a clean tree must pass.
 set -u
-command -v gov >/dev/null 2>&1 || {
-  echo "case-conflict-markers: govrail not installed (pip install govrail)" >&2
-  exit 1
-}
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
+
+# Resolve the govrail package from this repository (self-test runs us
+# with the repository root as cwd; `gov` may not be on PATH here).
+repo_root=$(pwd)
+
 cd "$scratch" || exit 1
 git init -q .
 git config user.email t@t
@@ -20,8 +19,9 @@ printf 'seed\n' > seed.txt
 git add -A
 git -c commit.gpgsign=false commit -qm init
 
+# The near-miss from the issue: markers staged during a rebase.
 printf 'intro\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> side\n' > doc.md
-if gov verify-conflict-markers > out.txt 2>&1; then
+if PYTHONPATH="$repo_root" python3 -m gov verify-conflict-markers > out.txt 2>&1; then
   echo "case-conflict-markers: a marked file passed the gate" >&2
   exit 1
 fi
@@ -31,12 +31,24 @@ grep -q 'doc.md:2' out.txt || {
   exit 1
 }
 
+# The escape hatch: a deliberate literal with the ignore token passes.
 printf 'resolved by hand\n' > doc.md
-printf '<<<<<<< HEAD gov:ignore-marker\n' > lit.md
-if gov verify-conflict-markers > out.txt 2>&1; then
+printf 'literal marker below is intentional gov:ignore-marker\n' > lit.md
+printf '<<<<<<< HEAD gov:ignore-marker\n' >> lit.md
+if PYTHONPATH="$repo_root" python3 -m gov verify-conflict-markers > out.txt 2>&1; then
+  :
+else
+  echo "case-conflict-markers: the ignore token was not tolerated" >&2
+  cat out.txt >&2
+  exit 1
+fi
+
+# A clean tree passes.
+rm doc.md lit.md
+if PYTHONPATH="$repo_root" python3 -m gov verify-conflict-markers > out.txt 2>&1; then
   echo "case-conflict-markers: rejection proof holds"
   exit 0
 fi
-echo "case-conflict-markers: the ignore token was not tolerated" >&2
+echo "case-conflict-markers: a clean tree went red" >&2
 cat out.txt >&2
 exit 1

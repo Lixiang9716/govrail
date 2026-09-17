@@ -18,7 +18,7 @@ pip install -e .        # 以可编辑模式安装 gov CLI
 ```sh
 pytest -q                 # 单元测试
 gov self-test             # 拒绝用例：证明每条治理 gate 都能拒绝
-gov run                   # 完整 gate DAG（notes + pairing + note-presence + self-test）
+gov run                   # 完整 gate DAG（本仓库自己的 gates.json）
 ```
 
 ## 提交改动

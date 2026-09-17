@@ -1,3 +1,10 @@
 {
-  "exclude": ["docs/decisions.md"]
+  "exclude": [
+    "docs/decisions.md"
+  ],
+  "include": [
+    "docs/**/*.md",
+    "README.md",
+    "CONTRIBUTING.md"
+  ]
 }

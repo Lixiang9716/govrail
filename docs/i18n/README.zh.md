@@ -31,7 +31,7 @@ gov verify-pairing --write docs/example.md
 {
   "include": ["docs/**/*.md", "README.md"],
   "counterparts": ["{stem}.zh.md"],
-  "exclude": ["docs/decisions.md"]
+  "exclude": ["docs/decisions.md", "docs/postmortem/README.md"]
 }
 ```
 

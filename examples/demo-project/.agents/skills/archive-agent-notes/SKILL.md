@@ -18,6 +18,8 @@ It documents one-shot scaffolding, a narrow adapter detail, or a superseded mech
 ## Never
 
 - Archive an `implemented/` note whose decision is still the shipped reality — update its facts in place instead.
+- Re-seal over a tampered archived file — restore it instead; `gov archive-notes` refuses a drifted seal, and `--rebaseline`
+  is explicit, loudly-printed consent.
 - Archive on a mechanical signal alone — `gov audit-notes` flags dead commands, missing D-refs, and unresolved paths; some are merely illustrative references. Signals point, you judge.
 - Edit, move, or delete anything under `archived/` — it is sha256-sealed; supersede forward instead.
 
@@ -27,4 +29,5 @@ It documents one-shot scaffolding, a narrow adapter detail, or a superseded mech
 1. Move the note to `archived/<class>/` keeping its filename.
 2. Insert `Archived: <date>` as line 4 (not earlier than the filename date); line 3 reads `Status: implemented`.
 3. Fix inbound links.
-4. Seal the manifest with `gov archive-notes`, then commit in the same change.
+4. Seal the manifest with `gov archive-notes`, confirm with `gov verify-archive`, and commit both in the same change.
+

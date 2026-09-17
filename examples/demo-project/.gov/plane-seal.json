@@ -7,29 +7,53 @@
       "sha256": "b6cf8158221e72e763cd355362d53ff0a56a0cd7400f6e55c53ae1e46ee8b419"
     },
     ".gov/rejections/case-archive.sh": {
-      "sha256": "8a33a0c9bc535389ada42f14ef64140201bb8709732ac798271a70c7f03ae495"
+      "sha256": "bcdb51e63a9bec18eeb9875a90561a88a2faad6dba22660ad1c80b679462811d"
     },
     ".gov/rejections/case-conflict-markers.sh": {
-      "sha256": "ce5e524704a7e77570c0e0be5b87422ec11a26463a9fbd88ef89c486d6d0566f"
+      "sha256": "69997a30fa33cba0a0a8635f6031ec16d1de5460067f9211fa62e9c74f1541eb"
+    },
+    ".gov/rejections/case-decisions.sh": {
+      "sha256": "33ae71ebc8a92adb30239c3c7cc6e130d926ec21e80b4024aec608e9dd7bc354"
+    },
+    ".gov/rejections/case-doc-sync.sh": {
+      "sha256": "ea080053aa91d41c50d7b70b4cad17c22be7ebf8c028fe8ac0101892f91cef0a"
+    },
+    ".gov/rejections/case-note-presence.sh": {
+      "sha256": "c79100a9aa14584ed307734021c931abbd632e7e83139c46f06c3f5a8af6bf48"
+    },
+    ".gov/rejections/case-notes.sh": {
+      "sha256": "a64bb95128d7028f06426911ee3136dbc8e7c6e57cb449affb4c0d9d79ab61a6"
+    },
+    ".gov/rejections/case-plane.sh": {
+      "sha256": "7f597aa9c7bccfbcd5de969e5c623be0b94f8522151ec05d100bc612cf20e08c"
     },
     ".gov/rejections/case-pre-commit-hook.sh": {
       "sha256": "b8f68966fe3ff6f800c968b74f05a564f6cdf42c9ff33982198e6975be5cc9f7"
     },
+    ".gov/rejections/case-rubric.sh": {
+      "sha256": "24cee132f28c3f92aee6660e2c9286c24579ee18a9b92e656015ecc96c3966e3"
+    },
+    ".gov/rejections/case-self-test.sh": {
+      "sha256": "19b9d080e89fd4745048fb6a5f5afab73f45a2a6ee199661dd205c3ada08edd0"
+    },
     ".gov/rejections/case-source-limits.sh": {
       "sha256": "63a3996468df0b0f55d66820da7df3a04c92db4105cdbd05eaf84a9dd30db426"
     },
+    ".gov/rejections/case-task.sh": {
+      "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
+    },
     ".gov/rules.md": {
-      "sha256": "8b544404b58cab5fe0b26c2d59037a35a7ad1ff777be8c6a30d914b7fcdbbf03"
+      "sha256": "77bbd51bdd524d674d5d6ac77a07c1211457883f851c97349ef64a8f7cc0ca61"
     },
     ".gov/surfaces.json": {
       "sha256": "eb694e30b6087b731bda67a87dceee5186f88897e9d4b638ee40c19686d50156"
     },
     "gates.json": {
-      "sha256": "a8f8030e7b9345cb1d0733495fbc359d6d6b18ecba7dd8f02f0aec7e9be4b363"
+      "sha256": "90d54f37d9e705add12ccca1b931da536f6bf5de3c03373cfc0f0c67f9beff6a"
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-16T10:44:41+00:00",
+    "ts": "2026-09-17T02:19:02+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }

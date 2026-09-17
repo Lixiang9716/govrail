@@ -27,6 +27,9 @@ The header is a title and a status line:
 Status: implemented
 ```
 
+The value is exactly `implemented` — the lifecycle state itself is
+the directory (`implemented/` vs `archived/`), never the field.
+
 The body carries three required sections, in this order:
 
 ```
