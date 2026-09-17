@@ -425,6 +425,15 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
         # the new config state, loudly, so verify-plane stays green for
         # a flow that went through the plane's own front door.
         verify_plane.baseline(project)
+        try:
+            from . import rituals
+            rituals.append(project, ritual="preset-rebaseline",
+                           preset=name)
+            print("  plane: ritual recorded (preset re-baseline) in "
+                  ".gov/rituals.jsonl")
+        except OSError as e:
+            print(f"  plane: WARNING — ritual could not be recorded in "
+                  f"the tracked ledger: {e}", file=sys.stderr)
         print("  plane: seal re-baselined over the adopted state")
     return 0
 
