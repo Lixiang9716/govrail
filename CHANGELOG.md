@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.9](https://github.com/Lixiang9716/govrail/compare/v0.34.8...v0.34.9) (2026-09-17)
+
+
+### Bug Fixes
+
+* containment walks the whole state path — the directory variant of the ledger escape, and AGENTS.md stops being written through ([#245](https://github.com/Lixiang9716/govrail/issues/245)) ([6913cc3](https://github.com/Lixiang9716/govrail/commit/6913cc343bb8d21064afb2f058bb50c5bb22da4e))
+
 ## [0.34.8](https://github.com/Lixiang9716/govrail/compare/v0.34.7...v0.34.8) (2026-09-17)
 
 
