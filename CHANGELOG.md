@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.11](https://github.com/Lixiang9716/govrail/compare/v0.34.10...v0.34.11) (2026-09-17)
+
+
+### Bug Fixes
+
+* run's output polarity becomes documented contract; the exit-code contract gets its pin (D56 revision) ([#256](https://github.com/Lixiang9716/govrail/issues/256)) ([deac507](https://github.com/Lixiang9716/govrail/commit/deac5074071a89eb7e07faebcbd8d7bb26143166))
+
 ## [0.34.10](https://github.com/Lixiang9716/govrail/compare/v0.34.9...v0.34.10) (2026-09-17)
 
 
