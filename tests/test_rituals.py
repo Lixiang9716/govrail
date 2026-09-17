@@ -43,7 +43,7 @@ def test_the_ledger_is_not_gitignored(tmp_path):
     root = _root(tmp_path)
     ledger = root / ".gov" / "rituals.jsonl"
     ledger.write_text("", encoding="utf-8")
-    checked = subprocess.run(
+    subprocess.run(
         ["git", "check-ignore", "-q", ledger.as_posix()],
         cwd=root, capture_output=True)
     # no git repo in the scratch → check-ignore can't run; emulate with
