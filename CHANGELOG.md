@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.12](https://github.com/Lixiang9716/govrail/compare/v0.34.11...v0.34.12) (2026-09-17)
+
+
+### Bug Fixes
+
+* gate failures and install friction learn to explain themselves (issue batch [#250](https://github.com/Lixiang9716/govrail/issues/250)/[#251](https://github.com/Lixiang9716/govrail/issues/251)/[#252](https://github.com/Lixiang9716/govrail/issues/252)/[#253](https://github.com/Lixiang9716/govrail/issues/253)/[#257](https://github.com/Lixiang9716/govrail/issues/257)/[#259](https://github.com/Lixiang9716/govrail/issues/259)/[#201](https://github.com/Lixiang9716/govrail/issues/201)/[#200](https://github.com/Lixiang9716/govrail/issues/200)) ([#260](https://github.com/Lixiang9716/govrail/issues/260)) ([5fb2954](https://github.com/Lixiang9716/govrail/commit/5fb2954642a76f4b3e70d35eb4ed8bd6920bd217))
+
 ## [0.34.11](https://github.com/Lixiang9716/govrail/compare/v0.34.10...v0.34.11) (2026-09-17)
 
 
