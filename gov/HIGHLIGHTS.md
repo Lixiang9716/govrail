@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.4 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- init --upgrade/--preview refuse on a project with no manifest
+
 ## 0.34.3 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - red-team round 5 — 3 HIGH + 15 MEDIUM + LOW batch

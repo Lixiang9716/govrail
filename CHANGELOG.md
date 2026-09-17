@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.4](https://github.com/Lixiang9716/govrail/compare/v0.34.3...v0.34.4) (2026-09-17)
+
+
+### Bug Fixes
+
+* init --upgrade/--preview refuse on a project with no manifest ([#235](https://github.com/Lixiang9716/govrail/issues/235)) ([83a7eb8](https://github.com/Lixiang9716/govrail/commit/83a7eb84a64e98583301b8ba0e78ce8a5ca483c8))
+
 ## [0.34.3](https://github.com/Lixiang9716/govrail/compare/v0.34.2...v0.34.3) (2026-09-17)
 
 
