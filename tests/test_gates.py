@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+import shutil
+
 from gov import cli, gates
 
 # Portable gate commands (#168): the Unix coreutils true/false do not
@@ -747,3 +749,92 @@ def test_history_directory_symlink_warns_and_writes_nothing(tmp_path,
     assert "NOT recorded" in err
     assert ("outside the repository" in err) or ("symlink" in err)
     assert list(outside.iterdir()) == [], "the external dir gained a file"
+
+
+# --- issue batch: self-explaining failures and GOV_BIN propagation ----
+
+def test_failed_gate_output_is_inlined_in_the_summary(tmp_path, capsys,
+                                                      monkeypatch):
+    """#201: the failing gate's own output IS the diagnosis — it used to
+    be shown only for PASSING gates, forcing a blind re-run."""
+    _write(tmp_path, {"gates": [{"id": "red", "command": [
+        sys.executable, "-c",
+        "import sys; print('the rule is X', file=sys.stderr); "
+        "raise SystemExit(1)"]}]}),
+    monkeypatch.chdir(tmp_path)
+    assert gates.main([]) == 1
+    out = capsys.readouterr().out
+    assert "--- output of red (failed) ---" in out
+    assert "the rule is X" in out
+
+
+def test_missing_gov_resolves_through_gov_bin(tmp_path, monkeypatch, capsys):
+    """#250: the hooks resolve gov for themselves and export GOV_BIN;
+    gate commands naming `gov` inherit the resolution instead of dying
+    MISSING in environments where the entry point is not on PATH."""
+    (tmp_path / "gates.json").write_text(json.dumps(
+        {"gates": [{"id": "a", "command": ["gov", "-c", "pass"]}]}),
+        encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GOV_BIN", f"{sys.executable}")
+    real_which = shutil.which
+    monkeypatch.setattr("shutil.which",
+                        lambda name: None if name == "gov"
+                        else real_which(name))
+    assert gates.main([]) == 0
+    assert "MISSING" not in capsys.readouterr().out
+
+
+def test_missing_gov_stays_missing_without_gov_bin(tmp_path, monkeypatch,
+                                                   capsys):
+    _write(tmp_path, {"gates": [{"id": "a",
+                                 "command": ["gov", "-c", "pass"]}]})
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GOV_BIN", raising=False)
+    real_which = shutil.which
+    monkeypatch.setattr("shutil.which",
+                        lambda name: None if name == "gov"
+                        else real_which(name))
+    assert gates.main([]) == 1
+    out = capsys.readouterr().out
+    assert "MISSING" in out and "command not found: gov" in out
+
+
+def test_gate_description_on_the_failure_line(tmp_path, capsys, monkeypatch):
+    """#257: the rule contract in one paragraph, shown where the
+    rejection lands — no source reading required."""
+    _write(tmp_path, {"gates": [{
+        "id": "logging", "description": "L1 no bare console; L2 module logger",
+        "command": FAIL}]})
+    monkeypatch.chdir(tmp_path)
+    assert gates.main([]) == 1
+    out = capsys.readouterr().out
+    assert "— L1 no bare console; L2 module logger" in out
+
+
+def test_gate_description_is_still_schema_checked(tmp_path):
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS,
+                                 "description": 42}]})
+    with pytest.raises(gates.ConfigError, match="must be a string"):
+        gates.load_config(str(tmp_path / "gates.json"))
+
+
+def test_plane_refusal_is_version_aware(tmp_path, monkeypatch, capsys):
+    """#259: a checkout initialized with an older plane hits the seal
+    refusal the day the mechanism moves — the refusal names both sides
+    instead of assuming the running binary is the newest thing around."""
+    _git_repo(tmp_path)
+    assert cli.init(tmp_path) == 0
+    manifest = tmp_path / ".gov" / "manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["version"] = "0.1.2"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    gates_file = tmp_path / "gates.json"
+    gates_file.write_text(
+        gates_file.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(SystemExit):
+        gates.main([])
+    err = capsys.readouterr().err
+    assert "initialized with govrail 0.1.2" in err
+    assert "you are running" in err

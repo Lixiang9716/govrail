@@ -215,3 +215,18 @@ def test_write_warns_when_previous_seal_unreadable(tmp_path, monkeypatch, capsys
     seal = json.loads((tmp_path / ".gov" / "plane-seal.json")
                       .read_text(encoding="utf-8"))
     assert ".gov/rules.md" in seal["files"]  # the re-baseline still landed
+
+
+def test_rebaseline_names_the_consent_ledger(tmp_path, capsys):
+    """#200: the consent record must be auditable — the output says
+    where it lives instead of leaving the operator to find it."""
+    from gov import verify_plane as vp
+    (tmp_path / ".gov").mkdir(parents=True)
+    (tmp_path / "gates.json").write_text("{}", encoding="utf-8")
+    import subprocess
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    (tmp_path / ".gov" / "rituals.jsonl").write_text("", encoding="utf-8")
+    rc = vp.main(["--write", "--confirm-unattended"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "consent recorded in" in out and "rituals.jsonl" in out

@@ -292,3 +292,20 @@ def test_write_announces_one_sided_reconfirm(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "ONE-SIDED re-confirm" in out and "only the zh side" in out
     assert "en side is unchanged" in out and "Rule 7" in out
+
+
+def test_write_warns_when_a_side_is_untracked(tmp_path, monkeypatch, capsys):
+    """#253: the commit stamps are frozen facts — a side stamped
+    'untracked' (staged but never committed) reads stale forever after
+    the first commit. Say so at the moment of writing."""
+    import subprocess
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    src = tmp_path / "guide.md"
+    zh = tmp_path / "guide.zh.md"
+    src.write_text("english\n", encoding="utf-8")
+    zh.write_text("中文\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    monkeypatch.chdir(tmp_path)
+    assert vtp.main(["--write", "guide"]) == 0
+    err = capsys.readouterr().err
+    assert "not committed yet" in err and "re-run --write" in err
