@@ -260,3 +260,35 @@ def test_explain_is_read_only(tmp_path, monkeypatch, capsys):
              if p.is_file() and ".git" not in p.parts}
     assert after == before, "--explain must not create or modify any file"
     assert vtp.main([]) == 1  # the pair is still unrecorded: explain judged nothing
+
+
+def test_write_announces_one_sided_reconfirm(tmp_path, monkeypatch, capsys):
+    """Rule 7's consent moment: when only ONE side's hash changed since
+    the previous record, --write names it loudly. A zh-side typo fix is
+    a legitimate one-sided confirm (the note informs); a substantive
+    one-language edit is what rule 7 exists to stop (the note names).
+    The gate itself never compares commits — blocking on unequal
+    en_commit/zh_commit would force fake churn on the untouched side."""
+    import subprocess as _sp
+    _sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    _sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    _sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("hello\n", encoding="utf-8")
+    (tmp_path / "docs" / "a.zh.md").write_text("你好\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert vtp.main(["--write", "docs/a.md"]) == 0
+    capsys.readouterr()
+    # a PAIRED edit: both sides move — no one-sided note
+    (tmp_path / "docs" / "a.md").write_text("hello v2\n", encoding="utf-8")
+    (tmp_path / "docs" / "a.zh.md").write_text("你好 v2\n", encoding="utf-8")
+    assert vtp.main(["--write", "docs/a.md"]) == 0
+    out = capsys.readouterr().out
+    assert "ONE-SIDED" not in out
+    # a ONE-SIDED edit: only zh moves — the note names the side
+    (tmp_path / "docs" / "a.zh.md").write_text("你好 v3（修正）\n",
+                                               encoding="utf-8")
+    assert vtp.main(["--write", "docs/a.md"]) == 0
+    out = capsys.readouterr().out
+    assert "ONE-SIDED re-confirm" in out and "only the zh side" in out
+    assert "en side is unchanged" in out and "Rule 7" in out

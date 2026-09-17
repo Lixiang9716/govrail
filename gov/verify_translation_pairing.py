@@ -300,9 +300,21 @@ def _render_record(fields: dict[str, str]) -> str:
     )
 
 
-def _announce_wrote(record: Path, fields: dict[str, str]) -> None:
+def _announce_wrote(record: Path, fields: dict[str, str],
+                    previous: dict[str, str] | None = None) -> None:
     """Issue #150: --write names the field values it wrote, not just the
-    file — the hand-restamp failure was invisible until the gate went red."""
+    file — the hand-restamp failure was invisible until the gate went red.
+
+    Also names a ONE-SIDED re-confirm loudly: when only one side's hash
+    changed since the previous record, the confirmation is absorbing a
+    single-language edit. A zh-side typo fix is a legitimate one-sided
+    confirm; a substantive one-sided edit is exactly what rule 7 ("a PR
+    never lands one language of a pair alone") exists to stop — and the
+    consent moment, where a human is watching, is where the distinction
+    gets made. The gate itself never compares commits: unequal
+    en_commit/zh_commit after a legal one-sided confirm is normal
+    residue, and blocking on it would force fake churn on the other
+    side."""
     print(f"wrote {record.as_posix()}")
     print(f"  en: {fields['en']}  zh: {fields['zh']}"
           "  (git blob hashes, not file sha256)")
@@ -310,6 +322,18 @@ def _announce_wrote(record: Path, fields: dict[str, str]) -> None:
           f"zh_commit: {fields['zh_commit'] or 'untracked'}"
           "  (last commit that touched each side — not HEAD)")
     print(f"  last_confirmed: {fields['last_confirmed']}  (UTC ISO-8601)")
+    previous = previous or {}
+    if previous:
+        moved = [side for side in ("en", "zh")
+                 if previous.get(side) and previous[side] != fields[side]]
+        if len(moved) == 1:
+            side = moved[0]
+            print(f"  NOTE: ONE-SIDED re-confirm — only the {side} side "
+                  f"moved since the last record "
+                  f"({previous[side][:7]} -> {fields[side][:7]}); the "
+                  f"{('zh' if side == 'en' else 'en')} side is unchanged. "
+                  "Rule 7: a PR never lands one language of a pair alone "
+                  "— confirm this edit pairs.")
 
 
 def _register(src: Path, zh: Path) -> tuple[Path, dict[str, str]]:
@@ -321,6 +345,12 @@ def _register(src: Path, zh: Path) -> tuple[Path, dict[str, str]]:
     record = _record_path(src)
     record.write_text(_render_record(fields), encoding="utf-8")
     return record, fields
+
+
+def _previous_record(src: Path) -> dict[str, str]:
+    """The pair's record BEFORE this confirmation (empty if none) —
+    captured by the caller before _register overwrites it."""
+    return _parse_record(_record_path(src)) if _record_path(src).is_file() else {}
 
 
 def _staged_files() -> list[str] | None:
@@ -468,7 +498,8 @@ def _write(items: list[str], cfg: dict[str, list[str]]) -> int:
         if en.parent != zh.parent:
             print("verify_translation_pairing: counterpart must sit next to the source", file=sys.stderr)
             return 2
-        _announce_wrote(*_register(en, zh))
+        _prev = _previous_record(en)
+        _announce_wrote(*_register(en, zh), _prev)
         if str(en) not in {str(p) for p in _sources(cfg)}:
             print(
                 f"note: {en} is outside the pairing include scope; the record is "
@@ -513,7 +544,8 @@ def _write(items: list[str], cfg: dict[str, list[str]]) -> int:
             print(f"verify_translation_pairing: {problem}", file=sys.stderr)
             unpairable += 1
             continue
-        _announce_wrote(*_register(src, zh))
+        _prev = _previous_record(src)
+        _announce_wrote(*_register(src, zh), _prev)
         wrote += 1
     if unpairable:
         print(
