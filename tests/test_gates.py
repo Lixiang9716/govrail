@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gov import gates
+from gov import cli, gates
 
 # Portable gate commands (#168): the Unix coreutils true/false do not
 # exist on Windows — "a command that exits 0/1" must not depend on PATH.
@@ -722,3 +722,24 @@ def test_receipt_ledger_symlink_refuses_the_receipt(tmp_path, monkeypatch,
     assert "receipt: skipped" in out.out + out.err
     assert "symlink" in out.out + out.err
     assert outside.read_text(encoding="utf-8") == "mine\n"
+
+
+def test_history_directory_symlink_warns_and_writes_nothing(tmp_path,
+                                                             monkeypatch,
+                                                             capsys):
+    """The directory variant of the ledger escape: `.gov/history` ITSELF
+    linked outside — the final-component check cannot see it, the
+    parent-chain containment does."""
+    import subprocess as sp
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    assert cli.init(tmp_path) == 0
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".gov" / "history").symlink_to(outside,
+                                               target_is_directory=True)
+    capsys.readouterr()
+    assert gates.main([]) == 0
+    err = capsys.readouterr().err
+    assert "NOT recorded" in err and "symlink" in err
+    assert list(outside.iterdir()) == [], "the external dir gained a file"

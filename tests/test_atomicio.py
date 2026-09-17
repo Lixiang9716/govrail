@@ -68,3 +68,36 @@ def test_write_bytes_is_atomic_and_exact(tmp_path):
     assert p.read_bytes() == b"#!/bin/sh\nexit 0\n"
     atomicio.write_bytes(p, b"#!/bin/sh\nexit 1\n")
     assert p.read_bytes() == b"#!/bin/sh\nexit 1\n"
+
+
+def test_append_line_refuses_a_symlinked_parent_directory(tmp_path,
+                                                          monkeypatch):
+    """The round-10 review's probe: O_NOFOLLOW and a final-component
+    lstat are blind to a LINKED DIRECTORY — `.gov/history` pointing
+    outside turned every ledger open into an outside write. Containment
+    walks the parent chain (the owning work-tree root is the boundary)."""
+    import subprocess as sp
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    monkeypatch.chdir(tmp_path)
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    (tmp_path / ".gov").mkdir()
+    (tmp_path / ".gov" / "history").symlink_to(outside_dir,
+                                               target_is_directory=True)
+    ledger = tmp_path / ".gov" / "history" / "gates.jsonl"
+    with pytest.raises(atomicio.SymlinkRefused, match="symlink"):
+        atomicio.append_line(ledger, '{"run": 1}\n')
+    assert list(outside_dir.iterdir()) == [], "the external dir gained a file"
+
+
+def test_contained_deep_unlinked_chain_writes(tmp_path, monkeypatch):
+    """Positive control: a real directory chain under the work-tree
+    root writes fine — containment refuses links, not depth."""
+    monkeypatch.chdir(tmp_path)
+    import subprocess as sp
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    deep = tmp_path / ".gov" / "history" / "deeper"
+    deep.mkdir(parents=True)
+    ledger = deep / "ledger.jsonl"
+    atomicio.append_line(ledger, '{"ok": true}\n')
+    assert ledger.read_text(encoding="utf-8") == '{"ok": true}\n'

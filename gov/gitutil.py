@@ -59,9 +59,17 @@ def has_head() -> bool:
     return git("rev-parse", "--verify", "--quiet", "HEAD").returncode == 0
 
 
-def toplevel() -> str | None:
-    """The work-tree root of the caller's cwd, or None outside a repository."""
-    proc = git("rev-parse", "--show-toplevel")
+def toplevel(start: str = ".") -> str | None:
+    """The work-tree root containing ``start``, or None outside a repository.
+
+    ``start`` lets a caller ask about a path it is NOT sitting in (the
+    containment check asks this about every state path it is about to
+    write)."""
+    proc = subprocess.run(
+        ["git", *_QUOTEPATH_OFF, "-C", start, "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, encoding="utf-8",
+        errors="surrogateescape", env=scrubbed_env(),
+    )
     if proc.returncode != 0:
         return None
     root = proc.stdout.strip()
