@@ -19,41 +19,36 @@ import tempfile
 from pathlib import Path
 
 
-def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
-    """Atomically (re)write ``path`` with ``text``.
-
-    The temp file inherits the existing file's mode when the file exists
-    (a rewrite must not change who could read it) and 0644 otherwise.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _target_mode(path: Path) -> int:
+    """The existing file's mode, else the admin's umask applied to 0666
+    (a hardcoded 0644 would leak ledgers global-readable on shared
+    machines; Windows enforces no POSIX mode bits)."""
     try:
-        mode = path.stat().st_mode & 0o777
+        return path.stat().st_mode & 0o777
     except OSError:
         if os.name == "nt":
-            mode = 0o644  # Windows enforces no POSIX mode bits
-        else:
-            # New file: respect the admin's umask (shared machines run
-            # 0640 — a hardcoded 0644 would leak ledgers global-readable).
-            # The get-umask dance is the standard recipe; the window is
-            # one call.
-            umask = os.umask(0)
-            os.umask(umask)
-            mode = 0o666 & ~umask
+            return 0o644
+        umask = os.umask(0)
+        os.umask(umask)
+        return 0o666 & ~umask
+
+
+def _atomic_replace(path: Path, data: bytes, mode: int,
+                    fsync: bool) -> None:
+    """mkstemp in the destination directory, write, fsync, chmod,
+    os.replace — then fsync the DIRECTORY (replace(2) is crash-safe but
+    not power-loss-safe; platforms without a directory fd skip it)."""
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name,
                                suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(text)
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
             if fsync:
                 f.flush()
                 os.fsync(f.fileno())
         os.chmod(tmp, mode)
         os.replace(tmp, path)
         if fsync:
-            # fsync the DIRECTORY too: replace(2) is crash-safe but not
-            # power-loss-safe — without a dir fsync the rename itself can
-            # be lost while the file content is durable. Best-effort:
-            # platforms without a directory fd (Windows) skip it.
             try:
                 dirfd = os.open(path.parent, os.O_RDONLY)
                 try:
@@ -68,6 +63,17 @@ def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
         except OSError:
             pass
         raise
+
+
+def write_text(path: Path, text: str, *, fsync: bool = True) -> None:
+    """Atomically (re)write ``path`` with ``text``.
+
+    The temp file inherits the existing file's mode when the file exists
+    (a rewrite must not change who could read it) and the umask's answer
+    otherwise.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_replace(path, text.encode("utf-8"), _target_mode(path), fsync)
 
 
 class SymlinkRefused(RuntimeError):
@@ -115,7 +121,9 @@ def append_line(path: Path, data: str, *, fsync: bool = True) -> None:
 
 
 def write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:
-    """Atomically (re)write ``path`` with bytes — the newline-exact
-    shape of :func:`write_text` (hook and workflow templates must land
-    byte-identical to their sources for uninstall's comparisons)."""
-    write_text(path, data.decode("utf-8"), fsync=fsync)
+    """Atomically (re)write ``path`` with bytes — BINARY, never text
+    mode: a text-mode write translates \n to \r\n on Windows, and the
+    hook/workflow templates must land byte-identical to their sources
+    for uninstall's byte-level comparisons."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_replace(path, data, _target_mode(path), fsync)
