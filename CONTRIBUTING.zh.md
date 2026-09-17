@@ -53,11 +53,14 @@ sleep 是为真实物理时间节拍（如租约 TTL 到期）计时。
 
 ## 保持 README 命令参考与实际一致
 
-README.md 中的命令区块（`gov:commands` 标记之间）由 `gov --help` 生成——
-描述的唯一真相源是 `gov/cli.py`。改动任何 CLI 面后运行
-`scripts/update_readme_commands.py`；区块过期、文档引用了不存在的
-`gov ...` 命令/旗标、或某命令的 help 行漏列真实子命令，CI 都会变红
-（tests/test_docs_cli_consistency.py）。不要手改该区块。
+所有**衍生**真相（README 的 `gov:commands` 区块 ← `gov --help`、demo
+标本 ← live 模板、i18n 配对示例 ← `DEFAULT_CONFIG`）都通过一条命令再生：
+`python scripts/derive_all.py`。PR 上，CI 的 `derive` job 以 `--check`
+模式运行——漂移变红并点名这条命令；master 合并推送上，该 job 自行
+再生并提交结果（一步到不动点，带循环守卫）。不要手改衍生内容；
+改它的真相源，让派生机制拥有副本。文档引用了不存在的 `gov ...`
+命令/旗标、或 help 行漏列真实子命令，仍由
+tests/test_docs_cli_consistency.py 保障。
 
 ## 笔记与规则
 
