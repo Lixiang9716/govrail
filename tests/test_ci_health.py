@@ -259,10 +259,14 @@ def test_ci_is_path_aware():
         assert "docs_only" in cond, (
             f"{job} runs unconditionally — a prose edit pays its full "
             "price; gate it on the classifier")
-    # one pytest cell always runs
+    # one pytest cell always runs — at STEP level (the matrix context
+    # is unavailable in a job-level if; actionlint enforces this)
     cell = jobs["gates-cell"]
-    cond = cell.get("if", "")
-    assert "docs_only" in cond and "'3.12'" in cond, (
+    assert "docs_only" not in cell.get("if", ""), (
+        "job-level matrix conditions are invalid GitHub syntax — the "
+        "docs_only gate belongs on the cell's steps")
+    step_ifs = [s.get("if", "") for s in cell.get("steps", [])]
+    assert any("docs_only" in c and "'3.12'" in c for c in step_ifs), (
         "gates-cell must keep one unconditional cell (3.12) — the "
         "required summary starves otherwise")
     for job in ("lint", "derive", "governance"):

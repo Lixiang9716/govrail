@@ -79,7 +79,6 @@ jobs:
     # other interpreters re-test interpreter sensitivity a prose edit
     # cannot have.
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true' || matrix.python-version == '3.12'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -97,9 +96,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      # matrix lives in STEP ifs, not the job if (actionlint: the
+      # matrix context is unavailable at job level). Docs-only keeps
+      # cell 3.12 — the doc-facing tests live there; the other cells
+      # start and skip in seconds, so the required gates summary never
+      # starves.
       - name: Install
+        if: needs.changes.outputs.docs_only != 'true' || matrix.python-version == '3.12'
         run: pip install -e ".[dev]"
       - name: Unit tests (pytest-xdist — workers overlap the subprocess waits)
+        if: needs.changes.outputs.docs_only != 'true' || matrix.python-version == '3.12'
         run: pytest -q -n auto
 
   derive:
