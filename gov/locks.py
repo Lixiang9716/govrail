@@ -386,13 +386,6 @@ def _sweep_strays(common: Path, ttl_s: float) -> None:
 
 def acquire(resource: str, holder: str, ttl: float,
             wait: float | None, tool: str = "gov acquire") -> int:
-    now = datetime.now(timezone.utc)
-    expires = _iso(datetime.fromtimestamp(now.timestamp() + ttl, timezone.utc))
-    payload = json.dumps(
-        {"resource": resource, "holder": holder,
-         "acquired_at": _iso(now), "expires_at": expires},
-        ensure_ascii=False, sort_keys=True,
-    ) + "\n"
     common = _common_dir(tool)
     _announce_root("acquire", common)
     _sweep_strays(common, ttl)
@@ -401,7 +394,18 @@ def acquire(resource: str, holder: str, ttl: float,
 
     deadline = time.monotonic() + (max(0.0, wait) if wait is not None else 0.0)
     while True:
+        # The lease is minted at the MOMENT of acquisition: expires was
+        # once computed before the wait loop, so every waited second ate
+        # the TTL and a --wait 10 --ttl 3 winner held an already-expired
+        # lease (verified live: the next acquirer took it over instantly).
         now = datetime.now(timezone.utc)
+        expires = _iso(datetime.fromtimestamp(now.timestamp() + ttl,
+                                              timezone.utc))
+        payload = json.dumps(
+            {"resource": resource, "holder": holder,
+             "acquired_at": _iso(now), "expires_at": expires},
+            ensure_ascii=False, sort_keys=True,
+        ) + "\n"
         if _create_exclusive(path, payload):
             print(f"acquire: '{resource}' leased by '{holder}' until {expires}")
             return 0

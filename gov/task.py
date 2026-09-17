@@ -368,10 +368,13 @@ def _clear_task_lease(cid: str, holder: str | None = None,
         print(f"task: {cid} was claimed by '{named}' while closing — "
               "their lease is left in place", file=sys.stderr)
         return
-    try:
-        lease.unlink()
-    except FileNotFoundError:
-        pass
+    # Under the guard flock, not a bare unlink: the unconditional-delete
+    # version raced a concurrent taker-over exactly the way the guard's
+    # own docstring says it prevents (check-then-unlink outside the lock
+    # can delete a lease a takeover just re-issued). --force names the
+    # knowing steal; the normal path is holder-verified by the check
+    # above, and release's holder argument enforces it inside the guard.
+    locks.release(resource, named or "", tool="task close")
 
 
 def cmd_claim(args: argparse.Namespace) -> int:

@@ -951,12 +951,16 @@ def _ledger_output(root: Path) -> str:
     """
     buf = io.StringIO()
     cwd = os.getcwd()
-    os.chdir(root)
-    try:
+    if root.resolve() != Path(cwd).resolve():
+        os.chdir(root)
+        try:
+            with contextlib.redirect_stdout(buf):
+                _coverage_report()
+        finally:
+            os.chdir(cwd)
+    else:
         with contextlib.redirect_stdout(buf):
             _coverage_report()
-    finally:
-        os.chdir(cwd)
     return buf.getvalue()
 
 
@@ -1724,6 +1728,7 @@ CASES = [
     test_check_engine_mechanisms_are_real,
     test_preset_rejects_unknown_name,
     test_text_subprocess_decodes_are_pinned,
+    test_pairing_staged_rejects_stale_sidecar,
 ]
 
 
@@ -1810,7 +1815,58 @@ def _coverage_report() -> None:
         print(f"note: case names unknown gate(s): {', '.join(stray)}")
 
 
-def _run_tool_case(case) -> tuple[str, bool]:
+def _run_with_timeout_guarded(case) -> tuple[str, bool]:
+    """Pool path: arm the subprocess watchdog around the direct runner.
+
+    The watchdog's subprocess IS the --case replay, which prints its own
+    PASS/FAIL line; on success this wrapper re-runs direct to produce
+    the caller's (line, ok) tuple from the same evidence. On timeout or
+    child failure it returns a loud FAIL line naming the case."""
+    import sys as _sys
+    if _watchdog_env_marked() or "--case" in (
+            _sys.argv[1:3] if len(_sys.argv) > 1 else []):
+        return _run_tool_case_direct(case)
+    if not any(c is case for c in CASES):
+        return _run_tool_case_direct(case)
+    import subprocess as _sp
+    # The child must import the SAME govrail this process is running:
+    # from a scratch cwd, `python -m gov.self_test` resolves the pip-
+    # installed govrail (possibly versions behind the working tree —
+    # found live: the newly registered case exited 2 "unknown case").
+    pkg_root = str(Path(__file__).resolve().parent.parent)
+    env = {**os.environ, "GOV_SELFTEST_WATCHDOG": "1",
+           "PYTHONPATH": os.pathsep.join(
+               [pkg_root] + ([os.environ["PYTHONPATH"]]
+                             if os.environ.get("PYTHONPATH") else []))}
+    proc = _sp.Popen(
+        [_sys.executable, "-m", "gov.self_test", "--case", case.__name__],
+        stdout=_sp.PIPE, stderr=_sp.PIPE, text=True,
+        encoding="utf-8", errors="replace", env=env,
+    )
+    try:
+        out, err = proc.communicate(timeout=CASE_TIMEOUT_S)
+    except _sp.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        return (f"FAIL {case.__name__} (exceeded {CASE_TIMEOUT_S}s — "
+                "killed by the case watchdog)", False)
+    # the child reported its own verdict; mirror it
+    verdict_ok = proc.returncode == 0
+    if out:
+        print(out, end="", flush=True)
+    if not verdict_ok and err:
+        print(err, end="", file=sys.stderr, flush=True)
+    line = f"{'PASS' if verdict_ok else 'FAIL'} {case.__name__}"
+    if not verdict_ok:
+        lines = [l for l in (out or "").strip().splitlines() if l.strip()]
+        if lines:
+            line += f" ({lines[-1].strip()})"
+    return line, verdict_ok
+
+
+def _run_tool_case_direct(case) -> tuple[str, bool]:
+    """Run one case in-process (the --case replay path): no watchdog —
+    this IS the innermost execution the pool's guard forks into."""
     try:
         case()
     except Exception as e:  # noqa: BLE001 — report, don't traceback
@@ -1833,6 +1889,10 @@ def _run_tool_case(case) -> tuple[str, bool]:
     return f"PASS {case.__name__}", True
 
 
+
+
+# historical name kept for the test suite: in-process single-case runs
+_run_tool_case = _run_tool_case_direct
 def _dump_case_failure(name: str, text: str) -> str:
     """Persist the whole failure output; the one-line report quotes only
     the killer exception, and the traceback above it used to vanish with
@@ -2030,7 +2090,27 @@ def _fail_if_thread_crashed() -> int:
     return 1
 
 
+CASE_TIMEOUT_S = float(os.environ.get("GOV_SELFTEST_TIMEOUT", "300"))
+
+
+def _watchdog_env_marked() -> bool:
+    """True when this process is already a watchdog child.
+
+    The --case replay path IS the innermost execution: a watchdog that
+    forks `--case` from inside `_run_tool_case` forks ITSELF
+    recursively (found live — the suite hung in self-fork). The guard
+    arms only in the pool-runner process; the replayed child runs the
+    function directly.
+    """
+    return os.environ.get("GOV_SELFTEST_WATCHDOG") == "1"
+
+
 def main(argv: list[str] | None = None) -> int:
+    try:
+        from .root import anchor_to_git_root
+    except ImportError:  # direct-script execution (scratch installs)
+        from root import anchor_to_git_root
+    anchor_to_git_root("self-test")
     try:
         from .root import force_utf8_stdio
     except ImportError:  # direct-script execution (python gov/self_test.py)
@@ -2063,7 +2143,9 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(f"unknown case '{args.case}' — not in CASES or the "
                          "diagnostic probes")
         _scrub_environment()
-        line, ok = _run_tool_case(case)
+        # --case is the innermost single-case execution (the pool's
+        # watchdog forked this very process to reach here): run direct
+        line, ok = _run_tool_case_direct(case)
         print(line)
         crash_rc = _fail_if_thread_crashed()
         return 0 if ok and not crash_rc else 1
@@ -2075,7 +2157,9 @@ def main(argv: list[str] | None = None) -> int:
 
     results: list[tuple[str, bool]] = []
     with ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
-        tool_futures = [pool.submit(_run_tool_case, c) for c in tool_jobs]
+        tool_futures = [
+            pool.submit(lambda c=c: _run_with_timeout_guarded(c)) 
+            for c in tool_jobs]
         project_futures = [pool.submit(_run_project_case, p) for p in project_jobs]
         for fut in tool_futures:
             results.append(fut.result())

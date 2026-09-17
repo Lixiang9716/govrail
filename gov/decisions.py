@@ -189,8 +189,9 @@ def numbers_in_rev(rev: str) -> set[int]:
                 nums.add(int(m.group(1)[1:]))
         return nums
     out = subprocess.run(
-        ["git", "show", f"{rev}:{path.as_posix()}"],
+        ["git", "-c", "core.quotepath=off", "show", f"{rev}:{path.as_posix()}"],
         capture_output=True, text=True,
+        env=gitutil.scrubbed_env(),
         # #168: the blob is repo content (UTF-8 by convention) — decoding
         # with the locale codec crashed verify-decisions --base on non-UTF-8
         # locales (a GBK Windows died on the Chinese decisions table before
