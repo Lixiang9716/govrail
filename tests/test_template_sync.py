@@ -25,7 +25,7 @@ yaml = pytest.importorskip("yaml")
 REPO = Path(__file__).resolve().parent.parent
 DEMO = REPO / "examples" / "demo-project"
 
-SKILLS = ["recall-first", "pre-push-checks", "code-review",
+SKILLS = ["govrail", "recall-first", "pre-push-checks", "code-review",
           "archive-agent-notes"]
 
 
