@@ -24,6 +24,8 @@ DEMO = REPO / "examples" / "demo-project"
 
 # (source, destination) — byte-for-byte copies, no variation allowed
 COPY_MAP = [
+    (REPO / ".agents/skills/govrail/SKILL.md",
+     DEMO / ".agents/skills/govrail/SKILL.md"),
     (REPO / ".agents/skills/recall-first/SKILL.md",
      DEMO / ".agents/skills/recall-first/SKILL.md"),
     (REPO / ".agents/skills/pre-push-checks/SKILL.md",

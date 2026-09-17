@@ -39,12 +39,15 @@ from . import __version__
 TEMPLATES = files("gov.templates")
 REFERENCE_MARKER = "<!-- gov:rules -->"
 REFERENCE_LINE = (
-    f"{REFERENCE_MARKER} Read .gov/rules.md and follow it before starting work."
+    f"{REFERENCE_MARKER} Read .gov/rules.md and follow it before starting "
+    "work. Start from the `govrail` skill — it routes every command to "
+    "the right moment (and names the moves that are never OK)."
 )
 HOOK_MARKER = "# govrail:"
 # The agent skills that travel with the plane: injected like rules.md,
 # create-if-missing, never overwriting a project's own skill.
-SKILLS = ("recall-first", "pre-push-checks", "code-review", "archive-agent-notes")
+SKILLS = ("govrail", "recall-first", "pre-push-checks", "code-review",
+          "archive-agent-notes")
 
 
 def _atomic_write(dest: Path, data: bytes) -> None:
