@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.3](https://github.com/Lixiang9716/govrail/compare/v0.34.2...v0.34.3) (2026-09-17)
+
+
+### Bug Fixes
+
+* red-team round 5 — 3 HIGH + 15 MEDIUM + LOW batch ([#233](https://github.com/Lixiang9716/govrail/issues/233)) ([f2f7e40](https://github.com/Lixiang9716/govrail/commit/f2f7e40b4a4be1567c35de09145016ef50a33853))
+
 ## [0.34.2](https://github.com/Lixiang9716/govrail/compare/v0.34.1...v0.34.2) (2026-09-17)
 
 

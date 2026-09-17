@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.3 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- red-team round 5 — 3 HIGH + 15 MEDIUM + LOW batch
+
 ## 0.34.2 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - the classifier probe's reproduction proof was vacuously true
