@@ -563,23 +563,6 @@ def test_cost_malformed_fails_loud_before_any_gate(tmp_path, monkeypatch, capsys
     assert gates.main(["--cost", "tokens=-1"]) == 2
     hist = tmp_path / ".gov/history/gates.jsonl"
     assert not hist.exists(), "a rejected run recorded nothing"
-import sys
-from pathlib import Path
-
-import pytest
-
-
-# Portable gate commands (#168): the Unix coreutils true/false do not
-# exist on Windows — "a command that exits 0/1" must not depend on PATH.
-PASS = [sys.executable, "-c", "pass"]
-FAIL = [sys.executable, "-c", "raise SystemExit(1)"]
-
-
-def _write(tmp_path: Path, data) -> Path:
-    p = tmp_path / "gates.json"
-    p.write_text(json.dumps(data), encoding="utf-8")
-    return p
-
 
 def _git_repo(tmp_path: Path) -> None:
     for cmd in (
