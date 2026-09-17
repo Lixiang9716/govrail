@@ -70,24 +70,45 @@ def test_write_bytes_is_atomic_and_exact(tmp_path):
     assert p.read_bytes() == b"#!/bin/sh\nexit 1\n"
 
 
-def test_append_line_refuses_a_symlinked_parent_directory(tmp_path,
-                                                          monkeypatch):
-    """The round-10 review's probe: O_NOFOLLOW and a final-component
-    lstat are blind to a LINKED DIRECTORY — `.gov/history` pointing
-    outside turned every ledger open into an outside write. Containment
-    walks the parent chain (the owning work-tree root is the boundary)."""
+def test_append_line_refuses_a_linked_directory_pointing_outside(
+        tmp_path, monkeypatch):
+    """N15, the auditor's repro: `.gov/history` linked to a directory
+    OUTSIDE the worktree. The old containment resolved the anchor from
+    the protected path — git's walk-up found no repository, the check
+    stepped aside, and the full gate record couried out. The boundary
+    now comes from the CALLER (the anchored runner) and realpath answers
+    where a write would LAND: outside → refuse."""
     import subprocess as sp
     sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
     monkeypatch.chdir(tmp_path)
-    outside_dir = tmp_path / "outside"
+    outside_dir = tmp_path.parent / f"{tmp_path.name}-outside-h2"
     outside_dir.mkdir()
     (tmp_path / ".gov").mkdir()
     (tmp_path / ".gov" / "history").symlink_to(outside_dir,
                                                target_is_directory=True)
     ledger = tmp_path / ".gov" / "history" / "gates.jsonl"
-    with pytest.raises(atomicio.SymlinkRefused, match="symlink"):
-        atomicio.append_line(ledger, '{"run": 1}\n')
+    with pytest.raises(atomicio.SymlinkRefused, match="outside the repository"):
+        atomicio.append_line(ledger, '{"run": 1}\n', root=tmp_path)
     assert list(outside_dir.iterdir()) == [], "the external dir gained a file"
+
+
+def test_append_line_refuses_a_link_on_the_way_even_if_it_stays_inside(
+        tmp_path, monkeypatch):
+    """A linked directory that happens to point INSIDE the repository is
+    still a link on a state path — the per-component lstat refuses it
+    even though the realpath verdict alone would have passed."""
+    import subprocess as sp
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    monkeypatch.chdir(tmp_path)
+    inside = tmp_path / "cache"
+    inside.mkdir()
+    (tmp_path / ".gov").mkdir()
+    (tmp_path / ".gov" / "history").symlink_to(inside,
+                                               target_is_directory=True)
+    ledger = tmp_path / ".gov" / "history" / "gates.jsonl"
+    with pytest.raises(atomicio.SymlinkRefused, match="is a symlink"):
+        atomicio.append_line(ledger, '{"run": 1}\n', root=tmp_path)
+    assert list(inside.iterdir()) == []
 
 
 def test_contained_deep_unlinked_chain_writes(tmp_path, monkeypatch):

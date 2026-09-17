@@ -377,6 +377,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _ledger_root(ledger: Path) -> Path | None:
+    """Structural boundary (<main>/.gov/history/<name> → <main>) — the
+    anchor never comes from the protected path (N15)."""
+    return ledger.parents[2] if len(ledger.parents) >= 3 else None
+
+
 def _record(reports: list[FileReport]) -> Path:
     from .anchor import history_path
     path = history_path("stats.jsonl")
@@ -393,12 +399,13 @@ def _record(reports: list[FileReport]) -> Path:
         "kind": "check",
         "checks": per_rule,
     }
+    line = json.dumps(record, separators=(",", ":")) + "\n"
     try:
         from . import atomicio
-        atomicio.append_line(path, json.dumps(record, separators=(",", ":")) + "\n")
+        atomicio.append_line(path, line, root=_ledger_root(path))
     except ImportError:  # direct-module execution
         import atomicio
-        atomicio.append_line(path, json.dumps(record, separators=(",", ":")) + "\n")
+        atomicio.append_line(path, line, root=_ledger_root(path))
     return path
 
 

@@ -114,7 +114,8 @@ def baseline(root: Path | None = None, *, caller: str | None = None,
             "unattended": bool(unattended),
         },
     }
-    atomicio.write_text(root / SEAL_PATH, json.dumps(payload, indent=2) + "\n")
+    atomicio.write_text(root / SEAL_PATH,
+                        json.dumps(payload, indent=2) + "\n", root=root)
 
 
 def _seal_in_history(root: Path) -> bool:

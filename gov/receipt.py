@@ -187,7 +187,7 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
     target.parent.mkdir(parents=True, exist_ok=True)
     # N10: BEFORE anything reads or writes through the path — even the
     # chain-head read must not follow a link out of the repository.
-    atomicio.assert_contained(target)
+    atomicio.assert_contained(target, root=_ledger_root(target))
     with open(target.with_name(target.name + ".lock"), "a+") as guard:
         if fcntl is not None:
             fcntl.flock(guard, fcntl.LOCK_EX)
@@ -215,9 +215,17 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
     return record
 
 
+def _ledger_root(ledger: Path) -> Path | None:
+    """The ledger's own checkout root: <main>/.gov/history/<name> →
+    <main>. STRUCTURAL, not path-derived — the anchor must never come
+    from the protected path (N15: a linked directory makes git's
+    walk-up answer for the attacker)."""
+    return ledger.parents[2] if len(ledger.parents) >= 3 else None
+
+
 def _last_hash(path: Path) -> str:
     """The chain head: the hash of the ledger's last valid line."""
-    atomicio.assert_contained(path)  # N10: never read through a link
+    atomicio.assert_contained(path, root=_ledger_root(path))  # N10: never read through a link
     try:
         lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln]
     except FileNotFoundError:

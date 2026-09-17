@@ -58,7 +58,7 @@ def append(root: Path | None = None, *, ritual: str, **details) -> Path:
     ledger = root / LEDGER
     # N10: the append refuses a symlinked ledger — a ritual recorded
     # into a file outside the repository is worse than no record.
-    atomicio.append_line(ledger, line)
+    atomicio.append_line(ledger, line, root=root)
     return ledger
 
 
