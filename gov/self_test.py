@@ -203,6 +203,20 @@ def test_verify_notes_rejects_hollow_skeleton() -> None:
         assert "'## Alternatives considered'" in result.stdout, result.stdout
 
 
+def test_verify_notes_rejects_unknown_argument() -> None:
+    """verify-notes is flagless; it used to ignore argv entirely and
+    answer a mistyped invocation with a GREEN verdict — the exit-code
+    contract's probe caught it (31/32 commands refuse unknown flags).
+    A refusal is named and exits 2, never a silent pass."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        notes = root / ".agents" / "notes" / "implemented"
+        notes.mkdir(parents=True)
+        result = _run("verify_notes.py", root, extra=["--json"])
+        assert result.returncode == 2, "an unknown flag must be refused"
+        assert "unexpected argument" in result.stderr, result.stderr
+
+
 def test_gates_rejects_duplicate_id() -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -1716,6 +1730,7 @@ def test_text_subprocess_decodes_are_pinned() -> None:
 
 CASES = [
     test_verify_notes_rejects_missing_section,
+    test_verify_notes_rejects_unknown_argument,
     test_verify_notes_rejects_hollow_skeleton,
     test_gates_rejects_duplicate_id,
     test_gates_rejects_cycle,

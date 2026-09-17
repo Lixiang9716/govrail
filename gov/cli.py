@@ -1335,7 +1335,7 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "self-test":
         return self_test.main(rest)
     if cmd == "verify-notes":
-        return verify_notes.main()
+        return verify_notes.main(rest)
     if cmd == "verify-pairing":
         return verify_translation_pairing.main(rest)
     if cmd == "verify-note-presence":
