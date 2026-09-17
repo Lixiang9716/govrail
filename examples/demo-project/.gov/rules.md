@@ -46,6 +46,18 @@ gate ships a rejection case that proves it catches the violation it claims to;
 
 ## 7. Bilingual pairs merge whole
 
-A human-facing document is a three-file pair: `foo.md` + `foo.zh.md` +
-`foo.i18n.yaml`. Editing one side without re-confirming the pair fails the
-pairing gate; a PR never lands one language of a pair alone.
+A human-facing document is a three-file pair: source + counterpart +
+`.i18n.yaml` record, under the naming conventions this project declared
+in `.gov/pairing.json` (govrail's own convention: `foo.md` + `foo.zh.md`
++ `foo.i18n.yaml`). Editing one side without re-confirming the pair fails
+the pairing gate; a PR never lands one language of a pair alone.
+
+
+## 8. Wait on conditions, not on clocks
+
+Never `sleep` hoping a state has arrived — poll the condition with a
+deadline, and fail loud when the deadline passes. A sleep may only pace
+real wall-clock physics (a lease TTL expiring, a rate-limit window),
+and even then the condition is asserted after the wait. Waiting for CI
+or another process is event-driven: `gh pr checks --watch`,
+`gh run watch --exit-status` — never a blind timed pause.

@@ -1,14 +1,15 @@
 {
   "modes": {
     "all": [
-      "self-test",
       "notes",
       "pairing",
       "note-presence",
       "conflict-markers",
       "archive",
-      "rubric",
+      "task",
+      "plane",
       "decisions",
+      "rubric",
       "source-limits"
     ],
     "quick": [
@@ -16,20 +17,12 @@
       "source-limits"
     ],
     "governance": [
-      "self-test"
+      "plane"
     ]
   },
   "defaultMode": "all",
   "concurrency": 4,
   "gates": [
-    {
-      "id": "self-test",
-      "label": "governance rejection cases (the govrail tools' own regression)",
-      "command": [
-        "gov",
-        "self-test"
-      ]
-    },
     {
       "id": "notes",
       "label": "note format",
@@ -39,7 +32,8 @@
       ],
       "paths": [
         ".agents/notes/**"
-      ]
+      ],
+      "timeoutMs": 120000
     },
     {
       "id": "pairing",
@@ -49,11 +43,15 @@
         "verify-pairing"
       ],
       "allowFailure": true,
+      "stages": [
+        "pre-commit"
+      ],
       "paths": [
         "docs/**",
         "README*",
         ".gov/pairing.json"
-      ]
+      ],
+      "timeoutMs": 180000
     },
     {
       "id": "note-presence",
@@ -61,14 +59,70 @@
       "command": [
         "gov",
         "verify-note-presence"
-      ]
+      ],
+      "timeoutMs": 60000
     },
     {
       "id": "conflict-markers",
-      "label": "no unresolved conflict markers in changed files (govrail built-in)",
+      "label": "no unresolved conflict markers in changed files (issue #104)",
       "command": [
         "gov",
         "verify-conflict-markers"
+      ],
+      "stages": [
+        "pre-commit"
+      ],
+      "timeoutMs": 120000
+    },
+    {
+      "id": "archive",
+      "label": "archived-notes seal",
+      "command": [
+        "gov",
+        "verify-archive"
+      ],
+      "paths": [
+        ".agents/notes/archived/**"
+      ],
+      "timeoutMs": 60000
+    },
+    {
+      "id": "task",
+      "label": "task cards",
+      "command": [
+        "gov",
+        "task",
+        "check"
+      ],
+      "paths": [
+        ".gov/tasks/**"
+      ],
+      "timeoutMs": 120000
+    },
+    {
+      "id": "plane",
+      "label": "governance-plane seal (rules + gate set tamper-evidence)",
+      "command": [
+        "gov",
+        "verify-plane"
+      ],
+      "paths": [
+        ".gov/rules.md",
+        "gates.json",
+        ".gov/pairing.json",
+        ".gov/plane-seal.json"
+      ],
+      "timeoutMs": 60000
+    },
+    {
+      "id": "decisions",
+      "label": "decisions table guard",
+      "command": [
+        "gov",
+        "verify-decisions"
+      ],
+      "paths": [
+        "docs/decisions.md"
       ]
     },
     {
@@ -84,17 +138,6 @@
       ]
     },
     {
-      "id": "decisions",
-      "label": "decisions table guard",
-      "command": [
-        "gov",
-        "verify-decisions"
-      ],
-      "paths": [
-        "docs/decisions.md"
-      ]
-    },
-    {
       "id": "source-limits",
       "label": "module size limit (demo)",
       "command": [
@@ -105,17 +148,6 @@
       "paths": [
         "src/**",
         "eval/**"
-      ]
-    },
-    {
-      "id": "archive",
-      "label": "archived-notes seal",
-      "command": [
-        "gov",
-        "verify-archive"
-      ],
-      "paths": [
-        ".agents/notes/archived/**"
       ]
     }
   ]

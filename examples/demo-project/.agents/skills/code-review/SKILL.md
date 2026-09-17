@@ -9,7 +9,16 @@ A short review with one substantiated blocker beats a list of nits. Machines alr
 
 ## Before reading the diff
 
-1. Run `gov change-scope --base <verified-ref>` and read the scope first; a dirty worktree means the PR author must either commit or exclude those files.
+1. Assemble the dossier in one shot:
+
+   ```sh
+   gov review --base <verified-ref>
+   ```
+
+   It carries the change scope, the in-scope notes, recall hits for the
+   change's own keywords, and the rubric items — grade from the dossier,
+   not from a cold repository. A dirty worktree means the PR author must
+   either commit or exclude those files.
 2. Find the PR's Agent Note. A non-trivial change without a note in the same PR is a blocker by rule 2 — and `gov verify-note-presence` will have said so.
 
 ## Grade against the rubric

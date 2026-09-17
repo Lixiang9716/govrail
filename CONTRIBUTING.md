@@ -19,7 +19,7 @@ pip install -e .        # installs the gov CLI in editable mode
 ```sh
 pytest -q                 # unit tests
 gov self-test             # rejection cases: prove every governance gate rejects
-gov run                   # the full gate DAG (notes + pairing + note-presence + self-test)
+gov run                   # the full gate DAG (this repo's own gates.json)
 ```
 
 ## Making a change
