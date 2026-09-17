@@ -201,6 +201,17 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
               "(the optional commit-stage gates ride with the hook runner)",
               file=sys.stderr)
         return 2
+    if preview and adopt is None:
+        # --preview only means something with --adopt: it shows what
+        # adoption WOULD land. Everywhere else it was silently dropped —
+        # `gov init --preview` on an initialized project answered "already
+        # initialized", and `--upgrade --preview` ran the report as if the
+        # flag existed. Found by the post-merge review of the round-5 fix
+        # (same class: a modifier an init path quietly ignores).
+        print("init: --preview rides with --adopt (a bare preview has "
+              "nothing to show; the drift report is `gov init --upgrade`)",
+              file=sys.stderr)
+        return 2
     if preset is not None:
         if upgrade or adopt is not None or adopt_new is not None:
             print("init: --preset composes with a fresh init (--hooks/--ci "
@@ -218,14 +229,18 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
     if adopt_new is not None and not manifest_path.exists():
         print("init: --adopt-new needs an initialized project", file=sys.stderr)
         return 2
-    if not manifest_path.exists() and (upgrade or preview):
-        # Both flags report ON an initialized project, and the fresh-init
-        # path below ignores them while writing the whole plane: `gov init
+    if not manifest_path.exists() and (upgrade or preview or adopt is not None):
+        # All three act ON an initialized project, and the fresh-init path
+        # below ignores them while writing the whole plane: `gov init
         # --preview` on a bare directory wrote thirteen files and called it
-        # a preview. A flag whose promise is "writes nothing" must refuse
-        # rather than do the opposite (rule 5).
-        flag = "--upgrade" if upgrade else "--preview"
-        print(f"init: {flag} needs an initialized project (no "
+        # a preview, and `--adopt X` performed a plain init with the target
+        # quietly dropped. A flag must refuse rather than do the opposite
+        # of its promise (rule 5). (--preview without --adopt never gets
+        # this far: the composition check above refuses it first.)
+        given = ("--upgrade" if upgrade
+                 else "--preview" if preview
+                 else "--adopt")
+        print(f"init: {given} needs an initialized project (no "
               f"{manifest_path.relative_to(project).as_posix()}); a fresh "
               "init writes the plane — drop the flag for that",
               file=sys.stderr)

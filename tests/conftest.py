@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from gov.root import ensure_utf8_runtime
+from gov.root import ensure_utf8_runtime, needs_utf8_runtime
 
 
 _WORKER_TMPDIRS: list[str] = []
@@ -34,10 +34,11 @@ def _restart_under_utf8(config) -> None:
     exactly that way: a red step with zero output, the failure
     invisible. ``pytest_configure`` runs with the capture suspended
     (fds restored to the real streams), so the exec'd run reports
-    normally.
+    normally. The needs-restart predicate is ``gov.root``'s
+    (``needs_utf8_runtime``) — a local copy decided whether the wall
+    stands, and a drifted copy re-blindfolds the gbk job (review R7).
     """
-    if sys.flags.utf8_mode or \
-            sys.getfilesystemencoding().lower().startswith("utf"):
+    if not needs_utf8_runtime():
         return
     capman = config.pluginmanager.get_plugin("capturemanager")
     if capman is not None:

@@ -38,6 +38,21 @@ def force_utf8_stdio() -> None:
             pass
 
 
+def needs_utf8_runtime() -> bool:
+    """True when this process still decodes with the host locale.
+
+    The one predicate both callers with an opinion consult — the CLI's
+    re-exec in ``ensure_utf8_runtime`` and the test conftest's
+    capture-aware restart (which must suspend pytest's capture BEFORE
+    exec'ing, or the report lands in a temp file nobody dumps). It was
+    byte-level duplicated in the conftest, and a copy that decides
+    whether the wall stands is one edit away from re-blindfolding the
+    gbk job — review R7 collapsed it back to one home.
+    """
+    return not (sys.flags.utf8_mode
+                or sys.getfilesystemencoding().lower().startswith("utf"))
+
+
 def ensure_utf8_runtime(force_exec: bool = False) -> None:
     """One runtime contract for every process in this plane: UTF-8.
 
@@ -57,8 +72,7 @@ def ensure_utf8_runtime(force_exec: bool = False) -> None:
     process's own bootstrap (the test conftest), never mid-run.
     """
     os.environ["PYTHONUTF8"] = "1"
-    if sys.flags.utf8_mode or \
-            sys.getfilesystemencoding().lower().startswith("utf"):
+    if not needs_utf8_runtime():
         return
     if "pytest" in sys.modules and not force_exec:
         return  # a library call inside a test run must not restart it
