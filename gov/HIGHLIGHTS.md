@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.9 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- containment walks the whole state path — the directory variant of the ledger escape, and AGENTS.md stops being written through
+
 ## 0.34.8 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - state writes refuse symlinks, attribution needs token boundaries, the torn-write sites close, machine contract written (D56)
