@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.6](https://github.com/Lixiang9716/govrail/compare/v0.34.5...v0.34.6) (2026-09-17)
+
+
+### Bug Fixes
+
+* pre-push deletion skip, hollow-note rejection, and the check gate joins the default set (D55) ([#239](https://github.com/Lixiang9716/govrail/issues/239)) ([4b4f4ed](https://github.com/Lixiang9716/govrail/commit/4b4f4ed15010ccfd03b76cb3df6230c391881859))
+
 ## [0.34.5](https://github.com/Lixiang9716/govrail/compare/v0.34.4...v0.34.5) (2026-09-17)
 
 
