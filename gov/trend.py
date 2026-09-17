@@ -313,9 +313,17 @@ def main(argv: list[str] | None = None) -> int:
         if not line:
             continue
         try:
-            runs.append(json.loads(line))
+            run = json.loads(line)
         except json.JSONDecodeError:
             print("trend: skipping a malformed history line", file=sys.stderr)
+            continue
+        if not isinstance(run, dict):
+            # A hand-edited ledger can carry JSON-valid non-objects (`5`,
+            # `null`, `"str"`) — name the skip, keep the report (rule 5);
+            # they used to crash every view with 'int' has no 'get'.
+            print("trend: skipping a non-object history line", file=sys.stderr)
+            continue
+        runs.append(run)
     runs = runs[-args.last:]
 
     halves: tuple[list[dict], list[dict]] | None = None

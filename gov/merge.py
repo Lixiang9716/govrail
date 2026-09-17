@@ -234,19 +234,22 @@ def run_merge(branches: list[str], base: str | None = None,
     tmp = Path(tempfile.mkdtemp(prefix="gov-merge-"))
     print(f"merge: preflighting the union of {len(branches)} branch(es) onto "
           f"base '{base}' ({base_sha[:12]}) — scratch worktree {tmp}", flush=True)
-    added = _git(root, "worktree", "add", "--detach", str(tmp), base_sha)
-    if added.returncode != 0:
-        shutil.rmtree(tmp, ignore_errors=True)
-        print(f"gov run --merge: could not create the scratch worktree: "
-              f"{(added.stderr or added.stdout).strip()}", file=sys.stderr, flush=True)
-        return 2
 
     # Everything below runs on the scratch; a deliberate failure keeps it
     # for inspection (the returns below), but an UNEXPECTED exit — Ctrl-C,
     # a crash — used to leak both the temp dir and git's worktree metadata,
     # violating D33 wall 3 (the host repository ends as it started). The
-    # except un-docks the worktree before propagating.
+    # except un-docks the worktree before propagating. The `worktree add`
+    # itself rides inside the guard too: an interruption mid-add would
+    # otherwise leak git's worktree registration beside the temp dir.
     try:
+        added = _git(root, "worktree", "add", "--detach", str(tmp), base_sha)
+        if added.returncode != 0:
+            shutil.rmtree(tmp, ignore_errors=True)
+            print(f"gov run --merge: could not create the scratch worktree: "
+                  f"{(added.stderr or added.stdout).strip()}", file=sys.stderr,
+                  flush=True)
+            return 2
         # Wall 2 (the toplevel guard, #24/D33): before anything is merged into
         # the scratch, it must resolve to ITSELF. If git resolves anywhere else,
         # abort loud rather than merge into someone else's checkout.

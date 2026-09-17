@@ -99,7 +99,11 @@ def main(argv: list[str] | None = None) -> int:
     notes = [f for f in files if f.startswith(".agents/notes/")]
     for f in notes:
         print(f"  {f}")
-    if not notes:
+    # The "carries a note" judgment counts IMPLEMENTED notes only: an
+    # archived note is frozen evidence (rule 4) — archiving is not the
+    # note this change owes. Same bar as verify_note_presence's NOTES_DIR;
+    # a diff touching only archived notes used to silence the warning.
+    if not any(f.startswith(vnp.NOTES_DIR) for f in notes):
         exempt_globs, ex_err = vnp._load_exempt_globs()
         if ex_err is not None:
             print(f"review: {ex_err}", file=sys.stderr)

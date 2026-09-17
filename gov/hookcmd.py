@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import replace as _dc_replace
+from pathlib import Path
 
 try:  # package context (`gov ...`)
     from . import gates as gates_mod
@@ -33,15 +34,27 @@ PROG = "hooks"
 
 def run_pre_commit() -> int:
     anchor_to_git_root(f"{PROG} pre-commit")
-    # Out-of-band seal check FIRST: the staged gate list comes from
-    # gates.json, and a tampered config could disable the plane gate to
-    # silence its own detection. verify-plane reads the seal and the
-    # config bytes directly — nothing from gates.json is trusted yet.
+    # N8: ONE read of the config bytes. The seal is judged over this exact
+    # buffer and the parser reuses it — closing the TOCTOU window where
+    # tampered bytes get parsed while clean bytes get seal-checked (the
+    # same single-read discipline as gov run's _plane_precheck).
     try:
         from . import verify_plane
     except ImportError:  # direct-script execution (self-test scratch)
         import verify_plane
-    drift = verify_plane.violations()
+    try:
+        config_raw = Path("gates.json").read_bytes()
+    except FileNotFoundError:
+        config_raw = None
+    except OSError as e:
+        print(f"{PROG} pre-commit: cannot read gates.json: {e}", file=sys.stderr)
+        return 2
+    # Out-of-band seal check FIRST: the staged gate list comes from
+    # gates.json, and a tampered config could disable the plane gate to
+    # silence its own detection. verify-plane judges the seal over the
+    # bytes just read — nothing from gates.json is trusted yet.
+    drift = verify_plane.violations(
+        overlays={"gates.json": config_raw} if config_raw is not None else None)
     if drift:
         print(f"{PROG} pre-commit: REFUSED — the governance plane drifted "
               "from its seal:", file=sys.stderr)
@@ -50,14 +63,15 @@ def run_pre_commit() -> int:
         print("  restore the files or accept explicitly: "
               "gov verify-plane --write", file=sys.stderr)
         return 1
-    try:
-        _modes, gate_list, _concurrency, _default = gates_mod.load_config("gates.json")
-    except gates_mod.ConfigError as e:
-        print(f"{PROG} pre-commit: gates.json is invalid: {e}", file=sys.stderr)
-        return 2
-    except FileNotFoundError:
+    if config_raw is None:
         print(f"{PROG} pre-commit: no gates.json — is this a governed "
               "project? (gov init creates it)", file=sys.stderr)
+        return 2
+    try:
+        _modes, gate_list, _concurrency, _default = gates_mod.load_config_from(
+            config_raw, "gates.json")
+    except gates_mod.ConfigError as e:
+        print(f"{PROG} pre-commit: gates.json is invalid: {e}", file=sys.stderr)
         return 2
 
     staged_gates = [g for g in gate_list

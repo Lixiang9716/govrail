@@ -262,6 +262,7 @@ def test_git_dir_injection_refused_and_host_bytes_unchanged(tmp_path):
     before_files = sorted(
         str(p.relative_to(root / ".git"))
         for p in (root / ".git").rglob("*") if p.is_file())
+    before_tree = tree_hash()
     r = _gov(root, "acquire", "r", "--agent", "a",
              env={"GIT_DIR": str(root / ".git")})
     assert r.returncode == 2
@@ -269,7 +270,7 @@ def test_git_dir_injection_refused_and_host_bytes_unchanged(tmp_path):
     assert "REFUSING" in r.stderr
     # the host repository is byte-identical: no lease written anywhere,
     # no new file in .git
-    assert tree_hash() == tree_hash()
+    assert tree_hash() == before_tree
     after_files = sorted(
         str(p.relative_to(root / ".git"))
         for p in (root / ".git").rglob("*") if p.is_file())
@@ -445,7 +446,10 @@ def test_guarded_runs_action_without_fcntl(tmp_path, monkeypatch):
     section, never crash the CLI: the action runs, its value returns, and an
     action exception still propagates through the degraded finally."""
     from gov import locks
-    assert locks.fcntl is not None or True  # POSIX: real flock; Windows: None
+    # POSIX arrives with a real flock, Windows with None (the guarded
+    # import); either way the attribute exists and the branch below is
+    # the one that must not crash.
+    assert hasattr(locks, "fcntl")
     monkeypatch.setattr(locks, "fcntl", None)
     calls = []
     out = locks._guarded(tmp_path, "res", lambda: calls.append(1) or "ok")

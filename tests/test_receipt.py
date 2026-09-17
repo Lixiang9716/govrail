@@ -39,7 +39,7 @@ def _append(tmp_path, record):
 
 
 def _green_record(commit, tree=None, prev="GENESIS", dirty=False,
-                  selection=None, gates=None):
+                  selection=None, gates=None, config=None):
     record = {
         "v": 1, "id": "", "ts": "2026-09-04T00:00:00+00:00",
         "commit": commit, "tree": tree, "dirty": dirty, "tag": "",
@@ -47,6 +47,8 @@ def _green_record(commit, tree=None, prev="GENESIS", dirty=False,
         "gates": gates or [{"gate": "a", "outcome": "PASS", "blocking": False}],
         "prev": prev,
     }
+    if config:
+        record["config"] = config
     record["id"] = "r-" + receipt_mod.compute_hash(record)[:12]
     record["hash"] = receipt_mod.compute_hash(record)
     return record
@@ -178,3 +180,66 @@ def test_run_receipt_selection_scoping(tmp_path, monkeypatch, capsys):
                             capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     assert receipt_mod.main(["verify", commit]) == 1
     assert "partial run" in capsys.readouterr().err
+
+
+def test_config_field_tamper_breaks_chain(tmp_path, monkeypatch, capsys):
+    """H-5a: the ledger line's config field is inside the hashed core —
+    laundering a bypass config out of a signed receipt breaks the chain."""
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
+    good = _green_record(commit, config="bypass.yaml")
+    _append(tmp_path, good)
+    # An editor's lie: rewrite the bypass run as a sealed-plane run
+    # without re-signing (old hash and id kept).
+    bad = dict(good)
+    bad["config"] = "gates.json"
+    bad["id"] = good["id"]
+    bad["hash"] = good["hash"]
+    _append(tmp_path, bad)
+    with pytest.raises(receipt_mod.ReceiptError, match="hash mismatch"):
+        receipt_mod.load_chain(_receipt_path(tmp_path))
+    assert receipt_mod.main(["verify", commit]) == 2
+    assert "hash mismatch" in capsys.readouterr().err
+
+
+def test_unsealed_config_receipt_is_never_full_green(tmp_path, monkeypatch, capsys):
+    """H-5b: a green receipt recorded under --config bypass.yaml is not
+    equivalent to a normal receipt at verify time — it is named as
+    degraded (exit 1), while an explicitly sealed-config receipt still
+    counts as full green."""
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
+    _append(tmp_path, _green_record(commit, config="bypass.yaml"))
+    assert receipt_mod.main(["verify", commit]) == 1
+    err = capsys.readouterr().err
+    assert "unsealed config" in err and "bypass.yaml" in err
+    # An explicit config=gates.json run is the sealed plane: full green.
+    _append(tmp_path, _green_record(commit, prev=_last_hash(tmp_path),
+                                    config="gates.json"))
+    assert receipt_mod.main(["verify", commit]) == 0
+    assert "all PASS" in capsys.readouterr().out
+
+
+def test_no_config_receipt_unchanged(tmp_path, monkeypatch, capsys):
+    """H-5: receipts predating the config field verify byte-identically —
+    the field's absence must not degrade or break them."""
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp_path,
+                            capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
+    record = _green_record(commit)
+    assert "config" not in record
+    _append(tmp_path, record)
+    assert receipt_mod.main(["verify", commit]) == 0
+    assert "all PASS" in capsys.readouterr().out
+
+
+def _last_hash(tmp_path):
+    lines = [ln for ln in
+             _receipt_path(tmp_path).read_text(encoding="utf-8").splitlines()
+             if ln]
+    return json.loads(lines[-1])["hash"]

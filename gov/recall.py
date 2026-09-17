@@ -25,9 +25,9 @@ AND: entries matching some terms are ranked by terms matched (then by
 where they hit) instead of the query being refused; the strict AND stays
 the default (D18) and an empty --any result still fails loud.
 
-Exit codes: 0 = hits (or partial hits under --any); 1 = no match (fail
-loud — never reason from an empty recall); 2 = usage error or no memory
-sources found (wrong directory?).
+Exit codes: 0 = hits (or partial hits under --any); 1 = no match, or an
+empty corpus (fail loud — never reason from an empty recall); 2 = usage
+error.
 """
 from __future__ import annotations
 
@@ -210,12 +210,15 @@ def main(argv: list[str] | None = None) -> int:
     print(f"recall: {corpus.statement()}", file=sys.stderr)
     entries = corpus.entries
     if not entries:
+        # An empty corpus is "no match, fail loud" (exit 1) — the same
+        # verdict as a miss over a populated corpus ("never reason from an
+        # empty recall"); exit 2 stays reserved for usage errors.
         print(
             "recall: no memory sources found (.agents/notes/, docs/decisions.md, "
             "docs/postmortem/) — is this a project root?",
             file=sys.stderr,
         )
-        return 2
+        return 1
 
     if args.any:
         scored: list[tuple[int, int, str, str, Entry]] = []

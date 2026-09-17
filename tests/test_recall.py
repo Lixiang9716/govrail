@@ -129,7 +129,9 @@ def test_recall_decisions_sections_are_entries(tmp_path, monkeypatch, capsys):
 
 def test_recall_no_sources_fails_loud(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert recall.main(["anything"]) == 2
+    # An empty corpus is "no match, fail loud" (1) — same verdict family
+    # as a miss; 2 stays reserved for usage errors.
+    assert recall.main(["anything"]) == 1
 
 
 def test_recall_archived_notes_searchable(tmp_path, monkeypatch, capsys):

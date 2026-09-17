@@ -37,31 +37,26 @@ def test_appends_accumulate_append_only(tmp_path):
 
 def test_the_ledger_is_not_gitignored(tmp_path):
     """N9's whole point: the ledger must be TRACKED. The repo's
-    .gitignore ignores .gov/history/ but never the ledger; this test
-    fails if anyone adds a pattern that would ignore it."""
+    .gitignore ignores .gov/history/ but never the ledger; a scratch repo
+    carrying those exact patterns is asked for its verdict — git's own
+    matcher, not a re-implementation of it (the emulation this replaces
+    ran git check-ignore and threw the answer away)."""
     import subprocess
     root = _root(tmp_path)
-    ledger = root / ".gov" / "rituals.jsonl"
-    ledger.write_text("", encoding="utf-8")
-    subprocess.run(
-        ["git", "check-ignore", "-q", ledger.as_posix()],
-        cwd=root, capture_output=True)
-    # no git repo in the scratch → check-ignore can't run; emulate with
-    # the repo's own .gitignore patterns instead
-    patterns = (Path(__file__).resolve().parent.parent / ".gitignore"
-                ).read_text(encoding="utf-8").splitlines()
-    def ignored(rel):
-        rel = rel.replace("\\", "/")
-        for pat in patterns:
-            pat = pat.strip()
-            if not pat or pat.startswith("#"):
-                continue
-            if pat.endswith("/") and rel.startswith(pat):
-                return True
-            if pat == rel:
-                return True
-        return False
-    assert not ignored(".gov/rituals.jsonl"), (
+    (root / ".gitignore").write_text(
+        (Path(__file__).resolve().parent.parent / ".gitignore"
+         ).read_text(encoding="utf-8"), encoding="utf-8")
+    subprocess.run(["git", "init", "-q", "."], cwd=root, check=True,
+                   capture_output=True)
+
+    def verdict(rel):
+        return subprocess.run(["git", "check-ignore", "-q", rel],
+                              cwd=root, capture_output=True).returncode
+
+    # Positive control first: the patterns ARE in force in this scratch
+    # (0 = ignored) — otherwise "not ignored" below proves nothing.
+    assert verdict(".gov/history/gates.jsonl") == 0
+    assert verdict(".gov/rituals.jsonl") == 1, (
         ".gov/rituals.jsonl must never be gitignored — the tracked "
         "ledger is the N9 fix; ignoring it re-creates deletable evidence")
 

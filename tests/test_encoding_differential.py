@@ -145,3 +145,38 @@ def test_supersession_note():
     assert reference_unpinned_text_spawns(good, "x.py") == []
     assert reference_unpinned_text_spawns(
         'subprocess.run(cmd, capture_output=True)', "x.py") == []
+
+
+def test_every_text_spawn_pins_the_decode_failure_mode():
+    """A pinned codec is half the pin: the shipped rule's own message asks
+    for ``encoding='utf-8', errors='replace'``, and this holds the plane to
+    BOTH while the rule's query enforces only the first.
+
+    The half that was missing cost real signal: ``gitutil.empty_tree``
+    pinned utf-8 and decoded strictly, so a GBK host's localized git
+    diagnostic — a failure the function already knows how to fall back
+    from — raised UnicodeDecodeError inside subprocess, and the gbk-locale
+    job reported an exit code with no failure text (the report was being
+    eaten by a second, unrelated defect). A gate that cannot run is not a
+    rejection; a decode that cannot fail is not a decode."""
+    import ast
+
+    offenders: list[str] = []
+    for p in sorted(GOV_DIR.rglob("*.py")):
+        tree = ast.parse(p.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "attr", getattr(node.func, "id", ""))
+            if name not in ("run", "Popen", "check_output", "call"):
+                continue
+            text = {k.arg: k.value for k in node.keywords
+                    if k.arg in ("text", "universal_newlines")}
+            if not any(getattr(v, "value", False) is True
+                       for v in text.values()):
+                continue
+            if "errors" not in {k.arg for k in node.keywords}:
+                offenders.append(f"{p.relative_to(HERE).as_posix()}:{node.lineno}")
+    assert offenders == [], (
+        "text-mode spawns decoding strictly (a child that is not UTF-8 "
+        "crashes the reader instead of reporting): " + ", ".join(offenders))

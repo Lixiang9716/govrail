@@ -168,3 +168,50 @@ def test_seal_covers_governance_behavior_files(tmp_path):
     (tmp_path / ".gov" / "rejections" / "case-x.sh").unlink()
     drift = verify_plane.violations(tmp_path)
     assert any("case-x.sh" in d and "gone" in d for d in drift)
+
+
+def test_non_object_seal_is_unreadable_not_a_crash(tmp_path):
+    """A legal-JSON-but-not-a-seal file (`[]`, `42`, non-object "files")
+    is a named unreadable-seal prerequisite, never an AttributeError."""
+    _init_plane(tmp_path)
+    seal = tmp_path / ".gov" / "plane-seal.json"
+    for bad in ("[]", "42", '{"files": []}'):
+        seal.write_text(bad, encoding="utf-8")
+        drift = verify_plane.violations(tmp_path)
+        assert drift and "cannot read" in drift[0]
+
+
+def test_non_object_seal_main_exits_2(tmp_path, monkeypatch):
+    _init_plane(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".gov" / "plane-seal.json").write_text("42", encoding="utf-8")
+    assert verify_plane.main([]) == 2
+
+
+def test_stripped_sealed_files_with_surviving_plane_is_drift(tmp_path, monkeypatch):
+    """The `if not files` short-circuit must not preempt violations():
+    deleting every sealed file while .gov/manifest.json survives is N2/N7
+    drift (exit 1), not a green 'no plane config found'."""
+    _init_plane(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".gov" / "manifest.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / ".gov" / "rules.md").unlink()
+    (tmp_path / "gates.json").unlink()
+    (tmp_path / ".gov" / "plane-seal.json").unlink()
+    assert verify_plane.main([]) == 1
+
+
+def test_write_warns_when_previous_seal_unreadable(tmp_path, monkeypatch, capsys):
+    """#4: --write over an unreadable previous seal continues (explicit
+    consent) but the swallow is loud, never silent."""
+    import io as _io
+    _init_plane(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin", _io.StringIO())  # not a tty
+    monkeypatch.setenv("GOV_CALLER", "agent-8")
+    (tmp_path / ".gov" / "plane-seal.json").write_text("[]", encoding="utf-8")
+    assert verify_plane.main(["--write", "--confirm-unattended"]) == 0
+    assert "WARNING" in capsys.readouterr().err
+    seal = json.loads((tmp_path / ".gov" / "plane-seal.json")
+                      .read_text(encoding="utf-8"))
+    assert ".gov/rules.md" in seal["files"]  # the re-baseline still landed

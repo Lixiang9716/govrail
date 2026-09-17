@@ -41,7 +41,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -50,11 +50,11 @@ from typing import Any
 try:
     from . import receipt as receipt_mod
     from . import gitutil, pathmatch
-    from .root import force_utf8_stdio
+    from .root import anchor_to_git_root, force_utf8_stdio
 except ImportError:  # direct-script execution (python gov/gates.py)
     import receipt as receipt_mod
     import gitutil, pathmatch
-    from root import force_utf8_stdio
+    from root import anchor_to_git_root, force_utf8_stdio
 
 BLOCKING_OUTCOMES = ("FAIL", "TIMEOUT", "MISSING")
 OUTCOME_ORDER = ("FAIL", "TIMEOUT", "MISSING", "SKIP", "PASS")
@@ -576,7 +576,17 @@ def _run_one(gate: Gate, live: set | None = None) -> tuple[Gate, str, str, bool,
     duration_ms = int((time.monotonic() - started) * 1000)
     output = ((out or "") + (err or "")).strip()
     if timed_out:
-        return gate, "TIMEOUT", f"exceeded {timeout_ms}ms", True, duration_ms
+        # communicate() already recovered whatever the gate printed before
+        # the kill — a TIMEOUT with that evidence names what was seen
+        # instead of a bare "exceeded Nms". Truncated: the report side of
+        # a TIMEOUT is a lead, not the full dump (the JSON record clips
+        # again at HISTORY_DETAIL_CAP).
+        detail = f"exceeded {timeout_ms}ms"
+        if output:
+            detail += " — captured output:\n" + output[:2000]
+            if len(output) > 2000:
+                detail += "\n... (truncated at 2000 characters)"
+        return gate, "TIMEOUT", detail, True, duration_ms
     if proc.returncode == 0:
         return gate, "PASS", output, False, duration_ms
     # #109 failure-first: a failing gate's evidence is never clipped at
@@ -718,8 +728,18 @@ def run_gates(
 
         stop = False
         while pending and not stop:
-            for fut in list(as_completed(pending)):
-                pending.pop(fut)
+            # FIRST_COMPLETED, not as_completed: a future enqueued by
+            # settle() mid-loop was never visible to the as_completed
+            # iterator created from the earlier snapshot, so a finished
+            # child's dependents waited for the whole current generation
+            # to drain before they could start (layer-serialized instead
+            # of a live DAG). wait(FIRST_COMPLETED) re-reads `pending`
+            # every turn: finish one gate, settle it, its dependents are
+            # enqueued and awaited immediately. --fail-fast semantics are
+            # unchanged (blocking failure cancels the pool below).
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for fut in done:
+                pending.pop(fut, None)
                 g, outcome, detail, is_blocking, duration_ms = fut.result()
                 outcomes[g.id] = outcome
                 details[g.id] = detail
@@ -854,6 +874,10 @@ def run_gates(
             # One-generation rotation: the ledger stays append-only per
             # run, but a ledger with no ceiling at all grows forever; the
             # previous generation survives as <name>.1 for archaeology.
+            # The rename-vs-append window stays (two concurrent runs can
+            # straddle a rotation — the loser's record lands in the fresh
+            # file) — a deliberate, tiny race: renaming under a lock would
+            # buy atomicity the ledger does not need to stay truthful.
             record_path.replace(record_path.parent / (record_path.name + ".1"))
         run_record = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -873,19 +897,37 @@ def run_gates(
         # N6 follow-up: history must distinguish "green under the sealed
         # constitution" from "green under --config something-else".
         run_record["config"] = config_path
-        with record_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(run_record, separators=(",", ":")) + "\n")
+        # Single os.write over O_APPEND (not a TextIOWrapper append, whose
+        # 8KB buffer could split one record into interleaved fragments
+        # under concurrent runs): POSIX positions each write at EOF
+        # atomically, so one encoded line lands whole.
+        line = json.dumps(run_record, separators=(",", ":")).encode("utf-8") \
+            + b"\n"
+        fd = os.open(record_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND,
+                     0o644)
+        try:
+            data = line
+            while data:  # honor partial writes; each retry re-appends at EOF
+                data = data[os.write(fd, data):]
+        finally:
+            os.close(fd)
     if rec is not None:
         target = receipt_path if receipt_path is not None \
             else receipt_mod._receipt_path()
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, separators=(",", ":"),
-                               ensure_ascii=False) + "\n")
-        commit = rec.get("commit") or "?"
-        state = " (dirty tree — will not verify as this commit)" if rec.get("dirty") else ""
-        emit(f"receipt: {rec['id']} recorded against {commit}{state} "
-             f"(cite it: gov receipt verify <commit>)")
+        # #10: the chain head is re-read and the append happens under one
+        # guard flock in receipt.append_receipt — building the receipt
+        # earlier (pre-gates) read the same head for concurrent runs, and
+        # the second record broke the chain for every later verify.
+        try:
+            rec = receipt_mod.append_receipt(rec, target)
+        except receipt_mod.ReceiptError as exc:
+            emit(f"receipt: skipped — the receipts ledger is unreadable ({exc})")
+        else:
+            commit = rec.get("commit") or "?"
+            state = " (dirty tree — will not verify as this commit)" \
+                if rec.get("dirty") else ""
+            emit(f"receipt: {rec['id']} recorded against {commit}{state} "
+                 f"(cite it: gov receipt verify <commit>)")
     return 1 if failed else 0
 
 
@@ -952,6 +994,13 @@ def _plane_precheck(tool: str = "gov run", config_rel: str | None = None,
 
 def main(argv: list[str] | None = None) -> int:
     force_utf8_stdio()  # reports leave as UTF-8 on every OS (#168)
+    # #13: `gov run` was the one command that skipped the root anchor —
+    # gates.json, the seal precheck, and .gov/history all resolve against
+    # cwd, so a subdirectory invocation read the wrong (or no) config and
+    # recorded history outside the plane's ledger. Anchoring first also
+    # means a relative --config resolves from the repo root, which is the
+    # wanted behavior.
+    anchor_to_git_root("gov run")
     parser = argparse.ArgumentParser(prog="gov run", description="Run the governance gate DAG.")
     parser.add_argument("--config", default="gates.json")
     parser.add_argument("--allow-unsealed-config", action="store_true",

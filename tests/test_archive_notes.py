@@ -98,3 +98,34 @@ def test_verify_archive_sealed_but_missing(tmp_path, monkeypatch, capsys):
     (arch / "gone.md").unlink()
     assert va.main([]) == 1
     assert "sealed but the file is gone" in capsys.readouterr().out
+
+
+def test_verify_archive_non_object_seal_is_named_exit_2(tmp_path, monkeypatch):
+    """A seal whose top level is `[]` (or whose 'files' is an array) is
+    legal JSON but not a seal: named exit 2, never an AttributeError."""
+    from gov import verify_archive as va
+    monkeypatch.chdir(tmp_path)
+    arch = tmp_path / ".agents" / "notes" / "archived" / "process"
+    arch.mkdir(parents=True)
+    (arch / "2026-01-01-x.md").write_text("# Agent Note: x\n", encoding="utf-8")
+    manifest = tmp_path / ".agents" / "notes" / "archived" / "manifest.json"
+    for bad in ("[]", "42", '{"files": ["a.md"]}'):
+        manifest.write_text(bad, encoding="utf-8")
+        assert va.main([]) == 2
+
+
+def test_verify_archive_unreadable_archived_file_is_a_violation(
+        tmp_path, monkeypatch, capsys):
+    """A dangling symlink where a sealed file should be is a named
+    violation (exit 1), not an OSError crash."""
+    import os
+    from gov import verify_archive as va
+    monkeypatch.chdir(tmp_path)
+    arch = tmp_path / ".agents" / "notes" / "archived" / "process"
+    arch.mkdir(parents=True)
+    (arch / "2026-01-01-x.md").write_text("# Agent Note: x\n", encoding="utf-8")
+    assert an.main([]) == 0  # sealed
+    (arch / "2026-01-01-x.md").unlink()  # ...then the content dangles
+    os.symlink(tmp_path / "nowhere.md", arch / "2026-01-01-x.md")
+    assert va.main([]) == 1
+    assert "unreadable" in capsys.readouterr().out

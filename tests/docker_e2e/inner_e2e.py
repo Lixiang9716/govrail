@@ -1562,10 +1562,10 @@ def recall_corpus_boundaries(base):
     (p / "docs" / "postmortem" / "README.md").unlink()
     commit_all(p, "adopted")
 
-    # phase 1: NO memory sources at all — exit 2 "is this a project
-    # root?" (a stricter boundary than term-miss: exit 1 means the
-    # corpus EXISTS and lacks the term)
-    r = gov("recall", "玄机", cwd=p, expect=2)
+    # phase 1: an EMPTY memory plane — exit 1 with the corpus
+    # statement (aligned with recall's exit contract: 2 = tool could
+    # not run, 1 = honest no-hit, including the empty-plane edge)
+    r = gov("recall", "玄机", cwd=p, expect=1)
     both = r.stdout + r.stderr
     assert "no memory sources found" in both
     assert "notes 0" in both and "postmortems 0" in both

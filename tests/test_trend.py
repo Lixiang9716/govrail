@@ -183,3 +183,34 @@ def test_trend_refuses_nonpositive_last(tmp_path, monkeypatch, capsys):
     for bad in ("0", "-2"):
         assert trend.main(["--last", bad]) == 2
         assert f"--last must be >= 1 (got {bad})" in capsys.readouterr().err
+
+
+def test_trend_skips_non_object_history_lines(tmp_path, monkeypatch, capsys):
+    """H-9: a hand-edited ledger can carry JSON-valid non-objects (`5`,
+    `null`, `"str"`) — every view names the skip on stderr and reports
+    the remaining runs instead of crashing ('int' has no 'get')."""
+    monkeypatch.chdir(tmp_path)
+    h = tmp_path / ".gov" / "history"
+    h.mkdir(parents=True)
+    good = lambda ms: json.dumps(
+        {"ts": "2026-09-01T00:00:00+00:00",
+         "gates": [{"gate": "a", "outcome": "PASS", "duration_ms": ms,
+                    "blocking": False, "detail": ""}]})
+    (h / "gates.jsonl").write_text(
+        good(100) + "\n5\nnull\n\"str\"\n" + good(110) + "\n",
+        encoding="utf-8")
+    # default duration view: the two good runs still compare
+    assert trend.main([]) == 0
+    captured = capsys.readouterr()
+    assert "2 run(s)" in captured.out and "stable" in captured.out
+    assert "skipping a non-object history line" in captured.err
+    # --by-tag: the non-object lines must not crash the tag walk
+    assert trend.main(["--by-tag"]) == 0
+    captured = capsys.readouterr()
+    assert "no run carries a caller tag" in captured.out
+    assert "skipping a non-object history line" in captured.err
+    # --cost: roll-up skips them instead of raising TypeError
+    assert trend.main(["--cost"]) == 0
+    captured = capsys.readouterr()
+    assert "2 run(s)" in captured.out and "no cost reported" in captured.out
+    assert "skipping a non-object history line" in captured.err

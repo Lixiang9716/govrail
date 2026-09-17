@@ -95,9 +95,25 @@ def test_write_is_idempotent(tmp_path, monkeypatch):
     assert (tmp_path / "gov" / "HIGHLIGHTS.md").read_text(encoding="utf-8") == after
 
 
-def test_write_fails_loud_without_highlights(tmp_path, monkeypatch):
+def test_write_without_highlights_or_config_is_a_named_green(tmp_path, monkeypatch, capsys):
+    """No HIGHLIGHTS and no .gov/docsync.json = the gate is not set up in
+    this repository: named exit 0 (the module header's promise), never a
+    permanent exit 2 an adopter cannot turn green."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG_TWO, encoding="utf-8")
+    assert vds.main(["--write"]) == 0
+    assert "not set up" in capsys.readouterr().out
+
+
+def test_write_configured_but_missing_highlights_fails_loud(tmp_path, monkeypatch):
+    """A DECLARED highlights file that does not exist is a broken
+    prerequisite (exit 2) — configured means intended."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CHANGELOG.md").write_text(CHANGELOG_TWO, encoding="utf-8")
+    cfg = tmp_path / ".gov"
+    cfg.mkdir()
+    (cfg / "docsync.json").write_text('{"highlights": "docs/USAGE.md"}',
+                                      encoding="utf-8")
     assert vds.main(["--write"]) == 2
 
 

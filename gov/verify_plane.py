@@ -183,9 +183,17 @@ def violations(root: Path | None = None,
     if not files:
         return []  # nothing left to judge (config deleted post-seal)
     try:
-        sealed = json.loads(seal.read_text(encoding="utf-8-sig")).get("files", {})
+        seal_doc = json.loads(seal.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError, UnicodeDecodeError) as e:
         return [f"cannot read the seal {seal}: {e}"]
+    if not isinstance(seal_doc, dict) or not isinstance(
+            seal_doc.get("files", {}), dict):
+        # `[]`, `42`, or a non-object "files" is legal JSON but not a
+        # seal — a named unreadable-seal prerequisite (exit 2 downstream),
+        # never an AttributeError traceback (rule 5).
+        return [f"cannot read the seal {seal}: the seal and its 'files' "
+                "must be JSON objects"]
+    sealed = seal_doc.get("files", {})
     out: list[str] = []
     for rel, p in files.items():
         entry = sealed.get(rel)
@@ -208,7 +216,32 @@ def violations(root: Path | None = None,
     return out
 
 
+def _report_drift(drift: list[str]) -> int:
+    """Print violations() output; 2 = unreadable seal, 1 = named drift."""
+    # An unreadable seal is a broken prerequisite (2), not a verdict (1).
+    if any(d.startswith("cannot read") for d in drift):
+        print(f"{PROG}: {drift[0]}", file=sys.stderr)
+        return 2
+    for v in drift:
+        print(v)
+    print(f"{PROG}: {len(drift)} violation(s) — the constitution is "
+          "tamper-evident, not tamper-proof; a seal change must be a "
+          "reviewed decision")
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
+    # #8: an unexpected OSError/decode/JSON failure is a broken
+    # prerequisite (exit 2, named), never a bare traceback.
+    try:
+        return _run(argv)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+        print(f"{PROG}: unexpected failure reading the plane state: {e}",
+              file=sys.stderr)
+        return 2
+
+
+def _run(argv: list[str] | None = None) -> int:
     anchor_to_git_root(PROG)
     parser = argparse.ArgumentParser(
         prog="gov verify-plane",
@@ -230,6 +263,14 @@ def main(argv: list[str] | None = None) -> int:
     files = _sealed_files(root)
 
     if not files:
+        # #5: "no sealed file survived" is NOT automatically green — that
+        # judgment belongs to violations() (N2/N7: a seal in git history,
+        # or surviving plane artifacts like .gov/manifest.json, is drift).
+        # The old unconditional exit 0 here short-circuited that verdict,
+        # so stripping every sealed file silenced the gate one level up.
+        drift = violations(root)
+        if drift:
+            return _report_drift(drift)
         print(f"{PROG}: no plane config found (no .gov/rules.md, no gates.json)")
         return 0
 
@@ -246,15 +287,32 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         previous: dict[str, str] = {}
         if seal.is_file():
+            unreadable: str | None = None
             try:
+                seal_doc = json.loads(seal.read_text(encoding="utf-8-sig"))
+                # #4: a non-object seal (or a non-object entry) contributes
+                # nothing instead of raising an AttributeError.
+                seal_files = seal_doc.get("files", {}) \
+                    if isinstance(seal_doc, dict) else {}
                 previous = {
-                    rel: (meta or {}).get("sha256", "?")
-                    for rel, meta in json.loads(
-                        seal.read_text(encoding="utf-8-sig"))
-                    .get("files", {}).items()
+                    rel: (meta.get("sha256", "?")
+                          if isinstance(meta, dict) else "?")
+                    for rel, meta in seal_files.items()
                 }
-            except (OSError, ValueError, UnicodeDecodeError):
+                if not isinstance(seal_doc, dict):
+                    unreadable = "the seal is not a JSON object"
+            except (OSError, ValueError, UnicodeDecodeError) as e:
+                unreadable = str(e)
                 previous = {}
+            if unreadable is not None:
+                # --write is explicit consent to re-baseline, so the flow
+                # continues — but an unreadable previous seal must never be
+                # swallowed silently: the diff below would read "(absent)"
+                # for every file with no explanation why.
+                previous = {}
+                print(f"{PROG}: WARNING — the previous seal {seal} is "
+                      f"unreadable ({unreadable}); re-baselining over it "
+                      "anyway", file=sys.stderr)
         baseline(root, unattended=not interactive)
         try:
             from . import rituals
@@ -285,16 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     if not drift:
         print(f"{PROG}: {len(files)} plane file(s) sealed and intact")
         return 0
-    # An unreadable seal is a broken prerequisite (2), not a verdict (1).
-    if any(d.startswith("cannot read") for d in drift):
-        print(f"{PROG}: {drift[0]}", file=sys.stderr)
-        return 2
-    for v in drift:
-        print(v)
-    print(f"{PROG}: {len(drift)} violation(s) — the constitution is "
-          "tamper-evident, not tamper-proof; a seal change must be a "
-          "reviewed decision")
-    return 1
+    return _report_drift(drift)
 
 
 if __name__ == "__main__":

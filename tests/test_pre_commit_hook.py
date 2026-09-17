@@ -192,3 +192,69 @@ def test_staged_check_green_when_sidecar_also_staged(tmp_path):
     r = _gov(tmp_path, "verify-pairing", "--staged")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "1 staged pair(s) ok" in r.stdout
+
+
+# --- H-6: run_pre_commit verifies and parses ONE read of gates.json ---
+
+def _staged_config() -> dict:
+    return {"gates": [{"id": "ok", "command": [sys.executable, "-c", "pass"],
+                        "stages": ["pre-commit"]}]}
+
+
+def test_pre_commit_single_read_verify_then_parse(tmp_path, monkeypatch, capsys):
+    """H-6: the seal is judged over the SAME bytes the parser consumes —
+    violations() gets the read overlay and the file-reading load_config()
+    is never called again (the old second disk read)."""
+    (tmp_path / "gates.json").write_text(json.dumps(_staged_config()),
+                                         encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    from gov import gates as gates_mod
+    from gov import hookcmd
+    from gov import verify_plane as vp
+
+    seen = {}
+
+    def fake_violations(root=None, overlays=None):
+        seen["overlays"] = overlays
+        return []
+
+    monkeypatch.setattr(vp, "violations", fake_violations)
+
+    def no_reread(*a, **k):
+        raise AssertionError(
+            "load_config re-read gates.json after the seal check (TOCTOU)")
+
+    monkeypatch.setattr(gates_mod, "load_config", no_reread)
+
+    assert hookcmd.run_pre_commit() == 0
+    overlays = seen["overlays"]
+    assert overlays and "gates.json" in overlays
+    assert json.loads(overlays["gates.json"]) == _staged_config()
+    assert "1 staged gate(s) ok" in capsys.readouterr().out
+
+
+def test_pre_commit_missing_gates_json_exits_2(tmp_path, monkeypatch, capsys):
+    """H-6: the missing-config path keeps its exit-2 contract, named."""
+    monkeypatch.chdir(tmp_path)
+    from gov import hookcmd
+    assert hookcmd.run_pre_commit() == 2
+    assert "no gates.json" in capsys.readouterr().err
+
+
+def test_pre_commit_tampered_config_refuses(tmp_path, monkeypatch, capsys):
+    """H-6 end to end: bytes edited after sealing are caught because the
+    seal is checked over the very bytes about to be parsed."""
+    _git_repo(tmp_path)
+    (tmp_path / "gates.json").write_text(json.dumps(_staged_config()),
+                                         encoding="utf-8")
+    from gov import hookcmd
+    from gov import verify_plane as vp
+    vp.baseline(tmp_path)  # seal the current plane state
+    monkeypatch.chdir(tmp_path)
+    # tamper AFTER the seal: disable the stage without re-baselining
+    tampered = json.dumps({"gates": [{"id": "ok",
+                                      "command": [sys.executable, "-c", "pass"]}]})
+    (tmp_path / "gates.json").write_text(tampered, encoding="utf-8")
+    assert hookcmd.run_pre_commit() == 1
+    err = capsys.readouterr().err
+    assert "REFUSED" in err and "differs from its seal" in err
