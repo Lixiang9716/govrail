@@ -47,9 +47,13 @@ from importlib.resources import files
 from pathlib import Path
 
 try:  # package context (`gov preset ...`)
+    from . import atomicio
     from . import gates as gates_mod
+    from .gitutil import toplevel
 except ImportError:  # direct script execution (self-test scratch dirs)
+    import atomicio
     import gates as gates_mod
+    from gitutil import toplevel
 
 TEMPLATES = files("gov.templates")
 PRESETS = "presets"
@@ -290,6 +294,10 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
     except PresetError as e:
         print(f"gov preset: {e}", file=sys.stderr)
         return 2
+    # N15: the containment boundary is the PROJECT's repository — the
+    # bundle-root parameter above is where presets LOAD from, never the
+    # boundary the project's writes are judged against.
+    repo_root = toplevel(str(project))
     project = project.resolve()
     gates_path = project / GATES_JSON
     manifest_path = project / MANIFEST
@@ -392,7 +400,7 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
                   "overwritten)")
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(src.read_bytes())
+        atomicio.write_bytes(dest, src.read_bytes(), root=repo_root)
         wrote = True
         print(f"  skill: created {SKILL_DEST}/{skill}/{SKILL_FILE}")
 
@@ -414,8 +422,9 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
             changed = True
             print(f"  hint: wrote manifest '{key}' = {json.dumps(value)}")
         if changed:
-            manifest_path.write_text(
-                json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            atomicio.write_text(
+                manifest_path, json.dumps(manifest, indent=2) + "\n",
+                root=repo_root)
             wrote = True
 
     if not wrote:
