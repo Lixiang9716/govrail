@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.34.11 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- run's output polarity becomes documented contract; the exit-code contract gets its pin (D56 revision)
+
 ## 0.34.10 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - the containment anchor comes from the process, never from the protected path (N15)
