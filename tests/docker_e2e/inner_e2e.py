@@ -1107,13 +1107,17 @@ def demo_upgrade_surface(base):
     git("config", "user.name", "t", cwd=p)
     commit_all(p, "specimen as shipped")
 
-    # uninitialized: --upgrade PROCEEDS as a normal init (the pinned
-    # contract, tests/test_cli.py::test_upgrade_on_uninitialized_
-    # fails_loud's assert == 0) — the flag's report surfaces on the
-    # SECOND call, once a manifest exists
-    r = gov("init", "--upgrade", cwd=p)
-    assert (p / ".gov" / "manifest.json").exists(), \
-        "the convenience path initializes for real"
+    # uninitialized: both flags refuse and write NOTHING. A flag that
+    # says "report drift" must not manufacture the manifest it reports
+    # against (D27: --upgrade reads, never writes) — this walk caught the
+    # write while the unit test pinned `== 0`; both assert the refusal now.
+    gov("init", "--upgrade", cwd=p, expect=2)
+    gov("init", "--preview", cwd=p, expect=2)
+    assert not (p / ".gov" / "manifest.json").exists(), \
+        "a refused report manufactured a manifest"
+
+    # initialized: the report reads the specimen's real drift per file
+    gov("init", cwd=p)
     r = gov("init", "--upgrade", "--json", cwd=p)
     value = json.loads(r.stdout)
     assert value["initialized_with"] and value["package"], value

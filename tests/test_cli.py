@@ -282,6 +282,17 @@ def test_upgrade_report_sees_drift_never_writes(tmp_path, capsys):
     assert "safe to refresh" not in out  # drift exists
 
 
+def test_preview_on_an_uninitialized_project_refuses_and_writes_nothing(
+        tmp_path, capsys):
+    """`--preview` promises "show what would land, write nothing", and the
+    fresh-init path ignored it: the flag fell through and wrote the whole
+    plane — thirteen files — reported as a preview. It refuses now."""
+    assert cli.init(tmp_path, preview=True) == 2
+    err = capsys.readouterr().err
+    assert "--preview needs an initialized project" in err
+    assert list(tmp_path.iterdir()) == [], "a refused preview left files"
+
+
 def test_upgrade_report_clean_project(tmp_path, capsys):
     _git_repo(tmp_path)
     assert cli.init(tmp_path) == 0
@@ -290,9 +301,13 @@ def test_upgrade_report_clean_project(tmp_path, capsys):
     assert "every injected file matches the shipped templates — safe to refresh" in out
 
 
-def test_upgrade_on_uninitialized_fails_loud(tmp_path):
-    assert cli.init(tmp_path, upgrade=True) == 0  # no manifest yet: normal init path
-    assert (tmp_path / ".gov" / "manifest.json").exists()
+def test_upgrade_on_uninitialized_fails_loud(tmp_path, capsys):
+    """The name was right and the body was not: this used to assert the
+    silent full init that a "reads, never writes" flag performed on a
+    project with no manifest (the deferred MEDIUM of round 5)."""
+    assert cli.init(tmp_path, upgrade=True) == 2
+    assert "--upgrade needs an initialized project" in capsys.readouterr().err
+    assert not (tmp_path / ".gov").exists(), "a refused upgrade wrote a plane"
 
 
 def test_adopt_lands_missing_never_overwrites(tmp_path, capsys):
