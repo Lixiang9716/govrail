@@ -146,7 +146,12 @@ def test_auto_base_prefers_upstream_range(tmp_path, monkeypatch, capsys):
     import subprocess as sp
     monkeypatch.chdir(tmp_path)
     _git_repo(tmp_path)
-    remote = tmp_path / "remote.git"
+    # OUTSIDE the worktree: `git add -A` scans untracked directories,
+    # and the push's background maintenance inside remote.git raced the
+    # scan ("unable to stat .../maintenance.lock") — seen once on the
+    # 3.13 cell, and a scan that can die on its own repo's neighbor is
+    # a flake waiting for a red master.
+    remote = tmp_path.parent / f"{tmp_path.name}-remote.git"
     sp.run(["git", "init", "-q", "--bare", str(remote)], check=True)
     sp.run(["git", "remote", "add", "origin", str(remote)], cwd=tmp_path, check=True)
     (tmp_path / "app.py").write_text("v1\n", encoding="utf-8")
