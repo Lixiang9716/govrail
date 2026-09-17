@@ -23,8 +23,10 @@ from pathlib import Path
 
 try:  # package context (`gov ...`)
     from .root import anchor_to_git_root
+    from .note import PLACEHOLDERS
 except ImportError:  # direct script execution (self-test runs files by path)
     from root import anchor_to_git_root
+    from note import PLACEHOLDERS
 
 NOTES_DIR = Path(".agents/notes")
 NOTES_README = "README.md"
@@ -65,6 +67,22 @@ def check_note(path: Path) -> list[str]:
             "required sections out of order — Problem, then Decision, "
             "then Alternatives considered"
         )
+    elif len(positions) == len(REQUIRED_SECTIONS):
+        # D3, hollow notes: a section that is empty or still carries the
+        # `gov note new` placeholder satisfies the format and proves
+        # nothing. The scaffold's own output used to pass this gate AS
+        # WRITTEN, making the empty shell the path of least resistance.
+        bounds = sorted(positions) + [len(lines)]
+        for section, start, end in zip(REQUIRED_SECTIONS, bounds, bounds[1:]):
+            body = "\n".join(lines[start + 1:end]).strip()
+            if not body:
+                errors.append(
+                    f"'{section}' section is empty — a note must state "
+                    "its content, not just carry the heading")
+            elif body == PLACEHOLDERS[section]:
+                errors.append(
+                    f"'{section}' section still carries the `gov note new` "
+                    "placeholder — fill it in or delete the note")
     return errors
 
 

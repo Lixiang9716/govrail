@@ -32,21 +32,32 @@ except ImportError:  # direct script execution
 CLASSES = ("feature", "bug-fix", "simplification", "architecture", "process", "testing")
 NOTES_IMPLEMENTED = Path(".agents/notes/implemented")
 
+# The scaffold's section bodies, ONE home: `note new` writes them, and
+# verify-notes REJECTS any implemented note still carrying one. The D3
+# hollow-note finding: a note satisfying only the format proves nothing,
+# and scaffold output passing the gates as written made the empty shell
+# the path of least resistance.
+PLACEHOLDERS = {
+    "## Problem": "(pain, stated to stand without the solution)",
+    "## Decision": "(what shipped, present tense)",
+    "## Alternatives considered": "(what it beat, and why each lost)",
+}
+
 SKELETON = """# Agent Note: {title}
 
 Status: implemented{related}
 
 ## Problem
 
-(pain, stated to stand without the solution)
+{ph_problem}
 
 ## Decision
 
-(what shipped, present tense)
+{ph_decision}
 
 ## Alternatives considered
 
-(what it beat, and why each lost)
+{ph_alternatives}
 """
 
 
@@ -115,10 +126,15 @@ def _new(args: argparse.Namespace) -> int:
         print(f"note: already exists: {dest}", file=sys.stderr)
         return 2
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(SKELETON.format(title=args.title, related=related),
-                    encoding="utf-8")
+    dest.write_text(SKELETON.format(
+        title=args.title, related=related,
+        ph_problem=PLACEHOLDERS["## Problem"],
+        ph_decision=PLACEHOLDERS["## Decision"],
+        ph_alternatives=PLACEHOLDERS["## Alternatives considered"],
+    ), encoding="utf-8")
     print(f"note: wrote {dest}")
-    print("note: fill the three sections; gov note check before committing")
+    print("note: fill the three sections — a placeholder left in place "
+          "fails gov note check and verify-notes")
     return 0
 
 

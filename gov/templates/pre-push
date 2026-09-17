@@ -40,8 +40,13 @@ base=""
 bases=0
 full=0
 while read -r local_ref local_sha remote_ref remote_sha; do
-    # A branch deletion pushes no content — nothing to gate.
-    [ "$local_ref" = "$zero" ] && continue
+    # A branch deletion pushes no content — nothing to gate. git reports
+    # the deletion as local_ref="(delete)" with the ZERO OID in
+    # local_sha, so the all-zero constant matches local_SHA, never
+    # local_ref (a ref name is never zero — the old comparison here
+    # compared against $local_ref and no deletion was ever skipped;
+    # round-9 template review, verified live against a real push).
+    [ "$local_sha" = "$zero" ] && continue
     if [ "$remote_sha" = "$zero" ]; then
         full=1   # new remote branch: everything is the change
     elif [ "$remote_sha" != "$base" ]; then
@@ -50,7 +55,15 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     fi
 done
 
-if [ "$full" = 1 ] || [ "$bases" -gt 1 ] || [ -z "$base" ]; then
+if [ "$full" = 0 ] && [ "$bases" = 0 ]; then
+    # Every ref in this push is a deletion (or nothing reached stdin):
+    # no commit is being updated, so no gate has anything to look at.
+    # Falling through to the full matrix here would run the entire DAG
+    # on a `git push origin :branch` — the very pushes that gate the
+    # least content.
+    exit 0
+fi
+if [ "$full" = 1 ] || [ "$bases" -gt 1 ]; then
     # Several push ranges — or a brand-new branch among them — cannot be
     # summarized by ONE base ref: scoping to the first range would let a
     # second branch's diff skip its gates, turning "smallest sufficient

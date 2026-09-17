@@ -6,6 +6,7 @@
       "pairing",
       "note-presence",
       "conflict-markers",
+      "check",
       "rubric",
       "archive",
       "decisions",
@@ -80,6 +81,15 @@
       "stages": [
         "pre-commit"
       ]
+    },
+    {
+      "id": "check",
+      "label": "syntax-class static checks over product code (shipped + .gov/checks/ rules)",
+      "command": [
+        "gov",
+        "check"
+      ],
+      "timeoutMs": 120000
     },
     {
       "id": "rubric",

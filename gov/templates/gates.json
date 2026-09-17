@@ -5,6 +5,7 @@
       "pairing",
       "note-presence",
       "conflict-markers",
+      "check",
       "archive",
       "task",
       "plane"
@@ -67,6 +68,15 @@
       ],
       "stages": [
         "pre-commit"
+      ],
+      "timeoutMs": 120000
+    },
+    {
+      "id": "check",
+      "label": "syntax-class static checks over product code (shipped + .gov/checks/ rules)",
+      "command": [
+        "gov",
+        "check"
       ],
       "timeoutMs": 120000
     },
