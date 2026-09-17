@@ -1460,7 +1460,8 @@ def grade_quit_skip(base):
         cwd=p, input="q\n", capture_output=True, text=True,
         encoding="utf-8", errors="replace", timeout=120)
     assert r.returncode == 1, r.stdout
-    assert "review: grade quit" in r.stdout
+    # N14: the abort report is an error — stderr, never the machine stream
+    assert "review: grade quit" in r.stderr
     assert "verdict:" not in r.stdout, "an aborted review never approves"
 
     # unrecognized keys are SKIPPED — a human's typo is never transcribed
@@ -1478,7 +1479,7 @@ def grade_quit_skip(base):
         cwd=p, input="", capture_output=True, text=True,
         encoding="utf-8", errors="replace", timeout=120)
     assert r.returncode == 1
-    assert "input ended" in r.stdout
+    assert "input ended" in r.stderr  # N14: same stream as quit
 
 
 def preset_on_specimen(base):

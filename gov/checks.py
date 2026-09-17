@@ -393,8 +393,12 @@ def _record(reports: list[FileReport]) -> Path:
         "kind": "check",
         "checks": per_rule,
     }
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, separators=(",", ":")) + "\n")
+    try:
+        from . import atomicio
+        atomicio.append_line(path, json.dumps(record, separators=(",", ":")) + "\n")
+    except ImportError:  # direct-module execution
+        import atomicio
+        atomicio.append_line(path, json.dumps(record, separators=(",", ":")) + "\n")
     return path
 
 

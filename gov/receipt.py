@@ -40,6 +40,11 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:  # package context (`gov ...`)
+    from . import atomicio
+except ImportError:  # direct-script execution
+    import atomicio
+
 try:  # POSIX: the lawful guard-flock class (see gov/locks.py) — held for
     # one append only, never across a process lifetime.
     import fcntl
@@ -180,6 +185,9 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
     """
     target = path if path is not None else _receipt_path()
     target.parent.mkdir(parents=True, exist_ok=True)
+    # N10: BEFORE anything reads or writes through the path — even the
+    # chain-head read must not follow a link out of the repository.
+    atomicio.assert_not_symlink(target)
     with open(target.with_name(target.name + ".lock"), "a+") as guard:
         if fcntl is not None:
             fcntl.flock(guard, fcntl.LOCK_EX)
@@ -192,8 +200,9 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
             record["hash"] = compute_hash(record)
             line = (json.dumps(record, separators=(",", ":"),
                                ensure_ascii=False) + "\n").encode("utf-8")
-            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND,
-                         0o644)
+            fd = os.open(target,
+                         os.O_WRONLY | os.O_CREAT | os.O_APPEND
+                         | getattr(os, "O_NOFOLLOW", 0), 0o644)
             try:
                 data = line
                 while data:  # honor partial writes; retries re-append at EOF
@@ -208,6 +217,7 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
 
 def _last_hash(path: Path) -> str:
     """The chain head: the hash of the ledger's last valid line."""
+    atomicio.assert_not_symlink(path)  # N10: never read through a link
     try:
         lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln]
     except FileNotFoundError:

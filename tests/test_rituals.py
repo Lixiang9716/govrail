@@ -60,3 +60,19 @@ def test_the_ledger_is_not_gitignored(tmp_path):
         ".gov/rituals.jsonl must never be gitignored — the tracked "
         "ledger is the N9 fix; ignoring it re-creates deletable evidence")
 
+
+
+def test_append_refuses_a_symlinked_ledger(tmp_path):
+    """N10: a rituals ledger symlinked outside the repository must not
+    become the destination of the plane's records — the append refuses,
+    naming the path, and the external file gains nothing."""
+    import pytest
+    from gov import atomicio
+    outside = tmp_path / "outside.txt"
+    outside.write_text("mine\n", encoding="utf-8")
+    (tmp_path / ".gov").mkdir()
+    ledger = tmp_path / ".gov" / "rituals.jsonl"
+    ledger.symlink_to(outside)
+    with pytest.raises(atomicio.SymlinkRefused, match="symlink"):
+        rituals.append(tmp_path, ritual="unsealed-config", caller="x")
+    assert outside.read_text(encoding="utf-8") == "mine\n"

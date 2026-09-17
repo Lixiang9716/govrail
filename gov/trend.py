@@ -296,9 +296,18 @@ def main(argv: list[str] | None = None) -> int:
             if not line:
                 continue
             try:
-                recordings.append(json.loads(line))
+                entry = json.loads(line)
             except json.JSONDecodeError:
-                print("trend: skipping a malformed stats line", file=sys.stderr)
+                print("trend: skipping a malformed stats line",
+                      file=sys.stderr)
+                continue
+            if not isinstance(entry, dict):
+                # the gates.jsonl tolerance, same shape: `5` parses fine
+                # and died three frames later in last_value (N12)
+                print("trend: skipping a non-object stats line",
+                      file=sys.stderr)
+                continue
+            recordings.append(entry)
         recordings = recordings[-args.last:]
         mid = len(recordings) // 2
         return _stats_report(recordings[:mid], recordings[mid:], len(recordings))

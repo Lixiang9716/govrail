@@ -104,4 +104,4 @@ def test_grade_needs_rubric_and_quit(tmp_path, monkeypatch):
                     "--base", "HEAD"], cwd=tmp_path, env=env,
                    input="q\n", capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert quit_.returncode == 1
-    assert "grade quit" in quit_.stdout
+    assert "grade quit" in quit_.stderr  # N14: abort reports are errors

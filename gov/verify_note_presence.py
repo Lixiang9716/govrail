@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -286,7 +287,11 @@ def _run(argv: list[str] | None = None) -> int:
     if required:
         corpus = _notes_corpus()
         for f in required:
-            if not any(f in text for text in corpus.values()):
+            # N11: a bare substring match let "renamed mysrc/auth/login.py.bak
+            # away" attribute "src/auth/login.py" — no boundary between "my"
+            # and "src". The mention must stand as its own token.
+            pattern = re.compile(r"(?<!\w)" + re.escape(f) + r"(?!\w)")
+            if not any(pattern.search(text) for text in corpus.values()):
                 unattributed.append(f)
 
     if (not non_trivial and not unattributed) or \
