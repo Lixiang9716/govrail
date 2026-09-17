@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.2](https://github.com/Lixiang9716/govrail/compare/v0.34.1...v0.34.2) (2026-09-17)
+
+
+### Bug Fixes
+
+* the classifier probe's reproduction proof was vacuously true ([#231](https://github.com/Lixiang9716/govrail/issues/231)) ([b973706](https://github.com/Lixiang9716/govrail/commit/b9737063cc9a8a39e1581296d03987c20dd098bc))
+
 ## [0.34.1](https://github.com/Lixiang9716/govrail/compare/v0.34.0...v0.34.1) (2026-09-17)
 
 
