@@ -62,6 +62,45 @@ jobs:
       - name: Unit tests (pytest-xdist — workers overlap the subprocess waits)
         run: pytest -q -n auto
 
+  derive:
+    # The derived-truth regenerator (scripts/derive_all.py): README's
+    # command block <- gov --help; the demo specimen <- live/template;
+    # the i18n pairing examples <- DEFAULT_CONFIG. On PRs it is a drift
+    # probe (red names the one command to run). On master merge pushes
+    # it REGENERATES AND COMMITS: derived truths never sit stale on
+    # master, and the PAT identity makes the push trigger CI, which
+    # re-runs derive, finds no drift, and stops — one step to the fixed
+    # point, loop-guarded by the bot-commit check.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_PAT || github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Derive every derived truth
+        run: |
+          pip install -e . -q
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            python scripts/derive_all.py --check
+          else
+            python scripts/derive_all.py
+            if [ -n "$(git status --porcelain)" ]; then
+              if git log -1 --format=%s | grep -q "^chore: mechanical derivation"; then
+                echo "derive: HEAD is already a derivation commit that still drifts — stopping (loop guard); inspect the regenerators"
+                exit 1
+              fi
+              git config user.name "govrail-derive-bot"
+              git config user.email "bot@users.noreply.github.com"
+              git add -A
+              git commit -qm "chore: mechanical derivation — README block, demo specimen, i18n examples regenerated from their truth sources"
+              git push
+              echo "derive: committed the regenerated truths; the push's CI re-verifies (expect green)"
+            fi
+          fi
+
   governance:
     # The dogfooding DAG, once: rejection cases prove every gate can
     # reject, and the full gate DAG runs green on its own repository.
@@ -85,11 +124,11 @@ jobs:
   gates:
     # The REQUIRED check's stable name (branch protection points here):
     # green iff lint, every version cell, and governance are green.
-    needs: [lint, gates-cell, governance]
+    needs: [lint, gates-cell, governance, derive]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: echo "lint + all version cells + governance green"
+      - run: echo "lint + all version cells + governance + derive green"
 
   backport-shadow:
     # Issue #138: a py2-era `argparse` backport (PyPI argparse==1.4.0)

@@ -212,3 +212,28 @@ def test_pytest_runs_are_parallelized():
         "pytest invoked without -n (xdist) — the suite is "
         "subprocess-heavy and loses ~2.5x wall clock serially:\n"
         + "\n".join(offenders))
+
+
+def test_derived_truths_regenerate_in_ci():
+    """The register's derived rows are CI-enforced, not memory-enforced:
+    the derive job runs scripts/derive_all.py (--check on PRs — drift
+    goes red naming the command), regenerates and COMMITS on master
+    merge pushes (the PAT identity, so the push re-triggers CI), and
+    carries a loop guard (a derivation commit that still drifts stops
+    the job instead of push-cycling)."""
+    ci = _load("ci.yml")
+    jobs = ci["jobs"]
+    assert "derive" in jobs, "the derive job disappeared — derived "
+    "truths are back to memory-enforced"
+    steps = " ".join(s.get("run", "") + s.get("name", "")
+                     for s in jobs["derive"].get("steps", []))
+    assert "derive_all.py --check" in steps, (
+        "PR-side must be a drift probe (--check)")
+    assert "derive_all.py" in steps and "git push" in steps, (
+        "master-side must regenerate and push")
+    assert "loop guard" in steps or "derivation commit" in steps, (
+        "the auto-push needs its loop guard")
+    needs = ci["jobs"]["gates"].get("needs", [])
+    assert "derive" in needs, (
+        "derive must feed the required gates summary — drift that "
+        "cannot block a merge is advisory drift")

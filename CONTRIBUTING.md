@@ -58,13 +58,16 @@ expiry).
 
 ## Keeping the README's command reference current
 
-The command block in README.md (between the `gov:commands` markers) is
-generated from `gov --help` — the descriptions in `gov/cli.py` are the
-single source of truth. After changing any CLI surface, run
-`scripts/update_readme_commands.py`; CI turns a stale block, an
-unresolvable `gov ...` citation, or a help line that omits a real
-subcommand red (tests/test_docs_cli_consistency.py). Never edit the
-block by hand.
+Every DERIVED truth (README's `gov:commands` block from `gov --help`,
+the demo specimen from the live templates, the i18n pairing examples
+from `DEFAULT_CONFIG`) regenerates through one command:
+`python scripts/derive_all.py`. On PRs, the CI `derive` job runs it in
+`--check` mode — drift goes red naming that command; on master merge
+pushes the job regenerates and commits the result itself (one step to
+the fixed point, loop-guarded). Never edit derived content by hand;
+edit its truth source and let the derivation own the copy. Unresolvable
+`gov ...` citations and help lines that omit a real subcommand stay
+red via tests/test_docs_cli_consistency.py.
 
 ## Notes and rules
 

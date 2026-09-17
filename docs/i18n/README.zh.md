@@ -29,9 +29,17 @@ gov verify-pairing --write docs/example.md
 
 ```json
 {
-  "include": ["docs/**/*.md", "README.md"],
-  "counterparts": ["{stem}.zh.md"],
-  "exclude": ["docs/decisions.md", "docs/postmortem/README.md"]
+  "include": [
+    "docs/**/*.md",
+    "README.md"
+  ],
+  "counterparts": [
+    "{stem}.zh.md"
+  ],
+  "exclude": [
+    "docs/decisions.md",
+    "docs/postmortem/README.md"
+  ]
 }
 ```
 
