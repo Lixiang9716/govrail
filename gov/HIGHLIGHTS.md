@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.38.1 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- the round-15 batch — gov update and gov parse meet their own contracts
+
 ## 0.38.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - gov update — the migration choreography becomes one command (D58)
