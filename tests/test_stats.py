@@ -249,7 +249,9 @@ def test_parse_reports_function_spans_and_depth(tmp_path, monkeypatch,
     monkeypatch.chdir(tmp_path)
     assert stats.parse_main([str(f), "--json"]) == 0
     import json as _json
-    reports = _json.loads(capsys.readouterr().out)
+    payload = _json.loads(capsys.readouterr().out)
+    assert payload["skipped"] == []
+    reports = payload["files"]
     assert len(reports) == 1
     r = reports[0]
     assert r["path"] == "mod.py" and r["language"] == "python"
@@ -276,16 +278,27 @@ def test_parse_skips_unsupported_files_named(tmp_path, monkeypatch,
     assert "no shipped grammar matches" in out
 
 
-def test_parse_walks_directories(tmp_path, monkeypatch, capsys):
+def test_parse_walks_directories_and_names_the_uncovered(tmp_path,
+                                                         monkeypatch,
+                                                         capsys):
+    """#270: the dir walk reports its honest complement — the .txt file
+    no grammar claims lands in `skipped` with a per-file reason, in the
+    same JSON object as the facts."""
     from gov import stats
-    _repo_fixture = tmp_path / "src"
-    _repo_fixture.mkdir()
-    (_repo_fixture / "a.py").write_text("def a():\n    pass\n",
-                                        encoding="utf-8")
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    (src_dir / "a.py").write_text("def a():\n    pass\n",
+                                  encoding="utf-8")
+    (src_dir / "notes.txt").write_text("planned hosts\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    assert stats.parse_main([str(_repo_fixture), "--json"]) == 0
-    reports = json.loads(capsys.readouterr().out)
-    assert len(reports) == 1 and reports[0]["functions"][0]["name"] == "a"
+    assert stats.parse_main([str(src_dir), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [f["path"] for f in payload["files"]] == ["src/a.py"]
+    assert payload["skipped"] == [
+        {"path": "src/notes.txt", "reason": "no grammar for .txt"}]
+    assert stats.parse_main([str(src_dir)]) == 0
+    out = capsys.readouterr().out
+    assert "1 file(s) not parsed" in out and ".txt" in out
 
 
 def test_parse_missing_path_is_named(tmp_path, monkeypatch, capsys):
