@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.37.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- gov parse — the parse layer as a declared primitive
+
 ## 0.36.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - D57 — four family hubs consolidate the command surface (32 → 22)

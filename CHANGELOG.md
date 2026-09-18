@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.0](https://github.com/Lixiang9716/govrail/compare/v0.36.0...v0.37.0) (2026-09-18)
+
+
+### Features
+
+* gov parse — the parse layer as a declared primitive ([#265](https://github.com/Lixiang9716/govrail/issues/265)) ([#267](https://github.com/Lixiang9716/govrail/issues/267)) ([636258b](https://github.com/Lixiang9716/govrail/commit/636258b3439aad16ffb4a69cd97a259ff6d0bde2))
+
 ## [0.36.0](https://github.com/Lixiang9716/govrail/compare/v0.35.0...v0.36.0) (2026-09-18)
 
 
