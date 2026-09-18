@@ -11,6 +11,7 @@ unattended consent) fail loud before any mutation.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -38,11 +39,24 @@ def _commit(tmp_path: Path, msg: str) -> None:
         cwd=tmp_path, check=True)
 
 
-def _invoke(argv: list[str], cwd: Path) -> int:
-    env = {**dict(**__import__("os").environ), "PYTHONPATH": str(REPO),
-           "PYTHONUTF8": "1"}
+def _fingerprint(root: Path) -> dict[Path, bytes]:
+    """Every file EXCEPT .git/** — git refreshes its index as a side
+    effect of read-only status calls, and the fingerprint is about the
+    plane's state, not git's bookkeeping."""
+    return {p: p.read_bytes() for p in sorted(root.rglob("*"))
+            if p.is_file() and ".git" not in p.parts}
+
+
+def _invoke(argv: list[str], cwd: Path, *,
+            consent: bool = False) -> int:
+    """DEVNULL stdin: the consent preflight keys on isatty, and a CI
+    runner may hand the subprocess a console — the test states its
+    consent explicitly instead of depending on the host's stdin."""
+    env = {**os.environ, "PYTHONPATH": str(REPO), "PYTHONUTF8": "1"}
+    argv = argv + (["--confirm-unattended"] if consent else [])
     return subprocess.run(
         [sys.executable, "-m", "gov", *argv], cwd=cwd, check=False,
+        stdin=subprocess.DEVNULL,
         capture_output=True, text=True, timeout=300, env=env,
         encoding="utf-8", errors="replace").returncode
 
@@ -64,16 +78,16 @@ def _setup(tmp_path: Path, *, old_pin: bool = True) -> None:
 
 def test_dry_run_changes_nothing(tmp_path):
     _setup(tmp_path)
-    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
-    assert _invoke(["update"], tmp_path) == 0
-    after = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    before = _fingerprint(tmp_path)
+    assert _invoke(["update"], tmp_path, consent=True) == 0
+    after = _fingerprint(tmp_path)
     assert before == after, "a dry run must not touch a byte"
 
 
 def test_apply_migrates_end_to_end(tmp_path):
     _setup(tmp_path)
     assert _invoke(["update", "--apply", "--confirm-unattended"],
-                   tmp_path) == 0
+                   tmp_path, consent=True) == 0
     manifest = json.loads(
         (tmp_path / ".gov" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == __version__
@@ -90,9 +104,9 @@ def test_apply_refuses_without_consent(tmp_path):
     """Non-interactive shell + no flag: the seal re-baseline is
     constitution acceptance — it refuses BEFORE touching anything."""
     _setup(tmp_path)
-    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
-    assert _invoke(["update", "--apply"], tmp_path) == 2
-    after = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    before = _fingerprint(tmp_path)
+    assert _invoke(["update", "--apply"], tmp_path, consent=False) == 2
+    after = _fingerprint(tmp_path)
     assert before == after
 
 
@@ -101,7 +115,7 @@ def test_refuses_a_dirty_worktree(tmp_path):
     (tmp_path / "dirty.txt").write_text("uncommitted\n", encoding="utf-8")
     subprocess.run(["git", "add", "dirty.txt"], cwd=tmp_path, check=True)
     assert _invoke(["update", "--apply", "--confirm-unattended"],
-                   tmp_path) == 2
+                   tmp_path, consent=True) == 2
     err = subprocess.run(
         [sys.executable, "-m", "gov", "update", "--apply",
          "--confirm-unattended"], cwd=tmp_path, capture_output=True,
@@ -125,7 +139,7 @@ def test_custom_gates_survive_the_merge(tmp_path):
     gates.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     _commit(tmp_path, "custom gate")
     assert _invoke(["update", "--apply", "--confirm-unattended"],
-                   tmp_path) == 0
+                   tmp_path, consent=True) == 0
     merged = json.loads(gates.read_text(encoding="utf-8"))
     ids = {g["id"] for g in merged["gates"]}
     assert "mine" in ids and "plane" in ids  # custom + shipped coexist
