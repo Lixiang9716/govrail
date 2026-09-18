@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.42.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- code design contracts — modular monolith, registry surfaces, self-hosted guardrails
+
 ## 0.41.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - multi-platform agent hooks — codex/copilot/gemini + dialect layer (D60)
