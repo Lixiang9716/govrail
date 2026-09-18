@@ -40,35 +40,41 @@ tools-family case in isolation (the replay's own building block).
 from __future__ import annotations
 
 import argparse
-import json
+import json  # noqa: F401 — tests read st.json (historical surface)
 import os
-import subprocess
+import subprocess  # noqa: F401 — tests read st.subprocess (historical surface)
 import sys
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-# Family modules register their cases at import time (order = report order):
-from . import (cases_notes, cases_gates, cases_knowledge, cases_surface,
-               cases_evidence)  # noqa: F401 — re-exports keep the historical symbol surface
+# Family modules register their cases at import time (order = report
+# order); the imports are deliberate side effects, never name loads.
+from . import (  # noqa: F401
+    cases_notes,  # noqa: F401
+    cases_gates,  # noqa: F401
+    cases_knowledge,  # noqa: F401
+    cases_surface,  # noqa: F401
+    cases_evidence,  # noqa: F401
+)
 from ._harness import (
-    CASES,
-    CONCURRENCY,
-    HERE,
-    REJECTIONS_DIR,
-    REJECTION_TIMEOUT_S,
-    _DIAGNOSTIC_PROBES,
-    _case_env,
-    _classify_tool_failure,
-    _coverage_report,
-    _git_repo,
-    _probe_always_fails,
-    _probe_env_only_failure,
-    _project_cases,
-    _run_project_case,
-    _run_text,
-)  # noqa: F401 — re-exports keep the historical symbol surface
+    CASES,  # noqa: F401
+    CONCURRENCY,  # noqa: F401
+    HERE,  # noqa: F401
+    REJECTIONS_DIR,  # noqa: F401
+    REJECTION_TIMEOUT_S,  # noqa: F401
+    _DIAGNOSTIC_PROBES,  # noqa: F401
+    _case_env,  # noqa: F401
+    _classify_tool_failure,  # noqa: F401
+    _coverage_report,  # noqa: F401
+    _git_repo,  # noqa: F401
+    _probe_always_fails,  # noqa: F401
+    _probe_env_only_failure,  # noqa: F401
+    _project_cases,  # noqa: F401
+    _run_project_case,  # noqa: F401
+    _run_text,  # noqa: F401
+)  # noqa: F401 — the closing-paren noqa cannot cover per-alias diagnostics
 
 
 

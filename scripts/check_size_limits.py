@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     overrides = cfg.get("overrides", {})
     scan = cfg.get("scan")
     if not isinstance(scan, list) or not scan:
-        print(f"size-limits: config 'scan' must be a non-empty glob array",
+        print("size-limits: config 'scan' must be a non-empty glob array",
               file=sys.stderr)
         raise SystemExit(2)
 
@@ -86,11 +86,11 @@ def main(argv: list[str] | None = None) -> int:
             count = len(f.read_text(encoding="utf-8").splitlines())
             limit = overrides.get(rel, default_limit)
             if count > limit:
-                over = (f" — raise this override in scripts/size-limits.json"
-                        f" as a reviewed diff, or split the module"
+                over = (" — raise this override in scripts/size-limits.json"
+                        " as a reviewed diff, or split the module"
                         if rel in overrides else
-                        f" — split the module, or declare an override in"
-                        f" scripts/size-limits.json")
+                        " — split the module, or declare an override in"
+                        " scripts/size-limits.json")
                 problems.append(f"{rel}: {count} lines (limit {limit}{over})")
 
     if problems:

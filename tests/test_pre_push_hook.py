@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from gov import cli, plane
+from gov import plane
 
 HERE = Path(__file__).resolve().parent.parent
 TEMPLATE = HERE / "gov" / "templates" / "pre-push"

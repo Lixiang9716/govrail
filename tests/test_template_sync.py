@@ -74,6 +74,13 @@ def test_demo_specimen_matches_the_plane():
     demo_cases = {p.name for p in (DEMO / ".gov/rejections").glob("case-*.sh")}
     demo_own = {"rubric", "decisions", "source-limits"}
     legal_extras = {f"case-{gid}.sh" for gid in demo_own}
+    # Self-hosted cases judge the govrail repo itself (scripts/ + ruff) —
+    # the demo specimen carries neither, so they never ship there.
+    repo_only = {"case-import-layers.sh", "case-size-limits.sh", "case-lint.sh"}
+    assert not (demo_cases & repo_only), (
+        f"repo-only case(s) {sorted(demo_cases & repo_only)} leaked into the "
+        "demo — run scripts/sync_demo_specimen.py (it prunes them)")
+    live_cases -= repo_only
     assert live_cases <= demo_cases, (
         f"demo missing rejection case(s) {sorted(live_cases - demo_cases)} — "
         "run scripts/sync_demo_specimen.py")

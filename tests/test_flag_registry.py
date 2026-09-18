@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from gov import audit_notes, cli, commands
+from gov import audit_notes, commands
 
 REPO = Path(__file__).resolve().parent.parent
 # Option-entry lines: exactly two spaces of indent, then the flag. Help-text

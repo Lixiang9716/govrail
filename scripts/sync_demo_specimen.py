@@ -45,6 +45,12 @@ COPY_MAP = [
 # demo's own gates, carried over the template base verbatim
 DEMO_EXTRA_GATES = {"rubric", "decisions", "source-limits"}
 
+# Self-hosted cases: they judge the govrail REPO itself (they run the
+# scripts/ checkers and need ruff) — the demo has neither, so these
+# cases never ship to the specimen and a leaked copy is pruned.
+REPO_ONLY_CASES = {"case-import-layers.sh", "case-size-limits.sh",
+                   "case-lint.sh"}
+
 
 def sync_copies() -> int:
     n = 0
@@ -55,11 +61,18 @@ def sync_copies() -> int:
             print(f"copied {src.relative_to(REPO)} -> {dst.relative_to(REPO)}")
             n += 1
     for case in sorted((REPO / ".gov/rejections").glob("case-*.sh")):
+        if case.name in REPO_ONLY_CASES:
+            continue
         dst = DEMO / ".gov/rejections" / case.name
         if not dst.is_file() or dst.read_bytes() != case.read_bytes():
             shutil.copyfile(case, dst)
             dst.chmod(0o755)
             print(f"copied {case.name} -> demo")
+            n += 1
+    for leaked in sorted((DEMO / ".gov/rejections").glob("case-*.sh")):
+        if leaked.name in REPO_ONLY_CASES:
+            leaked.unlink()
+            print(f"pruned repo-only {leaked.name} from demo")
             n += 1
     return n
 

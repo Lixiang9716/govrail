@@ -2,19 +2,11 @@
 """
 from __future__ import annotations
 
-import argparse
-import contextlib
-import io
 import json
 import os
-import re
-import shutil
 import subprocess
 import sys
-import sysconfig
 import tempfile
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ._harness import (
