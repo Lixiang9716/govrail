@@ -7,6 +7,8 @@
       "note-presence",
       "conflict-markers",
       "check",
+      "import-layers",
+      "size-limits",
       "rubric",
       "archive",
       "decisions",
@@ -94,6 +96,26 @@
         "check"
       ],
       "timeoutMs": 120000
+    },
+    {
+      "id": "import-layers",
+      "label": "package layering: leaves, no cycles, dispatcher on top",
+      "command": [
+        "python3",
+        "scripts/check_import_layers.py"
+      ],
+      "description": "gov/ stays a modular monolith: leaf modules import no gov module, only declared entrypoints import the cli dispatcher, and the import graph has no cycles (scripts/import-layers.json is the tier map)",
+      "allowFailure": true
+    },
+    {
+      "id": "size-limits",
+      "label": "module size within declared limits",
+      "command": [
+        "python3",
+        "scripts/check_size_limits.py"
+      ],
+      "description": "every gov/ and scripts/ module stays within its declared line budget (scripts/size-limits.json) — growth lands as a reviewed diff, not as a monolith (#265)",
+      "allowFailure": true
     },
     {
       "id": "rubric",
