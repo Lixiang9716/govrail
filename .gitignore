@@ -9,6 +9,9 @@ build/
 *.egg-info/
 .eggs/
 .gov/history/
+# lockfile's mutex for `gov decision add` — it stays by design (the
+# unlink race), so only its litter is ignored
+docs/.decision.lock
 
 # docker e2e per-cell bake stamps (host-local image state)
 tests/docker_e2e/.stamp-*

@@ -243,8 +243,8 @@ FAILURE_LEGS = {
 # command cannot silently land here. `lease` is deliberately 0/2/3: a
 # busy lease is 3, refusals are 2, and it has no failure verdict.
 NEVER_ONE_HERE = {
-    "init", "self-test", "hooks", "lease", "trend", "stats", "whatsnew",
-    "change-scope", "preset", "parse", "update",
+    "init", "self-test", "hooks", "agent-hooks", "lease", "trend", "stats",
+    "whatsnew", "change-scope", "preset", "parse", "update",
 }
 
 

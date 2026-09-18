@@ -1,0 +1,138 @@
+{
+  "title": "Fix code-review blockers on PR #286 (gov agent-hooks) \u2014 caller said: fix it",
+  "created": "2026-09-18T16:01:00+00:00",
+  "rules": {
+    "hash": "4b874cb3bd1f2c9dc557553ae5054686d7d91c017d09fa38a11d39008f26a04c",
+    "files": {
+      ".gov/rules.md": "650ebb4a4b7f4cff41b0086cfa23856019123abd64adc78760a1af9ce56f6088",
+      "gates.json": "c07f513d7c58354ff6a833e59b2462f88ac9592926ef46cc951069d63982a225"
+    }
+  },
+  "checklist": [
+    "fail-loud: report pre-existing .claude/settings.json; name malformed stdin; user-facing strings say gov agent-hooks",
+    "reversible install: created[] bare path; uninstall deletes pristine settings.json, keeps+names customized (proved by tests)",
+    "context injection: hookEventName PascalCase, event passed as parameter not sys.argv",
+    "feature note (D59) with Problem/Decision/Alternatives + decisions.md row",
+    "README.zh.md carries the agent-hooks row; pair re-confirmed",
+    "govrail skill stage table gains agent-hooks (rule 10)",
+    "gov run green, card closed with receipt, pushed to PR branch"
+  ],
+  "status": "done",
+  "receipt": {
+    "ts": "2026-09-18T16:29:35+00:00",
+    "mode": "all",
+    "rules": "4b874cb3bd1f2c9dc557553ae5054686d7d91c017d09fa38a11d39008f26a04c",
+    "green": true,
+    "gates": [
+      {
+        "gate": "self-test",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 4052,
+        "detail": "PASS test_verify_notes_rejects_missing_section\nPASS test_verify_notes_rejects_unknown_argument\nPASS test_verify_notes_rejects_hollow_skeleton\nPASS test_gates_rejects_duplicate_id\nPASS test_gates_rejects_cycle\nPASS test_gates_rejects_unknown_needs\nPASS test_gates_rejects_non_object_gate\nPASS test_cli_init_help_no_side_effect\nPASS test_gates_skips_transitively\nPASS test_pairing_rejects_missing_record\nPASS test_d57_hubs_and_aliases\nPASS test_pairing_write_resolves_bare_stem_and_zh_side\nPASS test_gates_default_mode_scopes_run\nPASS test_gates_rejects_unknown_default_mode\nPASS test_pairing_custom_counterpart_convention\nPASS test_gates_disabled_gate_never_runs\nPASS test_gates_advisory_failure_reports_without_blocking\nPASS test_pairing_explicit_registration_sticks\nPASS test_run_base_scopes_gates_by_paths\nPASS test_note_presence_warns_then_strict_blocks\nPASS test_change_scope_suggests_from_paths\nPASS test_run_failure_summary_and_gate_flag\nPASS test_verify_notes_rejects_wrong_section_order\nPASS test_rubric_rejects_broken_structure\nPASS test_rubric_rejects_zero_items\nPASS test_verify_notes_rejects_unknown_lifecycle\nPASS test_init_hooks_ci_roundtrip\nPASS test_passing_gate_output_stays_visible\nPASS test_verify_notes_rejects_status_lying\nPASS test_note_presence_auto_base_catches_committed_work\nPASS test_note_presence_rejects_ill_shaped_manifest\nPASS test_note_presence_task_receipts_and_manifest_exemptions\nPASS test_gates_rejects_gate_in_no_mode\nPASS test_self_test_adopts_project_rejection_cases\nPASS test_coverage_warning_names_the_marker_fix\nPASS test_archive_seal_detects_tampering_and_refuses_laundering\nPASS test_verify_decisions_rejects_broken_table\nPASS test_skills_text_command_drift_is_named\nPASS test_verify_decisions_rejects_base_collision\nPASS test_registry_real_flags_are_not_drift\nPASS test_gates_rejects_unknown_keys\nPASS test_doc_sync_rejects_changelog_without_highlights\nPASS test_conflict_markers_rejects_marked_file\nPASS test_conflict_markers_bare_separator_needs_sibling\nPASS test_task_check_rejects_tampered_receipt\nPASS test_task_check_rejects_stale_rules_pin\nPASS test_receipt_rejects_forged_record\nPASS test_task_survives_pre37_argparse_shadow\nPASS test_receipt_rejects_partial_run_as_full_evidence\nPASS test_failure_classifier_labels_tool_vs_environment\nPASS test_run_merge_rejects_text_conflict\nPASS test_parse_layer_metrics_mean_what_they_claim\nPASS test_preset_rejects_unknown_name\nPASS test_check_engine_mechanisms_are_real\nPASS test_text_subprocess_decodes_are_pinned\nPASS test_pairing_staged_rejects_stale_sidecar\nPASS test_verify_notes_rejects_missing_section\nPASS test_verify_notes_rejects_unknown_argument\nPASS test_verify_notes_rejects_hollow_skeleton\nPASS test_d57_hubs_and_aliases\nPASS test_gates_rejects_duplicate_id\nPASS test_gates_rejects_cycle\nPASS test_gates_rejects_unknown_needs\nPASS test_gates_skips_transitively\nPASS test_gates_rejects_non_object_gate\nPASS test_cli_init_help_no_side_effect\nPASS test_pairing_rejects_missing_record\nPASS test_pairing_write_resolves_bare_stem_and_zh_side\nPASS test_gates_default_mode_scopes_run\nPASS test_gates_rejects_unknown_default_mode\nPASS test_gates_disabled_gate_never_runs\nPASS test_gates_advisory_failure_reports_without_blocking\nPASS test_pairing_custom_counterpart_convention\nPASS test_pairing_explicit_registration_sticks\nPASS test_note_presence_warns_then_strict_blocks\nPASS test_run_base_scopes_gates_by_paths\nPASS test_run_failure_summary_and_gate_flag\nPASS test_change_scope_suggests_from_paths\nPASS test_init_hooks_ci_roundtrip\nPASS test_rubric_rejects_broken_structure\nPASS test_verify_notes_rejects_wrong_section_order\nPASS test_verify_notes_rejects_unknown_lifecycle\nPASS test_rubric_rejects_zero_items\nPASS test_passing_gate_output_stays_visible\nPASS test_note_presence_auto_base_catches_committed_work\nPASS test_note_presence_task_receipts_and_manifest_exemptions\nPASS test_note_presence_rejects_ill_shaped_manifest\nPASS test_verify_notes_rejects_status_lying\nPASS test_archive_seal_detects_tampering_and_refuses_laundering\nPASS test_gates_rejects_gate_in_no_mode\nPASS test_self_test_adopts_project_rejection_cases\nPASS test_coverage_warning_names_the_marker_fix\nPASS test_verify_decisions_rejects_broken_table\nPASS test_verify_decisions_rejects_base_collision\nPASS test_skills_text_command_drift_is_named\nPASS test_registry_real_flags_are_not_drift\nPASS test_gates_rejects_unknown_keys\nPASS test_doc_sync_rejects_changelog_without_highlights\nPASS test_conflict_markers_rejects_marked_file\nPASS test_conflict_markers_bare_separator_needs_sibling\nPASS test_task_check_rejects_stale_rules_pin\nPASS test_task_check_rejects_tampered_receipt\nPASS test_task_survives_pre37_argparse_shadow\nPASS test_receipt_rejects_forged_record\nPASS test_receipt_rejects_partial_run_as_full_evidence\nPASS test_run_merge_rejects_text_conflict\nPASS test_failure_classifier_labels_tool_vs_environment\nPASS test_parse_layer_metrics_mean_what_they_claim\nPASS test_check_engine_mechanisms_are_real\nPASS test_preset_rejects_unknown_name\nPASS test_text_subprocess_decodes_are_pinned\nPASS test_pairing_staged_rejects_stale_sidecar\nPASS .gov/rejections/case-archive.sh\nPASS .gov/rejections/case-check.sh\nPASS .gov/rejections/case-conflict-markers.sh\nPASS .gov/rejections/case-decisions.sh\nPASS .gov/rejections/case-doc-sync.sh\nPASS .gov/rejections/case-note-presence.sh\nPASS .gov/rejections/case-notes.sh\nPASS .gov/rejections/case-plane.sh\nPASS .gov/rejections/case-pre-commit-hook.sh\nPASS .gov/rejections/case-rubric.sh\nPASS .gov/rejections/case-self-test.sh\nPASS .gov/rejections/case-task.sh\ncoverage (gate x project rejection cases): self-test(1) notes(1) pairing(1) note-presence(1) conflict-markers(1) check(1) rubric(1) archive(1) decisions(1) task(1) doc-sync(1) plane(1)\nself-test: tools 56 + project 12 \u2014 all pass",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "notes",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 96,
+        "detail": "verify_notes: 156 note(s) ok",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "pairing",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 111,
+        "detail": "verify_translation_pairing: 11 pair(s) ok",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "note-presence",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 86,
+        "detail": "verify_note_presence: base=HEAD (dirty worktree \u2014 reviewing the working tree)\nverify_note_presence: 0 non-trivial file(s), 0 note file(s) \u2014 ok",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "conflict-markers",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 89,
+        "detail": "verify_conflict_markers: base=HEAD (dirty worktree \u2014 reviewing the working tree)\nverify_conflict_markers: 2 changed file(s) scanned, no conflict markers",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "check",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 161,
+        "detail": "gov check: clean\ngov check: base=HEAD (dirty worktree \u2014 reviewing the working tree) \u2014 2 changed file(s) in scope",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "rubric",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 85,
+        "detail": "verify_rubric: 8 item(s) ok + zh",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "archive",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 94,
+        "detail": "verify_archive: 18 archived file(s) sealed and intact",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "decisions",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 95,
+        "detail": "note: referenced by no note: D6, D7, D16, D35, D36 (informational)\nverify_decisions: 60 decision(s) ok, 5 orphan(s)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "task",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 77,
+        "detail": "open  T-0001 Fix code-review blockers on PR #286 (gov agent-hooks) \u2014 caller said: fix it (obey rules@4b874cb3bd1f)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "doc-sync",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 75,
+        "detail": "verify_doc_sync: syncing CHANGELOG.md against gov/HIGHLIGHTS.md (govrail's default layout; declare your own in .gov/docsync.json: {\"highlights\": \"<path>\"})\nverify_doc_sync: 62 version(s) paired (CHANGELOG \u2194 HIGHLIGHTS)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "plane",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 75,
+        "detail": "verify_plane: 16 plane file(s) sealed and intact",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      }
+    ]
+  },
+  "id": "T-0001"
+}

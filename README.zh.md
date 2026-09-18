@@ -63,6 +63,7 @@ gov doctor                     # 环境自检（PATH、python、解析层、钩�
 gov doctor --json             # 机器可读：{status, checks, problems}
 gov note new --class process --ref D6 "标题"  # 笔记脚手架（预校验）
 gov init --project <path> --hooks --ci  # 同时安装 pre-push 钩子与 CI
+gov agent-hooks <event>                  # 代理生命周期钩子（session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop）——plane 在 agent 工作流每一步的存在；init 装配 .claude/settings.json
 gov uninstall --project <path> # 精确反转
 gov run                        # 跑默认模式（defaultMode）的门禁 DAG
 gov run --base HEAD~1          # 只跑 paths 命中本次 diff 的门

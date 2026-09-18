@@ -506,6 +506,9 @@ def _inventory(created: set[str]) -> list[tuple[str, Any]]:
         expected.append(("gates.json", TEMPLATES.joinpath("gates.json")))
     if ".github/workflows/gov.yml" in created:
         expected.append((".github/workflows/gov.yml", TEMPLATES.joinpath("gov.yml")))
+    if ".claude/settings.json" in created:
+        expected.append((".claude/settings.json",
+                         TEMPLATES.joinpath("claude-settings.json")))
     return expected
 
 
@@ -909,6 +912,25 @@ def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
             print("init: created .github/workflows/gov.yml (CI runs gov run)")
         # _install_ci itself reports the already-exists case.
 
+    # Agent hooks: govrail's lifecycle events wired into the agent
+    # framework (Claude Code's PreToolUse / SessionStart / Stop etc.),
+    # so the plane has a presence at every point of the agent's
+    # workflow — not just at push time.
+    hooks_settings = project / ".claude" / "settings.json"
+    if hooks_settings.exists():
+        print("init: .claude/settings.json already exists; leaving it "
+              "untouched — merge the gov agent-hooks events in by hand "
+              "(gov agent-hooks --help lists them)")
+    else:
+        hooks_settings.parent.mkdir(parents=True, exist_ok=True)
+        atomicio.write_bytes(
+            hooks_settings,
+            TEMPLATES.joinpath("claude-settings.json").read_bytes())
+        created.append(".claude/settings.json")
+        print("init: created .claude/settings.json (agent lifecycle hooks: "
+              "session-start/pre-tool-use/post-tool-use/"
+              "user-prompt-submit/stop)")
+
     # Merge, not rebuild: the manifest's other keys (notably "templates",
     # the adoption-hash record `init --adopt` writes, D34) must survive an
     # add-on retrofit — the old three-key rewrite silently dropped them,
@@ -939,6 +961,8 @@ def _template_for(rel: str):
         return TEMPLATES.joinpath("postmortem-README.md")
     if rel == ".github/workflows/gov.yml":
         return TEMPLATES.joinpath("gov.yml")
+    if rel == ".claude/settings.json":
+        return TEMPLATES.joinpath("claude-settings.json")
     if rel.startswith(".agents/skills/") and rel.endswith("/SKILL.md"):
         return TEMPLATES.joinpath("skills") / rel.split("/")[2] / "SKILL.md"
     return None
@@ -1115,7 +1139,8 @@ _DEPRECATED_ALIASES = {
 _COMMANDS = {
     "init": "inject the plane into a project (--hooks/--ci add runners; --hooks "
             "--pre-commit adds the opt-in commit-stage gates; --adopt-new "
-            "merges new shipped gates; --upgrade shows template drift)",
+            "merges new shipped gates; --upgrade shows template drift; "
+            "installs .claude/settings.json agent hooks unless one exists)",
     "uninstall": "reverse init",
     "run": "run the project's gate DAG (args forwarded to gates.py; "
            "--receipt records a tamper-evident run receipt, #124; "
@@ -1124,6 +1149,9 @@ _COMMANDS = {
     "self-test": "run governance rejection cases",
     "receipt": "verifiable run receipts (verify/show): verify a cited "
                "receipt against a commit (issue #124/D42)",
+    "agent-hooks": "agent lifecycle hooks (session-start/pre-tool-use/"
+                   "post-tool-use/user-prompt-submit/stop — govrail's "
+                   "presence at every point of the agent's workflow)",
     "verify-plane": "tamper-evidence for the plane's own config "
                     "(rules.md, gates.json, pairing/decisions/surfaces, "
                     ".gov/rejections/**; --write re-baselines — interactive "
@@ -1481,6 +1509,9 @@ def main(argv: list[str] | None = None) -> int:
         return task.main(rest)
     if cmd == "hooks":
         return hookcmd.main(rest)
+    if cmd == "agent-hooks":
+        from . import agent_hooks
+        return agent_hooks.main(rest)
     if cmd == "verify-plane":
         return verify_plane.main(rest)
     print(f"gov: unknown command '{cmd}'", file=sys.stderr)

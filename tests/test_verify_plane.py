@@ -217,7 +217,7 @@ def test_write_warns_when_previous_seal_unreadable(tmp_path, monkeypatch, capsys
     assert ".gov/rules.md" in seal["files"]  # the re-baseline still landed
 
 
-def test_rebaseline_names_the_consent_ledger(tmp_path, capsys):
+def test_rebaseline_names_the_consent_ledger(tmp_path, monkeypatch, capsys):
     """#200: the consent record must be auditable — the output says
     where it lives instead of leaving the operator to find it."""
     from gov import verify_plane as vp
@@ -226,6 +226,9 @@ def test_rebaseline_names_the_consent_ledger(tmp_path, capsys):
     import subprocess
     subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
     (tmp_path / ".gov" / "rituals.jsonl").write_text("", encoding="utf-8")
+    # anchor_to_git_root climbs from cwd: without this chdir the in-process
+    # --write re-baselines the LIVE plane mid-suite (real ledger lines).
+    monkeypatch.chdir(tmp_path)
     rc = vp.main(["--write", "--confirm-unattended"])
     assert rc == 0
     out = capsys.readouterr().out

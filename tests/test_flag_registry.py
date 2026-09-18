@@ -31,6 +31,7 @@ LEADING_DASH_RX = re.compile(r"((?:-h|--[\w-]+)(?:,\s*(?:-h|--[\w-]+))*)(?=\s|$)
 # lives on `next`, --from/--id on `add`) — every listed surface is probed
 # and the registry must equal the union (#107).
 HELP_ARGV: dict[str, list[list[str]]] = {
+    "agent-hooks": [["agent-hooks", "--help"]],
     "note": [["note", "--help"], ["note", "new", "--help"],
              ["note", "list", "--help"], ["note", "verify", "--help"],
              ["note", "presence", "--help"], ["note", "audit", "--help"],
