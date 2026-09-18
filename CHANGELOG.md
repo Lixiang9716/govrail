@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/Lixiang9716/govrail/compare/v0.35.0...v0.36.0) (2026-09-18)
+
+
+### Features
+
+* D57 — four family hubs consolidate the command surface (32 → 22) ([#264](https://github.com/Lixiang9716/govrail/issues/264)) ([9cad635](https://github.com/Lixiang9716/govrail/commit/9cad6358e7bb761a37475fe17e477e59d3ff10b1))
+
 ## [0.35.0](https://github.com/Lixiang9716/govrail/compare/v0.34.12...v0.35.0) (2026-09-17)
 
 
