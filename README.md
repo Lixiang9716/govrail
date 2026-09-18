@@ -100,7 +100,9 @@ gov trend                     # gate duration trends from --record history
 gov stats                     # structural facts per language (lines, symbols, nesting depth) — facts, not verdicts
 gov parse <files>             # per-file function spans, line counts, depth (--json);
                               # govrail ships the tree-sitter stack — custom gates may
-                              # import it, never pin tree-sitter yourself
+                              # import it, never pin tree-sitter yourself.
+                              # shipped grammars: c, cpp, go, java, javascript,
+                              # python, rust, typescript
 gov check                     # syntax-class checks over the parse layer; suppressions counted, never invisible
 gov receipt verify <commit>   # was a full green run recorded on this tree? (#124)
 gov recall <terms>            # retrieve notes, decisions, postmortems (--any relaxes the AND)

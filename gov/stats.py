@@ -302,8 +302,6 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
 
 
 # ── #265: `gov parse` — the parse layer as a first-class primitive ──
@@ -342,36 +340,71 @@ def _file_report(path: Path, src: bytes, name: str, pack) -> dict:
     }
 
 
-def parse_report(paths: list[Path], lang: str | None = None) -> tuple[list[dict], list[str]]:
+def _uncovered(target: Path, claimed: set[Path],
+               excludes: set[str]) -> list[Path]:
+    """Walkable files under ``target`` that no grammar claimed — the
+    honest complement of the parse walk. Same traversal contract as
+    parse._walk: excluded directory names pruned, symlinks never
+    followed, and the caller's claimed set subtracted."""
+    import os
+    out: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(target):
+        dirnames[:] = sorted(d for d in dirnames if d not in excludes)
+        for name in sorted(filenames):
+            p = Path(dirpath) / name
+            if p.is_symlink():
+                continue
+            if p not in claimed:
+                out.append(p)
+    return out
+
+
+def parse_report(paths: list[Path],
+                 lang: str | None = None) -> tuple[list[dict], list[dict]]:
     """Per-file structure facts for every supported file under/being
-    ``paths``. Returns (reports, skipped) — skipped are unsupported
-    files, named for the stderr (facts, not verdicts: nothing here
-    fails)."""
+    ``paths``, PLUS the honest complement (#270): files the walk saw but
+    no grammar claims, returned as ``skipped`` — a size gate must be
+    able to tell "parsed clean" from "never parsed at all"."""
     try:
         from .checks import available_langs
     except ImportError:  # direct script execution
         from checks import available_langs
     names = [lang] if lang else available_langs()
     reports: list[dict] = []
-    skipped: list[str] = []
+    skipped: list[dict] = []
     from . import parse
     for target in paths:
         target = Path(target)
         if target.is_dir():
+            claimed: set[Path] = set()
+            excludes: set[str] = set()
             for name in names:
                 pack = parse.load_pack(name)
-                for path, src in parse.iter_files(target, pack):
-                    reports.append(_file_report(path, src, name, pack))
+                excludes.update(pack.exclude)
+                for path, src_bytes in parse.iter_files(target, pack):
+                    claimed.add(path)
+                    reports.append(_file_report(path, src_bytes, name, pack))
+            cwd = Path.cwd()
+            for walked in sorted(_uncovered(target, claimed, excludes)):
+                rel = (walked.relative_to(cwd).as_posix()
+                       if walked.is_absolute() and walked.is_relative_to(cwd)
+                       else walked.as_posix())
+                suffix = walked.suffix or "(no extension)"
+                skipped.append({
+                    "path": rel,
+                    "reason": f"no grammar for {suffix}",
+                })
             continue
         if not target.is_file():
-            skipped.append(f"{target}: no such file")
+            skipped.append({"path": target.as_posix(),
+                            "reason": "no such file"})
             continue
         name, pack = _pack_for(target, names)
         if pack is None:
-            skipped.append(f"{target}: no shipped grammar matches")
+            skipped.append({"path": target.as_posix(),
+                            "reason": "no shipped grammar matches"})
             continue
-        reports.append(_file_report(
-            target, target.read_bytes(), name, pack))
+        reports.append(_file_report(target, target.read_bytes(), name, pack))
     return reports, skipped
 
 
@@ -382,20 +415,27 @@ def parse_main(argv: list[str] | None = None) -> int:
     reads these numbers; the plane does not judge them."""
     from .root import anchor_to_git_root
     anchor_to_git_root("parse")
+    try:
+        from .checks import available_langs
+    except ImportError:  # direct script execution
+        from checks import available_langs
+    names = available_langs()
     parser = argparse.ArgumentParser(
         prog="gov parse",
         description="Per-file structure facts from the parse layer "
                     "(function spans, line counts, nesting depth) — "
-                    "the primitive a size gate declares its limits "
-                    "against. Facts, not verdicts.")
+                    "the primitive a size/complexity gate declares its "
+                    "limits against. Facts, not verdicts. "
+                    f"Shipped grammars: {', '.join(names)}.")
     parser.add_argument("paths", nargs="+", metavar="PATH",
                         help="files or directories (directories walk "
                              "every shipped grammar's file set)")
     parser.add_argument("--lang", metavar="LANG",
-                        help="only this language (directories)")
+                        help="only this language (directories); shipped: "
+                             f"{', '.join(names)}")
     parser.add_argument("--json", action="store_true",
-                        help="one JSON array on stdout; the human report "
-                             "moves to stderr")
+                        help="one JSON object on stdout (files + skipped); "
+                             "the human report moves to stderr")
     args = parser.parse_args(argv)
 
     reports, skipped = parse_report([Path(p) for p in args.paths],
@@ -404,10 +444,16 @@ def parse_main(argv: list[str] | None = None) -> int:
     def emit(text: str) -> None:
         print(text, file=sys.stderr if args.json else sys.stdout)
 
-    for note in skipped:
-        emit(f"gov parse: skipped {note}")
+    if skipped:
+        # #270: "never parsed at all" must be distinguishable from
+        # "parsed clean" — in JSON as per-file entries, in the human
+        # report as a coverage line. Silence is the one wrong answer.
+        emit(f"gov parse: {len(skipped)} file(s) not parsed — no shipped "
+             "grammar matches their type")
+        for note in skipped:
+            emit(f"gov parse: skipped {note['path']}: {note['reason']}")
     if args.json:
-        print(json.dumps(reports, indent=2))
+        print(json.dumps({"files": reports, "skipped": skipped}, indent=2))
         return 0
     for r in reports:
         emit(f"--- {r['path']} ({r['language']}): "
@@ -421,3 +467,7 @@ def parse_main(argv: list[str] | None = None) -> int:
     if not reports:
         emit("gov parse: nothing matched a shipped grammar")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
