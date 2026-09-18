@@ -43,6 +43,12 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   `--confirm-unattended`).
 - `gov init --preset <name>` — typed starters. Only when the project
   matches the preset's type; presets never load themselves.
+- `gov agent-hooks <event>` — the plane's presence at the agent's
+  lifecycle events (Claude Code-style hooks; `gov init` wires
+  `.claude/settings.json`). Framework-invoked, not a human verb. If
+  init reports the settings file already exists, merge the five events
+  in by hand. The pre-tool-use deny is a presence, not a fence —
+  `gov run` and the pre-push gate remain the enforcement.
 - `gov uninstall --force` — reverse init. `--force` is for customized
   trees AFTER copying out what you keep; without it, uninstall refuses
   to delete anything customized.

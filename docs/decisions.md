@@ -492,3 +492,11 @@
 - **决定**：(b)。**前置硬门（任何变更之前全部通过）**：git 仓库；tracked 文件零未提交改动（`--untracked-files=no` 的 porcelain——update 自身的变更必须可独立评审）；`.gov/manifest.json` 存在；仪式同意（交互 TTY 或 `--confirm-unattended`）。**步骤**（全为既有件的编排，零新机制）：分类采纳（missing + upstream-moved，定制文件永不触碰——_adopt 自身的守卫是第二道锁）→ adopt-new 门合并（加性按 id，schema 校验后才落）→ CI pin 行级刷新（只重写匹配 `pip install govrail...` 的 run 行，自定义注释/结构保留；无该行则点名跳过）→ `.gitignore` 补 history 行（symlink 拒写，N13）→ manifest 版本对齐 → seal 重基线（仪式，入 tracked 台账）→ `whatsnew --since <旧版本>` → 收尾"commit now"。**干跑是默认**：无 `--apply` 只打印计划零写入；--help/--lang 式极性遵 D56。**与 D57 的关系**：update 是迁移的编排入口；D57 的命令面收敛是它编排的词汇。`verify-notes` 未知旗标拒绝（#256）的教训同步适用：update 的 passthrough 一律显式声明+显式转发。
 - **被否**：(a) 维持手工五步——#259 的原始场景（"CI breaks mysteriously"）正是五步没走的结果，文档里的五步等于没写；(c) 挂 init 名下——迁移跨 init/seal/CI 三个域，挂单一域会撒谎；`init --upgrade` 保持只读报告的承诺不动。
 - **修订（rule 9 交叉引用）**：命令化的下一步是**纪律化**——rule 9 新增于 `.gov/rules.md`：多步任务必须携带 task card，open 卡片阻塞 push。D58 编排了迁移的机制，rule 9 把"用这个机制"从可选习惯升级为 plane 的行规。两者的接口是 `gov task new --check`：每条 checklist 项锚定用户原话，`task check` 机械验证完成状态，pre-push 钩子自动阻塞未完成的迁移。**翻转整个命令族的输出极性**（若未来有消费者署名）——走 D56 变更记录，不搭车。
+
+## D59 — agent 钩子：plane 在 agent 生命周期每一刻的存在，安装面精确可逆
+
+- **问题**：plane 只在 push 时见到 agent（pre-push 门），会话开始靠 AGENTS.md 指路 skills——Claude Code 类框架在 SessionStart/PreToolUse/PostToolUse/UserPromptSubmit/Stop 都开放了钩子位，plane 无一席；会话中途的破坏性命令（rm -rf /、git reset --hard）绕过审计直奔工作树，plane 无感。
+- **选项**：(a) 维持 push 时点单点存在；(b) `gov agent-hooks <event>` 五事件处理器 + init 安装 `.claude/settings.json`，pre-tool-use 先做破坏性命令拒绝；(c) 只写文档教用户自己配钩子
+- **状态**：已决
+- **决定**：(b)。五事件统一 `handler(payload, event)` 签名；上下文注入的 hookEventName 用框架自己的 PascalCase 拼写（settings.json 键名），kebab-case 会被框架静默忽略；stdin 空载是合法无载荷调用，畸形载荷在 stderr 点名后继续——响亮的 fail-open，退出码契约保持 0/2（exit 2 会把不说 JSON 的兼容框架的每次 PreToolUse 全部堵死，教会大家卸载钩子）。安装走 init 既有面：模板 `claude-settings.json` 单源——init 的写入、`_inventory` 的漂移分类、uninstall 的定制检查、`_template_for` 的逆向映射四处读同一份字节；已存在即点名跳过（同 `_install_ci` 的 already-exists 汇报），绝不合并改写采用者自己的配置；manifest `created[]` 记裸路径。**定性**：这是存在不是围栏——pre-tool-use 的拒绝是字符串匹配，可变体绕过；执法始终是 `gov run` 与 pre-push 门。
+- **被否**：(a) 单点存在——会话中途的绕过恰恰发生在 push 之前，事后门追不回已被 reset 掉的历史；(c) 文档教学——可检查的承诺是门（rule 1），手配的钩子无幂等、无卸载、第二个人装出第二个形状；**合并进已存在的 settings.json**——采用者的配置是他们的领土，自动合并 JSON 迟早踩坏手写注释与键序，点名跳过把决定留给采用者；**畸形载荷 exit 2 fail-closed**——听着安全，实际是让不说 JSON 的框架每次工具调用都被拒。
