@@ -127,7 +127,6 @@ def internal_imports(path: Path, package: str) -> tuple[set[str], set[str]]:
     (a deferred edge cannot tangle initialization)."""
     source = path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(path))
-    prefix = package.split(".")[-1]
     static_ids = {id(n) for n in _static_import_nodes(tree)}
     static: set[str] = set()
     lazy: set[str] = set()

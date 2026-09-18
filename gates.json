@@ -14,7 +14,8 @@
       "decisions",
       "task",
       "doc-sync",
-      "plane"
+      "plane",
+      "lint"
     ],
     "quick": [
       "notes",
@@ -114,7 +115,7 @@
         "python3",
         "scripts/check_size_limits.py"
       ],
-      "description": "every gov/ and scripts/ module stays within its declared line budget (scripts/size-limits.json) — growth lands as a reviewed diff, not as a monolith (#265)",
+      "description": "every gov/ and scripts/ module stays within its declared line budget (scripts/size-limits.json) \u2014 growth lands as a reviewed diff, not as a monolith (#265)",
       "allowFailure": true
     },
     {
@@ -170,7 +171,7 @@
     },
     {
       "id": "doc-sync",
-      "label": "CHANGELOG ↔ HIGHLIGHTS pairing",
+      "label": "CHANGELOG \u2194 HIGHLIGHTS pairing",
       "command": [
         "gov",
         "verify",
@@ -194,6 +195,16 @@
         ".gov/pairing.json",
         ".gov/plane-seal.json"
       ]
+    },
+    {
+      "id": "lint",
+      "label": "ruff (pyflakes + syntax-level pycodestyle)",
+      "command": [
+        "ruff",
+        "check",
+        "."
+      ],
+      "description": "the CI lint job, gate-ized: the same ruff the lint cell runs now rides the DAG, so pre-push catches what CI used to catch first (config: [tool.ruff] in pyproject.toml)"
     }
   ]
 }

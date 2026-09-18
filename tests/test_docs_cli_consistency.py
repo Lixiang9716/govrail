@@ -19,7 +19,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from gov import audit_notes as an  # noqa: E402
-from gov import cli, commands  # noqa: E402
+from gov import commands  # noqa: E402
 
 README = REPO / "README.md"
 BEGIN = "<!-- gov:commands BEGIN"

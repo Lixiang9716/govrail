@@ -73,4 +73,6 @@ apply 不引入任何新合并语义——复用平面的既有契约，且绝�
 4. **数据驱动的扩展。** 新能力先回答"能不能是数据"——门是 `gates.json` 里的命令、类型化起点是 preset 包、语言事实是数据包（`gov/langs/`、`gov/checks/`）。D53 的决定在此放大：机制要少，数据即扩展路径。
 5. **自吃的护栏。** 平面吃自己的狗粮：`import-layers` 与 `size-limits` 两门读声明式限额（`scripts/import-layers.json`、`scripts/size-limits.json`），把"不许长出失控巨石"从评审愿望变成被检查的事实（#265 的形状——体量门 = 声明限额 + `gov parse`/`gov stats` 本就产出的事实）。
 
+CI 的 lint job 也已门禁化：`lint` 门在 DAG 内跑同一个 ruff，pre-push 先于 CI 看见失败（block——自吃树没有采用者首跑要保护）。
+
 明确**不取**的，理由在案：插件框架 / entry-points（D53 选了数据包；安装期插件破坏"单次 pip install + `gov init`"模型）；`Gate` 抽象基类（门就是外部命令——多态早已住在命令槽里）；DI 容器（这个规模上函数参数就是注入）；内部事件总线（状态层的追加式哈希链台账已是事件溯源）；六边形仪式（两平面分离——治理机制 vs 产品代码、经 `gates.json` 命令槽相连——就是端口与适配器边界，在产品级实现、在产品级挣钱）。

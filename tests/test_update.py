@@ -18,7 +18,7 @@ import pytest
 import sys
 from pathlib import Path
 
-from gov import cli, plane
+from gov import plane
 from gov.version import __version__
 
 PASS = [sys.executable, "-c", "pass"]

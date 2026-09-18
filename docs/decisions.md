@@ -512,7 +512,7 @@
 ## D61 — 代码设计契约：模块化单体、注册表单一来源、自吃守护门
 
 - **问题**：0.41 的树上三处可维护性侵蚀已从事故温床长成结构性病灶——cli.py 1600 行里约 1100 行是 init/uninstall 领域机制（update/audit-notes 跨模块伸手拿私有符号，模块边界说谎）；self_test.py 2329 行单一高扰动文件，每加一门需"定义 + 手工登记 CASES"双 bookkeeping；体量与分层零门禁，"不许长出巨石"只是评审愿望（rule 1：gates over prose）。外部评审同轮证伪检查器的第一版：绝对形态导入（`from gov.gates import parse_cost`）不可见，声明叶 merge 的违规边假绿。
-- **选项**：(a) 维持现状，靠 rule 9 人肉纪律与评审关怀；(b) 立五条代码设计契约（模块化单体、注册表驱动表面、函数式核心/命令式外壳、数据驱动扩展、自吃护栏）+ 三步落地：注册表迁 commands.py、init/uninstall 迁 plane.py、self_test 包化 @case 注册，配 import-layers 与 size-limits 两个自吃门（advisory 先行）；(c) 上插件框架/抽象 Gate 基类/DI 容器/事件总线，机制化解决
+- **选项**：(a) 维持现状，靠 rule 9 人肉纪律与评审关怀；(b) 立五条代码设计契约（模块化单体、注册表驱动表面、函数式核心/命令式外壳、数据驱动扩展、自吃护栏）+ 三步落地：注册表迁 commands.py、init/uninstall 迁 plane.py、self_test 包化 @case 注册，配 import-layers 与 size-limits 两个自吃门（advisory 先行），随后 CI 既有的 ruff lint job 收编为第三个门 lint（block，自吃树无采用者首跑问题）；(c) 上插件框架/抽象 Gate 基类/DI 容器/事件总线，机制化解决
 - **状态**：已决
 - **决定**：(b)。分层与体量的限额是数据（scripts/import-layers.json、scripts/size-limits.json），门审判导入期图（静态环违规；函数级惰性边方向照查、环豁免、计数可见——43+ 条既有惰性边是本库既定解耦手段）；案例经 @case 定义即登记；文档叶集合以配置为唯一事实源。明确不取：(a) 同类词汇四方人工同步已在 D56 修订二出过事故；(c) 的每个机制都对产品形态撒谎——门是外部命令（多态住在 gates.json 命令槽），1.6 万行规模函数参数即注入，状态层追加式哈希链台账已是事件溯源，两平面分离即端口-适配器边界。两门翻 blocking 留作有运行证据后的独立决定（P0-3 极性纪律）。
 - **被否**：见上 (a)/(c)；另否"self_test 只加装饰器不拆文件"——装饰器只灭双 bookkeeping，不灭单一高扰动文件的合并冲突。
