@@ -3,6 +3,136 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.43.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- --write announces a one-sided re-confirm — rule 7's consent moment
+- acquire/release — lease locks for oblivious parallel agents
+- adoption provenance, adopt preview and disclosure, external D-references (D34)
+- agent-dev template with gates, notes, pairing, and skills
+- caller tagging in .gov/history — gov run --tag / GOV_CALLER, gov trend --by-tag (D42, [#120](https://github.com/Lixiang9716/govrail/issues/120))
+- caller-reported cost ledger in .gov/history — gov run --cost/GOV_COST, gov trend --cost (D44, [#126](https://github.com/Lixiang9716/govrail/issues/126))
+- caller-reported cost ledger in .gov/history — gov run --cost/GOV_COST, gov trend --cost (D45, [#126](https://github.com/Lixiang9716/govrail/issues/126))
+- CHANGELOG ↔ HIGHLIGHTS pairing — version-following made mechanical (D37)
+- code design contracts — modular monolith, registry surfaces, self-hosted guardrails
+- conflict-marker gate — git's blind spot becomes a content gate (D38)
+- D57 — four family hubs consolidate the command surface (32 → 22)
+- decision --against alias with stale-base warning; doctor names unadopted shipped gates
+- decision-row tooling for parallel branches — next/add/--base/dir format
+- decision-row tooling for parallel branches — next/add/--base/dir format
+- dual bash and pwsh governance runners, drop the Node runtime
+- encoding= checks ride the check engine — differential proof retires the regex scanner
+- enforceable governance — scoped runs, note-presence, pairing conventions, hooks/CI
+- gov -C <path> targets another worktree without cd
+- gov -C <path> targets another worktree without cd
+- gov init --adopt-new gates.json — additive adoption of new shipped gates (D39)
+- gov init --adopt-new gates.json — additive adoption of new shipped gates (D39)
+- gov init --upgrade — seeing template drift, never writing it (D27)
+- gov note list --stale + release identity closure
+- gov parse — the parse layer as a declared primitive
+- gov task — task cards pin rules@hash for subagent briefs
+- gov task — task cards pin rules@hash for subagent briefs
+- gov update — the migration choreography becomes one command (D58)
+- gov update (D58) + agent hooks + rule 9 + round-15 batch
+- grow-the-plane rule, conditional-stance craft, heartbeat, and CI self-test
+- JSON output on the agent hot paths (gov run / audit-notes / verify-decisions / doctor)
+- JSON output on the hot paths — run gains selected_by/scoped_out, doctor/verify-decisions/audit-notes gain --json
+- links gate, trim-cot-leakage and find-simplifications skills
+- multi-platform agent hooks — codex/copilot/gemini + dialect layer (D60)
+- note-presence exemptions — task receipts by default, manifest note_presence_exempt
+- one-line curl installer for scaffolding verified projects
+- optional pre-commit hook — pairing drift surfaces at commit, not push (D40)
+- optional pre-commit hook — pairing drift surfaces at commit, not push (D41)
+- optional pre-commit hook — pairing drift surfaces at commit, not push (D41)
+- paired installers, installer CI legs, and release-pinned scaffolds
+- pairing sidecar is self-describing — template comments, --write field echo, --explain ([#155](https://github.com/Lixiang9716/govrail/issues/155)) ([d446b2d](https://github.com/Lixiang9716/govrail/commit/d446b2db9bcbd36c995725de376d4fc66e583206)), closes [#150](https://github.com/Lixiang9716/govrail/issues/150)
+- presets — python-lib and docs-bilingual bundles
+- presets — typed adoption bundles (machinery + agent-heavy)
+- recall misses are diagnosable — corpus statement, per-term counts, --any
+- release flow drafts HIGHLIGHTS sections — verify-doc-sync --write (D45)
+- release flow drafts HIGHLIGHTS sections — verify-doc-sync --write (D45)
+- review rubric — judgment gets a structure and a meta-gate
+- rule 8 — wait on conditions, not on clocks
+- rule 9 as a mechanical gate — open cards with unchecked items block the push
+- run --merge — preflight the union of parallel branches before landing
+- self-hosted star history (daily GitHub Actions + SVG chart)
+- self-test classifies FAILs via clean-env replay ([#139](https://github.com/Lixiang9716/govrail/issues/139), D47)
+- self-test classifies FAILs via clean-env replay
+- task claims — lease semantics for parallel workers
+- the adopter wishes — local rejection cases, --json, parallel self-test, surface mapping (D25)
+- the agent skills ship with the plane (gov init injects them)
+- the check engine — syntax-class rules over the parse layer (D57)
+- the govrail router skill — when/when-not judgment for the whole command surface, injected first
+- the memory read side — gov recall and gov audit-notes
+- the README command reference is generated from gov --help
+- the usability round — living specimen, cookbook, whatsnew, reports that point ahead (D31)
+- tree-sitter as a base dependency — the parse layer and gov stats (D54)
+- twin pairs confirm together via script-pairs manifest
+- verifiable run receipts — gov run --receipt + gov receipt verify ([#124](https://github.com/Lixiang9716/govrail/issues/124), D44)
+- verifiable run receipts — gov run --receipt + gov receipt verify
+- vocabulary gate, notes discipline, and twin-probe script pairs
+- wishes 9-14 — decision guard, review dossier, skill drift, trends, noise, orphans (D28)
+- wishes round III — adopt, doctor, note scaffolding, evidence prefetch, strict schema, default recording (D29)
+- wishes round IV — grade mode, pairing round-trip, decision half-life, coverage ledger, dry checks, per-gate trends (D30)
+- --write resolves bare stem and .zh.md side without crashing
+- audit-notes flag registry pinned to each command's real --help surface ([#102](https://github.com/Lixiang9716/govrail/issues/102)) ([d542e3f](https://github.com/Lixiang9716/govrail/commit/d542e3f278acd32c132a5fd9b830ae22cbe62a85)), closes [#101](https://github.com/Lixiang9716/govrail/issues/101)
+- audit-notes summary tells the truth; truncation marker reads in order
+- bare adopt-preview cross-references the drift inventory; version-alignment guard (D35)
+- BOM-tolerant memory plane, check --json stderr report, self-test failure dumps, non-positive window refusals — plus the docker e2e matrix, 98 scenarios (D58)
+- **cli:** hand-roll required subcommands; keep case env off stdlib shadows ([5f2ed54](https://github.com/Lixiang9716/govrail/commit/5f2ed54293303e60f367763704720781863a6501)), closes [#138](https://github.com/Lixiang9716/govrail/issues/138)
+- **cli:** hand-roll required subcommands; keep case env off stdlib shadows
+- close N2 (seal deletion = detector deletion) and harden the new modules per the 0.30.4 red-team
+- close the audited defect report — 47 findings across the plane
+- containment walks the whole state path — the directory variant of the ledger escape, and AGENTS.md stops being written through
+- decision add table-format draft shape — help and validator agree
+- decision add table-format draft shape — help and validator agree
+- drop unused detail parameter from gate outcome line
+- enforce the plane seal out-of-band + the P1/P2 floor
+- every remaining open item from the round-15 audit ledger
+- failure-first gate output — failed evidence is never clipped, failure line names the rerun command
+- failure-first gate output — failed evidence never clipped, failure line names the rerun command
+- gate failures and install friction learn to explain themselves (issue batch [#250](https://github.com/Lixiang9716/govrail/issues/250)/[#251](https://github.com/Lixiang9716/govrail/issues/251)/[#252](https://github.com/Lixiang9716/govrail/issues/252)/[#253](https://github.com/Lixiang9716/govrail/issues/253)/[#257](https://github.com/Lixiang9716/govrail/issues/257)/[#259](https://github.com/Lixiang9716/govrail/issues/259)/[#201](https://github.com/Lixiang9716/govrail/issues/201)/[#200](https://github.com/Lixiang9716/govrail/issues/200))
+- gate reachability — one parking mechanism, and it is loud (D24)
+- gov note new says when a D-ref is left unchecked (rule 5)
+- gov parse names its uncovered files and declares its grammars ([#269](https://github.com/Lixiang9716/govrail/issues/269)/[#270](https://github.com/Lixiang9716/govrail/issues/270))
+- gov whatsnew states the installed wheel and maps version lag ([#92](https://github.com/Lixiang9716/govrail/issues/92) residual)
+- host integrity — three walls around the self-test's scratch fixtures
+- init --preview requires --adopt, and --adopt requires an initialized project
+- init --upgrade/--preview refuse on a project with no manifest
+- leases are created by atomic hard-link — a race CI caught could double-issue a lease; plus e2e batches 53-55, 8 more scenarios
+- **lint:** 69 ruff findings + lint gate-ized into the DAG (post-[#290](https://github.com/Lixiang9716/govrail/issues/290) follow-up)
+- N2 unsealed-plane drift, N3 recorded re-baseline ritual, N4 wider seal, N5 umask
+- N6/N7/N8 — the seal's trust chain closes around --config, stripped constitutions, and single-read ordering
+- pin LF checkout so content-addressed gates hold on Windows
+- pin UTF-8 on self-test's own spawns; thread crashes fail loud
+- pre-push deletion skip, hollow-note rejection, and the check gate joins the default set (D55)
+- publish to PyPI inside the release workflow
+- pwsh port must run the pwsh command variant
+- pytest suite joins the windows CI job — portable fixtures, named skips ([#168](https://github.com/Lixiang9716/govrail/issues/168) follow-up)
+- rebuild the docker helper definition cleanly (docstring + import + call)
+- red-team round 4 — TTL minted at acquisition, staged reads the record's counterpart, the unregistered case runs, and the self-test watchdog
+- red-team round 5 — 3 HIGH + 15 MEDIUM + LOW batch
+- rejection-case budget and the --json purity contract (D26)
+- retrofittable add-ons, customizations named before deletion, Status closed (D22)
+- ritual evidence moves to a tracked ledger (N9)
+- run's output polarity becomes documented contract; the exit-code contract gets its pin (D56 revision)
+- self-test's undeclared-case warning prints the remedy inline
+- six defects found by adversarial end-to-end testing
+- source package version from gov/version.py for release-please
+- state writes refuse symlinks, attribution needs token boundaries, the torn-write sites close, machine contract written (D56)
+- subcommand --help/--version must be side-effect free
+- the check gate judges the change scope, not history — plus its rule-6 rejection case
+- the classifier probe's reproduction proof was vacuously true
+- the containment anchor comes from the process, never from the protected path (N15)
+- the executor honesty round — auto base, root anchoring, partial baselines (D21)
+- the honesty round — enforce what was already promised (D20)
+- the round-15 batch — gov update and gov parse meet their own contracts
+- the seal gets a detector, re-sealing cannot launder, uninstall is two-step (D23)
+- the stale-base wording lands on master — docker scenarios pin the clarified direction; the harness prints tracebacks on scenario failure
+- twin ports are alternatives, not both-required
+- Windows portability — guarded fcntl, portable self-test fixtures, UTF-8 git decode
+- worktrees, hook context, blast radius, and the vacuous-green family ([#15](https://github.com/Lixiang9716/govrail/issues/15)-[#23](https://github.com/Lixiang9716/govrail/issues/23))
+- drop the in-template installers; distribution rides template mechanics
+
 ## 0.42.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - code design contracts — modular monolith, registry surfaces, self-hosted guardrails
