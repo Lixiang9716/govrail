@@ -61,3 +61,23 @@ real wall-clock physics (a lease TTL expiring, a rate-limit window),
 and even then the condition is asserted after the wait. Waiting for CI
 or another process is event-driven: `gh pr checks --watch`,
 `gh run watch --exit-status` — never a blind timed pause.
+
+## 9. A new command ships its discovery surface in the same PR
+
+Adding a user-facing `gov` command (or renaming one) must update, in
+the same PR, the three homes that make it discoverable — each catches
+a different drift, so missing any one is a regression:
+
+- `--help` and the flag registry (`audit_notes.FLAGS`): the registry
+  test enforces both directions — a listed-but-unregistered flag gives
+  false `unknown flag` signals on working invocations, a registered-
+  but-unlisted one silently misses typos;
+- the `govrail` skill's stage table (when to use the command, when not
+  — judgment, not syntax): agents enumerate skills, not help output;
+- the exit-code contract registries
+  (`tests/test_exit_code_contract.py`): a failure leg for every
+  failure-capable command, or an explicit declaration that the command
+  is 0/2-only.
+
+Deprecated aliases are held to the same bar — they stay working through
+the deprecation window, and citations of them are not drift.
