@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.37.1](https://github.com/Lixiang9716/govrail/compare/v0.37.0...v0.37.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* gov parse names its uncovered files and declares its grammars ([#269](https://github.com/Lixiang9716/govrail/issues/269)/[#270](https://github.com/Lixiang9716/govrail/issues/270)) ([#271](https://github.com/Lixiang9716/govrail/issues/271)) ([bf58c89](https://github.com/Lixiang9716/govrail/commit/bf58c8920dfc50e1c1473bbb1a01c60061340829))
+
 ## [0.37.0](https://github.com/Lixiang9716/govrail/compare/v0.36.0...v0.37.0) (2026-09-18)
 
 
