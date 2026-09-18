@@ -21,6 +21,9 @@
     ".gov/rejections/case-doc-sync.sh": {
       "sha256": "ea080053aa91d41c50d7b70b4cad17c22be7ebf8c028fe8ac0101892f91cef0a"
     },
+    ".gov/rejections/case-import-layers.sh": {
+      "sha256": "c6a4591d8407042fdd5f81397f2018ae0cc59e76ccfef972680288eb250031e2"
+    },
     ".gov/rejections/case-note-presence.sh": {
       "sha256": "c79100a9aa14584ed307734021c931abbd632e7e83139c46f06c3f5a8af6bf48"
     },
@@ -39,6 +42,9 @@
     ".gov/rejections/case-self-test.sh": {
       "sha256": "19b9d080e89fd4745048fb6a5f5afab73f45a2a6ee199661dd205c3ada08edd0"
     },
+    ".gov/rejections/case-size-limits.sh": {
+      "sha256": "f8698a414953f03820102f03d470c9f447d1c69846998b68f3bd8cf86f57c9c8"
+    },
     ".gov/rejections/case-source-limits.sh": {
       "sha256": "63a3996468df0b0f55d66820da7df3a04c92db4105cdbd05eaf84a9dd30db426"
     },
@@ -56,7 +62,7 @@
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-18T17:32:53+00:00",
+    "ts": "2026-09-18T19:28:06+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }
