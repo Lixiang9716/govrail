@@ -38,7 +38,7 @@ def test_agent_heavy_bundle_loads():
     assert bundle["description"]
     assert [g["id"] for g in bundle["gates"]] == ["verify-decisions"]
     gate = bundle["gates"][0]
-    assert gate["command"] == ["gov", "verify-decisions"]
+    assert gate["command"] == ["gov", "decision", "verify"]
     assert gate["paths"] == ["docs/decisions.md"]
     assert bundle["modes"] == {"governance": ["verify-decisions"]}
     assert bundle["skills"] == ["parallel-workers"]
@@ -68,8 +68,11 @@ def test_docs_bilingual_bundle_loads():
     assert bundle["name"] == DOCS_BILINGUAL
     assert bundle["description"]
     assert [g["id"] for g in bundle["gates"]] == ["doc-sync"]
-    assert bundle["gates"][0]["command"] == ["gov", "verify-doc-sync"]
-    assert bundle["gates"][0]["paths"] == ["CHANGELOG.md", "HIGHLIGHTS.md"]
+    assert bundle["gates"][0]["command"] == ["gov", "verify", "doc-sync"]
+    # U-16: the paths must cover doc-sync's real read surface (the tool
+    # reads gov/HIGHLIGHTS.md; the config file can relocate it)
+    assert bundle["gates"][0]["paths"] == [
+        "CHANGELOG.md", "gov/HIGHLIGHTS.md", ".gov/docsync.json"]
     assert bundle["modes"] == {"all": ["doc-sync"]}
     assert "skills" not in bundle and "hints" not in bundle
 
@@ -78,7 +81,7 @@ def test_preset_show_prints_the_content_presets_items(capsys):
     for name, gate_ids, commands in (
             (PYTHON_LIB, ("pytest", "build"),
              ("python3 -m pytest -q", "python3 -m build")),
-            (DOCS_BILINGUAL, ("doc-sync",), ("gov verify-doc-sync",))):
+            (DOCS_BILINGUAL, ("doc-sync",), ("gov verify doc-sync",))):
         assert cli.main(["preset", "show", name]) == 0
         out = capsys.readouterr().out
         for gid in gate_ids:
@@ -111,7 +114,7 @@ def test_preset_show_prints_every_item_and_writes_nothing(tmp_path, capsys):
     assert cli.main(["preset", "show", AGENT_HEAVY]) == 0
     out = capsys.readouterr().out
     assert "verify-decisions" in out          # every gate
-    assert "gov verify-decisions" in out      # its command
+    assert "gov decision verify" in out      # its command
     assert "governance" in out                # every mode change
     assert "parallel-workers" in out          # every skill
     assert "note_presence_exempt" in out      # every hint

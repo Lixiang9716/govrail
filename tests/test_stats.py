@@ -302,6 +302,11 @@ def test_parse_walks_directories_and_names_the_uncovered(tmp_path,
 
 
 def test_parse_missing_path_is_named(tmp_path, monkeypatch, capsys):
+    """U-6: an explicit path that does not exist is a caller error
+    (named exit 2) — rc 0 with empty facts is reserved for real
+    zero-match scopes."""
     monkeypatch.chdir(tmp_path)
-    assert stats.parse_main([str(tmp_path / "nope.py")]) == 0
-    assert "no such file" in capsys.readouterr().out
+    assert stats.parse_main([str(tmp_path / "nope.py")]) == 2
+    captured = capsys.readouterr()
+    assert "no such file or directory" in captured.err
+    assert "gov parse: skipped" not in captured.out
