@@ -8,6 +8,14 @@ set -u
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 
+# The gate's checker is ruff; in environments without it (wheel-only
+# installs, minimal containers) the gate itself would report MISSING —
+# this proof skips NAMED, never silently passed.
+if ! command -v ruff >/dev/null 2>&1; then
+  echo "case-lint: SKIP — ruff not installed here; the lint gate would report MISSING"
+  exit 0
+fi
+
 mkdir -p "$scratch/pkg"
 printf 'import os\nx = 1\n' > "$scratch/pkg/bad.py"
 printf 'y = 2\n' > "$scratch/pkg/fine.py"
