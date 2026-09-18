@@ -1,0 +1,8 @@
+{
+  "default": 1600,
+  "scan": [
+    "gov/**/*.py",
+    "scripts/*.py"
+  ],
+  "overrides": {}
+}

@@ -61,3 +61,10 @@
 - **合格证据：** 一条标 已决 的 D 号条目，或一条说明为何无需条目的笔记。
 - **反模式：** 只活在 commit message 里的"已锁定"决策。
 - **Gate candidate:** no —— 什么算设计级是判断。
+
+### R9 — 单体保持模块化
+
+- **查什么：** 新代码落进分层契约——叶不导入 gov 模块、只有入口导入分发器、导入期图不新增环、文件不越过声明的体量预算（`scripts/import-layers.json`、`scripts/size-limits.json`；两门今日仍 advisory）。
+- **合格证据：** diff 上 `gov run --gate import-layers --gate size-limits` 绿；新注册表条目（命令、案例）落进它唯一的家（`gov/commands.py`、`@case`），而不是第二张手工名单。
+- **反模式：** "临时"辅助模块反向导入分发器；影子第二名单与注册表并行生长；某文件悄悄越过 1600 行。
+- **Gate candidate:** yes —— 门已存在；在限额学会自己说话之前，本项是评审者对缝隙的判断（什么*应该*是叶）。

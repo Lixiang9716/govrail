@@ -115,8 +115,8 @@ def main(argv: list[str] | None = None) -> int:
               "— nothing to update (gov init first)", file=sys.stderr)
         return 2
 
-    from . import cli as cli_mod
-    files_out, old_version, _tpl = cli_mod._upgrade_files(root, manifest_path)
+    from . import plane as plane_mod
+    files_out, old_version, _tpl = plane_mod.upgrade_files(root, manifest_path)
     if files_out is None:
         print("gov update: the manifest is unreadable — see "
               "`gov init --upgrade`", file=sys.stderr)
@@ -200,13 +200,13 @@ def main(argv: list[str] | None = None) -> int:
     def _migrate() -> int:
         nonlocal steps_done
         if adoptable:
-            rc = cli_mod._adopt(root, manifest_path, adoptable,
+            rc = plane_mod.adopt_missing(root, manifest_path, adoptable,
                                 preview=False)
             if rc != 0:
                 return rc
         steps_done += 1
         if (root / "gates.json").is_file():
-            rc = cli_mod._adopt_new(root, manifest_path, "gates.json")
+            rc = plane_mod.adopt_new_gates(root, manifest_path, "gates.json")
             if rc != 0:
                 return rc
         steps_done += 1

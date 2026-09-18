@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from gov import cli
+from gov import cli, plane
 
 HERE = Path(__file__).resolve().parent.parent
 TEMPLATE = HERE / "gov" / "templates" / "pre-push"
@@ -39,7 +39,7 @@ def hooked(tmp_path, monkeypatch):
     import subprocess as sp
 
     sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
-    assert cli.init(tmp_path, hooks=True) == 0
+    assert plane.init(tmp_path, hooks=True) == 0
     checkout = ("refs/heads/"
                 + sp.run(["git", "symbolic-ref", "--short", "HEAD"],
                          cwd=tmp_path, check=True, capture_output=True,

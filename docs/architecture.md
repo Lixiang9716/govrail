@@ -254,3 +254,56 @@ inspiration-driven:
 | A convention is enforced by hand a third time | a skill whose description is the trigger |
 | A prose promise becomes mechanically checkable | a new gate in `gates.json` with a rejection test |
 | A non-trivial decision is made | an Agent Note in the same change |
+
+## Code design contracts
+
+The `gov` package is itself a modular monolith, and the pattern is a
+commitment, not an accident — five contracts hold the 16k lines together
+as it grows:
+
+1. **Modular monolith.** One flat package, one module per bounded
+   concern, three layers with no exception: leaf utilities (the exact
+   set is declared in `scripts/import-layers.json` — the gate's config,
+   not this prose, is that list's home) → domain modules (one per
+   command family) → the dispatcher (`cli.py`) on top, imported by
+   declared entrypoints only. The `import-layers` gate judges this graph — leaves stay
+   leaves, nothing reaches up to the dispatcher, and the import-*time*
+   graph stays cycle-free. Function-level lazy imports are the
+   established decoupling device (direction rules still apply to them);
+   they are counted in the gate's summary so they never become
+   invisible.
+2. **Registry-driven surfaces.** Every vocabulary a machine consumes is
+   one table in one home: `gov/commands.py` holds the command panel
+   (`--help` renders it, audit-notes reads it as known-commands, the
+   exit-code contract test walks it as its mother list); self-test
+   cases register via the `@case` decorator — a case is defined, never
+   also hand-listed. A new command touches the registry and the
+   `govrail` skill's stage table, nothing else (rule 9).
+3. **Functional core, imperative shell.** Parsing, validation,
+   selection, and hashing are pure functions of their inputs
+   (`load_config`, `_select_by_paths`, canonical serialization);
+   git, subprocesses, and disk writes live in `main()` and the shell
+   layer only. Testability comes from purity, not from an injection
+   framework.
+4. **Data-driven extension.** New capability first answers "can this be
+   data?" — gates are commands in `gates.json`, typed starters are
+   preset bundles, language facts are packs (`gov/langs/`,
+   `gov/checks/`). D53's decision scales: mechanisms are few, data is
+   the extension path.
+5. **Self-hosted guardrails.** The plane eats its own cooking: the
+   `import-layers` and `size-limits` gates read declared limits
+   (`scripts/import-layers.json`, `scripts/size-limits.json`) and turn
+   "no runaway monolith" from review hope into a checked fact (#265's
+   shape — a size gate is declared limits plus the facts `gov
+   parse`/`gov stats` already produce).
+
+Explicitly **not** adopted, with the reasons on record: a plugin
+framework or entry-points (D53 chose data bundles; install-time plugins
+break the one `pip install` + `gov init` model); an abstract `Gate`
+base class (gates are external commands — polymorphism already lives in
+the command slot); a DI container (function arguments are injection at
+this scale); an internal event bus (the state layer's append-only
+hash-chained ledgers are already event sourcing); hexagonal ceremony
+(the two-plane split — governance machinery vs product code, connected
+through the `gates.json` command slot — is the ports-and-adapters
+boundary, realized at the product level where it earns its keep).

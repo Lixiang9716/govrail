@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from gov import cli
+from gov import cli, plane
 
 
 def _repo(root):
@@ -58,7 +58,7 @@ def test_local_d_ref_still_validated(tmp_path, monkeypatch, capsys):
 
 def test_manifest_records_template_hashes(tmp_path):
     _repo(tmp_path)
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text(encoding="utf-8"))
     hashes = manifest.get("templates", {})
     assert ".gov/rules.md" in hashes

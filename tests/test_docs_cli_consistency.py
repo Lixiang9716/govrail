@@ -1,7 +1,7 @@
 """Docs ↔ CLI consistency — the command reference cannot drift again.
 
 The README's command block is GENERATED from `gov --help` (one truth:
-the descriptions live in gov/cli.py). These tests turn every drift red
+the descriptions live in gov/commands.py). These tests turn every drift red
 in CI: a stale block, a doc citing a command/subcommand/flag that does
 not exist, a help description whose subcommand list lags the parser,
 or the Chinese README referencing commands the surface no longer has.
@@ -19,7 +19,7 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 from gov import audit_notes as an  # noqa: E402
-from gov import cli  # noqa: E402
+from gov import cli, commands  # noqa: E402
 
 README = REPO / "README.md"
 BEGIN = "<!-- gov:commands BEGIN"
@@ -79,7 +79,7 @@ def test_docs_cite_only_real_commands_flags_and_subcommands():
     # D57 Wave 1: absorbed commands remain REAL (deprecated aliases with
     # identical behavior) — citations of them are valid until Wave 2
     # flips the docs and retires the aliases.
-    commands = set(cli._COMMANDS) | set(cli._DEPRECATED_ALIASES)
+    known = set(commands.COMMANDS) | set(commands.DEPRECATED_ALIASES)
     problems = []
     for rel in DOCS:
         text = (REPO / rel).read_text(encoding="utf-8")
@@ -87,7 +87,7 @@ def test_docs_cite_only_real_commands_flags_and_subcommands():
             cmd, rest = m.group(1), m.group(2)
             line = text[:m.start()].count("\n") + 1
             where = f"{rel}:{line}"
-            if cmd not in commands:
+            if cmd not in known:
                 problems.append(f"{where}: unknown command `gov {cmd}`")
                 continue
             toks = rest.split()
@@ -109,13 +109,13 @@ def test_help_descriptions_list_the_real_subcommands():
     "(new/check)" for two releases after list/show landed; the machine
     catches what the reviewer cannot be expected to count."""
     for cmd, subs in SUBS.items():
-        desc = cli._COMMANDS[cmd]
+        desc = commands.COMMANDS[cmd]
         # every subcommand word must appear in the one-line description
         claimed_words = {w for w in SUB_WORDS if re.search(rf"\b{w}\b", desc)}
         missing = subs - claimed_words
         assert not missing, (
             f"`gov --help`'s {cmd} line omits subcommand(s) "
-            f"{sorted(missing)} — update cli._COMMANDS, then run "
+            f"{sorted(missing)} — update commands.COMMANDS, then run "
             "scripts/update_readme_commands.py")
 
 

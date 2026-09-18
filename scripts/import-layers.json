@@ -1,0 +1,20 @@
+{
+  "package": "gov",
+  "leaves": [
+    "anchor",
+    "atomicio",
+    "commands",
+    "gitutil",
+    "lockfile",
+    "pathmatch",
+    "root",
+    "version",
+    "whatsnew"
+  ],
+  "top": [
+    "cli"
+  ],
+  "cli_importers_allowed": [
+    "__main__"
+  ]
+}

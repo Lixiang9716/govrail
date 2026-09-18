@@ -68,3 +68,10 @@ its bilingual pair.
 - **Evidence:** a D-numbered entry marked 已决 (decided), or a note explaining why no entry was needed.
 - **Anti-pattern:** a locked-looking decision living only in a commit message.
 - **Gate candidate:** no — what counts as design-level is judgment.
+
+### R9 — The monolith stays modular
+
+- **Checks:** new code lands in the layering contract — leaves import no gov module, only entrypoints import the dispatcher, the import-time graph gains no cycle, and files stay within their declared size budgets (`scripts/import-layers.json`, `scripts/size-limits.json`; both gates advisory today).
+- **Evidence:** `gov run --gate import-layers --gate size-limits` green on the diff; a new registry entry (command, case) landed in its one home (`gov/commands.py`, `@case`) instead of a second list.
+- **Anti-pattern:** a "temporary" helper module importing the dispatcher; a second hand-maintained list shadowing a registry; a file quietly crossing 1600 lines.
+- **Gate candidate:** yes — the gates exist; this item is the reviewer's judgment on the seams (what *should* be a leaf) until the limits learn to say so.

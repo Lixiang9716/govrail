@@ -4,7 +4,7 @@
 The README block between the BEGIN/END markers is GENERATED from the
 CLI's own help output (pinned to COLUMNS=80 so the render is identical
 on every machine and in CI). Edit the CLI's descriptions in
-gov/cli.py, then run this script; never edit the block by hand. The
+gov/commands.py, then run this script; never edit the block by hand. The
 consistency test (tests/test_docs_cli_consistency.py) turns a stale
 block red in CI.
 """
