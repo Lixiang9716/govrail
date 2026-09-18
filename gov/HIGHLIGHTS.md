@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.38.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- gov update — the migration choreography becomes one command (D58)
+
 ## 0.37.1 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - gov parse names its uncovered files and declares its grammars ([#269](https://github.com/Lixiang9716/govrail/issues/269)/[#270](https://github.com/Lixiang9716/govrail/issues/270))
