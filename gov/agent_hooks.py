@@ -148,6 +148,15 @@ def main(argv: list[str] | None = None) -> int:
         event = sys.argv[1] if len(sys.argv) > 1 else ""
         argv = [event]
     event = argv[0]
+    if event in ("-h", "--help"):
+        print("usage: gov agent-hooks <event>")
+        print("agent lifecycle hooks — govrail's presence at every point "
+              "of the agent's workflow")
+        print("events: session-start, pre-tool-use, post-tool-use, "
+              "user-prompt-submit, stop")
+        print("reads JSON on stdin from the agent framework; outputs JSON "
+              "to control the agent")
+        return 0
     handler = HANDLERS.get(event)
     if handler is None:
         print(f"gov hooks: unknown event '{event}' "

@@ -135,8 +135,9 @@ commands:
   run              run the project's gate DAG (args forwarded to gates.py; --receipt records a tamper-evident run receipt, #124; --merge preflights the union of parallel branches in a scratch worktree before landing)
   self-test        run governance rejection cases
   receipt          verifiable run receipts (verify/show): verify a cited receipt against a commit (issue #124/D42)
-  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
+  agent-hooks      agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop — govrail's presence at every point of the agent's workflow)
   verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
+  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
   doctor           environment self-check (PATH, python, hooks, gates schema)
   note             note scaffold, read side, and the notes gates (new/check/list/show/verify/presence/audit/archive/archive-verify; list --stale marks audit signals)
   decision         decision-row tooling (next/add/verify: next free D-number; atomic validated add; table structure guard)
