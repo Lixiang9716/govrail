@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.36.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- D57 — four family hubs consolidate the command surface (32 → 22)
+
 ## 0.35.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - the govrail router skill — when/when-not judgment for the whole command surface, injected first
