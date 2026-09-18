@@ -1157,8 +1157,9 @@ _COMMANDS = {
     "self-test": "run governance rejection cases",
     "receipt": "verifiable run receipts (verify/show): verify a cited "
                "receipt against a commit (issue #124/D42)",
-    "hooks": "agent lifecycle hooks (session-start/pre-tool-use/"
-             "post-tool-use/stop — govrail's presence at every point)",
+    "agent-hooks": "agent lifecycle hooks (session-start/pre-tool-use/"
+                   "post-tool-use/user-prompt-submit/stop — govrail's "
+                   "presence at every point of the agent's workflow)",
     "verify-plane": "tamper-evidence for the plane's own config "
                     "(rules.md, gates.json, pairing/decisions/surfaces, "
                     ".gov/rejections/**; --write re-baselines — interactive "

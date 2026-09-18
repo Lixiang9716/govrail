@@ -20,7 +20,6 @@ event from the moment `gov init` installs the hooks config.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -99,7 +98,6 @@ def handle_pre_tool_use(payload: dict) -> None:
     root = _governed(payload)
     if root is None:
         return
-    tool = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {})
     command = ""
     if isinstance(tool_input, dict):
