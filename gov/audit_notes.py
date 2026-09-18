@@ -87,6 +87,7 @@ FLAGS: dict[str, set[str]] = {
     "trend": {"--last", "--gate", "--base", "--by-tag", "--cost", "--stats"},
     "stats": {"--lang", "--record", "--json"},
     "check": {"--lang", "--strict", "--record", "--json", "--base", "--all"},
+    "parse": {"--json", "--lang"},
     "doctor": {"--json"},
     "whatsnew": {"--since"},
     "recall": {"--any", "--snippet"},

@@ -1100,6 +1100,9 @@ _COMMANDS = {
     "check": "syntax-class static checks over the parse layer (shipped + "
              ".gov/checks/ rules; suppressions counted; --strict makes "
              "warnings block)",
+    "parse": "per-file structure facts from the parse layer (function "
+             "spans, line counts, nesting depth) — facts, not verdicts; "
+             "the primitive a size/complexity gate reads (#265)",
     "review": "assemble the review dossier for a diff (scope, notes, recall, rubric)",
     "trend": "gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)",
     "stats": "structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger",
@@ -1390,6 +1393,8 @@ def main(argv: list[str] | None = None) -> int:
         return stats.main(rest)
     if cmd == "check":
         return checks.main(rest)
+    if cmd == "parse":
+        return stats.parse_main(rest)
     if cmd == "doctor":
         return doctor.main(rest)
     if cmd == "note":
