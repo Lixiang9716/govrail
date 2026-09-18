@@ -244,7 +244,7 @@ FAILURE_LEGS = {
 # busy lease is 3, refusals are 2, and it has no failure verdict.
 NEVER_ONE_HERE = {
     "init", "self-test", "hooks", "lease", "trend", "stats", "whatsnew",
-    "change-scope", "preset", "parse",
+    "change-scope", "preset", "parse", "update",
 }
 
 

@@ -97,6 +97,7 @@ FLAGS: dict[str, set[str]] = {
     "task": {"--check", "--rules", "--mode", "--timeout",
              "--agent", "--ttl", "--wait", "--json", "--force"},  # across subcommands; --agent/--force on close
     "preset": {"--project"},  # on the `apply` subcommand (list/show are flagless)
+    "update": {"--apply", "--confirm-unattended"},
     "acquire": {"--agent", "--ttl", "--wait"},
     "release": {"--agent"},
     "locks": set(),

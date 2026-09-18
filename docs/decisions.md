@@ -481,3 +481,12 @@
 - **状态**：已决
 - **决定**：(b)，三波迁移。**Wave 1（本次）**：四个 hub 上线，13 个被吸收命令保留为**弃用别名**——行为不变、stderr 一行弃用提示、`audit-notes` 的 known-commands 并入别名集（引用旧名的笔记不算死命令）、D56 登记表保留旧键；模板/根/demo gates.json 的门命令翻到新形式并重封 seal；当前文档对（CONTRIBUTING/adoption/cookbook/architecture/review-rubric/truth-sources/i18n-README/AGENTS/skills）同步翻转并重确认配对；**历史 notes 与 decisions/CHANGELOG/HIGHLIGHTS 不改写**——它们是有日期的记录，不是当前文档。**Wave 2**：文档全量翻转已随 Wave 1 完成；别名在两个 minor 后下线（下线前 print 弃用行已满一个窗口）。`verify-notes` 是无旗标命令，曾对未知旗标回绿裁决——退出码契约测试抓出后同轮修正（未知旗标 → 点名 exit 2，CLI 与脚本两条路径都覆盖）。
 - **被否**：(a) 维持现状——路由 skill 解决的是"发现"，解决不了"同一族两个命名法"的词汇分裂；(c) 全部收进 `gov verify`——`gov note verify`（notes 门）与 `gov verify rubric`（量规门）分属两个家族，统一院子反而制造"同一族两个门面"；**直接删除旧名**——采用者的 gates.json、脚本、笔记引用的是旧词汇，破坏性变更没有消费者署名就不做。
+
+
+## D58 — `gov update`：迁移的显式入口（#259 建议二的兑现）
+
+- **问题**：plane 迁移是五个散命令的手工编排——`init --upgrade`（报告）→ `init --adopt`（落模板）→ `init --adopt-new gates.json`（并新门）→ `verify-plane --write`（重封，仪式）→ 手改 workflow 的版本 pin。#259 的原始诉求就是"一条显式、有记录的步骤"；dsh-mobile 的实际迁移（人工执行，govrail 仓库侧代跑）证明步骤清单固定且机械，适合命令化。而 CI pin 是唯一的死结：`_install_ci` 文件存在即跳过，pin 必然随时间腐化（0.29.4 事故的根源）。
+- **选项**：(a) 维持手工五步 + 文档；(b) 顶层 `gov update`（干跑默认、--apply 执行、--confirm-unattended 供仪式）；(c) `init --upgrade --apply`（挂在 init 名下）
+- **状态**：已决
+- **决定**：(b)。**前置硬门（任何变更之前全部通过）**：git 仓库；tracked 文件零未提交改动（`--untracked-files=no` 的 porcelain——update 自身的变更必须可独立评审）；`.gov/manifest.json` 存在；仪式同意（交互 TTY 或 `--confirm-unattended`）。**步骤**（全为既有件的编排，零新机制）：分类采纳（missing + upstream-moved，定制文件永不触碰——_adopt 自身的守卫是第二道锁）→ adopt-new 门合并（加性按 id，schema 校验后才落）→ CI pin 行级刷新（只重写匹配 `pip install govrail...` 的 run 行，自定义注释/结构保留；无该行则点名跳过）→ `.gitignore` 补 history 行（symlink 拒写，N13）→ manifest 版本对齐 → seal 重基线（仪式，入 tracked 台账）→ `whatsnew --since <旧版本>` → 收尾"commit now"。**干跑是默认**：无 `--apply` 只打印计划零写入；--help/--lang 式极性遵 D56。**与 D57 的关系**：update 是迁移的编排入口；D57 的命令面收敛是它编排的词汇。`verify-notes` 未知旗标拒绝（#256）的教训同步适用：update 的 passthrough 一律显式声明+显式转发。
+- **被否**：(a) 维持手工五步——#259 的原始场景（"CI breaks mysteriously"）正是五步没走的结果，文档里的五步等于没写；(c) 挂 init 名下——迁移跨 init/seal/CI 三个域，挂单一域会撒谎；`init --upgrade` 保持只读报告的承诺不动。**翻转整个命令族的输出极性**（若未来有消费者署名）——走 D56 变更记录，不搭车。

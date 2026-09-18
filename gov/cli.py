@@ -709,6 +709,55 @@ def _adopt_new(project: Path, manifest_path: Path, target: str) -> int:
     return 0
 
 
+def _upgrade_files(project: Path, manifest_path: Path):
+    """The per-file drift classification the upgrade report renders:
+    (files_out, init_version, tpl_paths) — files_out carries
+    {path, status, era, adoptable}; tpl_paths maps rel → the template
+    file backing it (relocations like .gov/rules.md ← rules.md are
+    _inventory's knowledge). ``None`` when the manifest is corrupt (the
+    caller names it). gov update consumes the classification to adopt
+    exactly the safe files (missing + upstream-moved)."""
+    import hashlib
+
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None, None
+    created = set(data.get("created", []))
+    init_version = data.get("version", "unknown")
+    recorded = data.get("templates", {})
+    expected = _inventory(created)
+    opt_in = {".gov/hooks/pre-push", ".gov/hooks/pre-commit"}
+    files_out = []
+    tpl_paths: dict[str, Path] = {}
+    for rel, tpl in expected:
+        local = project / rel
+        if not local.exists():
+            status = "absent-add-on" if rel in opt_in else "missing"
+        elif local.read_bytes() == tpl.read_bytes():
+            status = "matches"
+        else:
+            status = "differs"
+        era = None
+        if status == "differs":
+            local_h = hashlib.sha256((project / rel).read_bytes()).hexdigest()
+            adopted_h = recorded.get(rel)
+            if adopted_h is None:
+                era = "ambiguous"
+            elif local_h == adopted_h:
+                era = "upstream-moved"
+            else:
+                era = "both-moved"
+        files_out.append({
+            "path": rel,
+            "status": status,
+            "era": era,
+            "adoptable": status == "missing" or era == "upstream-moved",
+        })
+        tpl_paths[rel] = tpl
+    return files_out, init_version, tpl_paths
+
+
 def _upgrade_report(project: Path, manifest_path: Path,
                     json_mode: bool = False) -> int:
     """Wish 8/D27: show how the shipped templates and this project drifted.
@@ -719,70 +768,38 @@ def _upgrade_report(project: Path, manifest_path: Path,
     """
     import difflib
 
-    try:
-        data = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"init: corrupt manifest {manifest_path}: {e}", file=sys.stderr)
+    classified, init_version, tpl_paths = _upgrade_files(
+        project, manifest_path)
+    if classified is None:
+        print(f"init: corrupt manifest {manifest_path}: cannot classify",
+              file=sys.stderr)
         return 2
-    created = set(data.get("created", []))
-    init_version = data.get("version", "unknown")
-    recorded = data.get("templates", {})  # adopted hashes (D34); BOTH eras read it
-
-    expected = _inventory(created)
-
     current: list[str] = []
     missing: list[str] = []
-    differing: list[tuple[str, Any]] = []
-    opt_in = {".gov/hooks/pre-push", ".gov/hooks/pre-commit"}  # add-ons, not always-injected
-    for rel, tpl in expected:
-        local = project / rel
-        if not local.exists():
-            if rel in opt_in:
-                continue  # absent add-on is not drift
+    differing: list[tuple[str, Path]] = []
+    for f in classified:
+        rel, local = f["path"], project / f["path"]
+        if f["status"] == "absent-add-on":
+            continue  # absent add-on is not drift
+        if f["status"] == "missing":
             missing.append(rel)
             continue
         try:
-            if local.read_bytes() == tpl.read_bytes():
-                current.append(rel)
-            else:
-                differing.append((rel, tpl))
+            matches = local.read_bytes() == tpl_paths[f["path"]].read_bytes()
         except OSError:
-            differing.append((rel, tpl))
+            matches = False
+        if matches:
+            current.append(rel)
+        else:
+            differing.append((rel, tpl_paths[f["path"]]))
 
     if json_mode:
         # Wish 6c/D30: machine-readable drift — an agent decides adoptions
         # programmatically (stdout is exactly one JSON value).
-        opt_in = {".gov/hooks/pre-push", ".gov/hooks/pre-commit"}
-        files_out = []
-        for rel, tpl in expected:
-            local = project / rel
-            if not local.exists():
-                status = "absent-add-on" if rel in opt_in else "missing"
-            elif local.read_bytes() == tpl.read_bytes():
-                status = "matches"
-            else:
-                status = "differs"
-            era = None
-            if status == "differs":
-                import hashlib
-                local_h = hashlib.sha256((project / rel).read_bytes()).hexdigest()
-                adopted_h = recorded.get(rel)
-                if adopted_h is None:
-                    era = "ambiguous"
-                elif local_h == adopted_h:
-                    era = "upstream-moved"
-                else:
-                    era = "both-moved"
-            files_out.append({
-                "path": rel,
-                "status": status,
-                "era": era,
-                "adoptable": status == "missing" or era == "upstream-moved",
-            })
         print(json.dumps({
             "initialized_with": init_version,
             "package": __version__,
-            "files": files_out,
+            "files": classified,
         }, indent=2))
         return 0
     print(f"init: upgrade report for {project} — nothing is changed by this report")
@@ -795,6 +812,8 @@ def _upgrade_report(project: Path, manifest_path: Path,
     for rel in missing:
         print(f"  {rel:<40} MISSING — adoptable: gov init --adopt {rel}")
     import hashlib
+    recorded = json.loads(
+        manifest_path.read_text(encoding="utf-8")).get("templates", {})
     for rel, tpl in differing:
         local_b = (project / rel).read_bytes()
         local_h = hashlib.sha256(local_b).hexdigest()
@@ -1115,6 +1134,10 @@ _COMMANDS = {
     "preset": "typed adoption bundles (list/show/apply): a project type's "
               "gates, skills, and manifest hints — additive, never "
               "overwriting (D53)",
+    "update": "one deliberate migration step: adopt missing/moved "
+              "templates, merge newly shipped gates, refresh the CI pin, "
+              "re-seal the plane (dry run by default; --apply executes; "
+              "the seal needs --confirm-unattended or a TTY)",
 }
 
 
@@ -1354,6 +1377,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2 if parsed is None else uninstall(parsed[0], force=parsed[3])
     if cmd == "preset":
         return presets.main(rest)
+    if cmd == "update":
+        from . import update
+        return update.main(rest)
     if cmd == "run":
         return gates.main(rest)
     if cmd == "receipt":

@@ -152,6 +152,7 @@ commands:
   change-scope     report touched surfaces (e.g. --base <ref>)
   task             task cards for subagent briefs (new/check/close/claim/release/list; rules@hash pin + checklist + green-run receipt; claim/release lease a card so two workers cannot take one)
   preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
+  update           one deliberate migration step: adopt missing/moved templates, merge newly shipped gates, refresh the CI pin, re-seal the plane (dry run by default; --apply executes; the seal needs --confirm-unattended or a TTY)
 ```
 <!-- gov:commands END -->
 
