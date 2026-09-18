@@ -35,6 +35,12 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   changes nothing. Use `--adopt` when a report says UPSTREAM MOVED and
   you want the new template; do NOT use it to paper over a real
   customization.
+- `gov update --apply` — one deliberate migration step (adopt missing/
+  moved templates + merge newly shipped gates + refresh the CI pin +
+  re-seal). Dry run by default; use it when `gov init --upgrade`
+  reports MISSING/UPSTREAM MOVED files or the workflow pin is stale.
+  Not on a dirty worktree, and the seal step needs consent (TTY or
+  `--confirm-unattended`).
 - `gov init --preset <name>` — typed starters. Only when the project
   matches the preset's type; presets never load themselves.
 - `gov uninstall --force` — reverse init. `--force` is for customized
