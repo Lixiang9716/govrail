@@ -268,7 +268,8 @@ def iter_files(root: Path, pack: LangPack) -> Iterator[tuple[Path, bytes]]:
         try:
             yield p, p.read_bytes()
         except OSError as e:
-            print(f"gov stats: cannot read {p}: {e}", file=sys.stderr)
+            print(f"gov parse/stats: cannot read {p}: {e}",
+                  file=sys.stderr)
 
 
 def grammar_version(pack: LangPack) -> str | None:

@@ -1370,7 +1370,8 @@ def main(argv: list[str] | None = None) -> int:
         # D57 Wave 1: absorbed commands keep working — same behavior,
         # one deprecation line, and the alias dies after the window.
         new = _DEPRECATED_ALIASES[cmd]
-        print(f"gov: '{cmd}' is deprecated — use 'gov {' '.join(new)}'",
+        print(f"gov: '{cmd}' is deprecated — use 'gov {' '.join(new)}' "
+              "(removal targeted for 0.40; the alias works until then)",
               file=sys.stderr)
         cmd, rest = new[0], [*new[1:], *rest]
 
@@ -1417,7 +1418,7 @@ def main(argv: list[str] | None = None) -> int:
                "conflict-markers": verify_conflict_markers,
                "doc-sync": verify_doc_sync}
         sub = rest[0] if rest else ""
-        if sub in ("-h", "--help") or not rest:
+        if sub in ("-h", "--help"):
             print("usage: gov verify <target> [flags]")
             print("content gates without a family hub:")
             for name, help_text in (
@@ -1430,7 +1431,11 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {name:<20} {help_text}")
             return 0
         if sub not in hub:
-            print(f"gov verify: unknown target '{sub}' (known: "
+            # bare invocation AND unknown target are both usage errors:
+            # siblings (note/decision/lease) exit 2 on a missing/unknown
+            # subcommand — this hub must not be the quiet one (P2)
+            print("usage: gov verify <target> [flags]", file=sys.stderr)
+            print(f"gov verify: unknown target '{sub or '(bare)'}' (known: "
                   f"{', '.join(sorted(hub))})", file=sys.stderr)
             return 2
         return hub[sub].main(rest[1:])

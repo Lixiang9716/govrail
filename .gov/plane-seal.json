@@ -43,14 +43,14 @@
       "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
     },
     ".gov/rules.md": {
-      "sha256": "701d5e27c980a1080c5849f922fc217b2e22ae5def058293ebbe8bbf81a5911a"
+      "sha256": "7559a98f36b7f34f06b03cee6c6665d10eaeaa76691eb15aac3456b7bee5b61b"
     },
     "gates.json": {
       "sha256": "c07f513d7c58354ff6a833e59b2462f88ac9592926ef46cc951069d63982a225"
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-18T11:20:10+00:00",
+    "ts": "2026-09-18T12:18:50+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }

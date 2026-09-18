@@ -357,7 +357,9 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
-        parser.error("a subcommand is required (new|check|list|show)")
+        parser.error("a subcommand is required "
+                     "(new|check|list|show|verify|presence|audit|archive|"
+                     "archive-verify)")
     return args.func(args)
 
 
