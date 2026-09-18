@@ -909,6 +909,39 @@ def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
             print("init: created .github/workflows/gov.yml (CI runs gov run)")
         # _install_ci itself reports the already-exists case.
 
+    # Agent hooks: govrail's lifecycle events wired into the agent
+    # framework (Claude Code's PreToolUse / SessionStart / Stop etc.),
+    # so the plane has a presence at every point of the agent's
+    # workflow — not just at push time.
+    hooks_settings = project / ".claude" / "settings.json"
+    if not hooks_settings.is_file():
+        hooks_settings.parent.mkdir(parents=True, exist_ok=True)
+        hooks_settings.write_text(json.dumps({
+            "hooks": {
+                "SessionStart": [
+                    {"hooks": [{"type": "command",
+                                "command": "gov agent-hooks session-start"}]}
+                ],
+                "PreToolUse": [
+                    {"hooks": [{"type": "command",
+                                "command": "gov agent-hooks pre-tool-use"}]}
+                ],
+                "PostToolUse": [
+                    {"hooks": [{"type": "command",
+                                "command": "gov agent-hooks post-tool-use"}]}
+                ],
+                "UserPromptSubmit": [
+                    {"hooks": [{"type": "command",
+                                "command": "gov agent-hooks user-prompt-submit"}]}
+                ],
+                "Stop": [
+                    {"hooks": [{"type": "command",
+                                "command": "gov agent-hooks stop"}]}
+                ],
+            }
+        }, indent=2) + "\n", encoding="utf-8")
+        created.append(".claude/settings.json (agent hooks)")
+
     # Merge, not rebuild: the manifest's other keys (notably "templates",
     # the adoption-hash record `init --adopt` writes, D34) must survive an
     # add-on retrofit — the old three-key rewrite silently dropped them,
@@ -1124,6 +1157,8 @@ _COMMANDS = {
     "self-test": "run governance rejection cases",
     "receipt": "verifiable run receipts (verify/show): verify a cited "
                "receipt against a commit (issue #124/D42)",
+    "hooks": "agent lifecycle hooks (session-start/pre-tool-use/"
+             "post-tool-use/stop — govrail's presence at every point)",
     "verify-plane": "tamper-evidence for the plane's own config "
                     "(rules.md, gates.json, pairing/decisions/surfaces, "
                     ".gov/rejections/**; --write re-baselines — interactive "
@@ -1481,6 +1516,9 @@ def main(argv: list[str] | None = None) -> int:
         return task.main(rest)
     if cmd == "hooks":
         return hookcmd.main(rest)
+    if cmd == "agent-hooks":
+        from . import agent_hooks
+        return agent_hooks.main(rest)
     if cmd == "verify-plane":
         return verify_plane.main(rest)
     print(f"gov: unknown command '{cmd}'", file=sys.stderr)
