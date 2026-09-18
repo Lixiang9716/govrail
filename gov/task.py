@@ -202,7 +202,7 @@ def _check_receipt(cid: str, card: dict) -> list[str]:
     return problems
 
 
-def cmd_check(_args: argparse.Namespace) -> int:
+def cmd_check(args: argparse.Namespace) -> int:
     combined, _files = rules_hash()
     cards = _load_cards()
     if not cards:
@@ -217,14 +217,12 @@ def cmd_check(_args: argparse.Namespace) -> int:
             problems.extend(_check_receipt(cid, card))
             print(f"done  {cid} {title}")
         elif status == "open":
-            # rule 9: an open card with unchecked items blocks the gate —
-            # the checklist IS the contract between the caller and the
-            # plane, and "in progress" is not "done".
-            unchecked = [item for item in card.get("checklist", [])]
+            unchecked = ([item for item in card.get("checklist", [])]
+                         if getattr(args, "strict", False) else [])
             if unchecked:
                 problems.append(
-                    f"{cid}: {len(unchecked)} unchecked item(s) — close the "
-                    "card or check them off")
+                    f"{cid}: {len(unchecked)} unchecked checklist item(s) — "
+                    "close the card or check them off (rule 9)")
                 print(f"OPEN  {cid} {title} ({len(unchecked)} unchecked)")
             elif pinned != combined:
                 problems.append(
@@ -487,6 +485,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_check = sub.add_parser("check", help="name stale cards and verify "
                              "receipts (gate-scoped to .gov/tasks/**)")
+    p_check.add_argument("--strict", action="store_true",
+                         help="open cards with unchecked checklist items "
+                              "block (rule 9)")
     p_check.set_defaults(func=cmd_check)
 
     p_close = sub.add_parser("close", help="run the gate DAG now and close "

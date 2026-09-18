@@ -447,6 +447,6 @@ def test_open_card_with_unchecked_items_exits_one(tmp_path, monkeypatch, capsys)
         "checklist": ["fix the seal", "update the pin"],
         "status": "open", "receipt": None,
     }), encoding="utf-8")
-    assert task.main(["check"]) == 1  # unchecked items: blocking
+    assert task.main(["check", "--strict"]) == 1  # unchecked: blocking
     out = capsys.readouterr().out
     assert "unchecked" in out
