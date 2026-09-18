@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "name": "govrail-session-start",
+            "type": "command",
+            "command": "gov agent-hooks session-start --dialect gemini",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "BeforeAgent": [
+      {
+        "hooks": [
+          {
+            "name": "govrail-user-prompt",
+            "type": "command",
+            "command": "gov agent-hooks user-prompt-submit --dialect gemini",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "hooks": [
+          {
+            "name": "govrail-pre-tool-use",
+            "type": "command",
+            "command": "gov agent-hooks pre-tool-use --dialect gemini",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "hooks": [
+          {
+            "name": "govrail-post-tool-use",
+            "type": "command",
+            "command": "gov agent-hooks post-tool-use --dialect gemini",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "hooks": [
+          {
+            "name": "govrail-stop",
+            "type": "command",
+            "command": "gov agent-hooks stop --dialect gemini",
+            "timeout": 30000
+          }
+        ]
+      }
+    ]
+  }
+}

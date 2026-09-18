@@ -46,6 +46,16 @@ HOOK_MARKER = "# govrail:"
 # create-if-missing, never overwriting a project's own skill.
 SKILLS = ("govrail", "recall-first", "pre-push-checks", "code-review",
           "archive-agent-notes")
+# D60: agent platforms `--platforms` can select — one installed hook
+# config and one shipped template each, all wiring the same five
+# `gov agent-hooks` events in the platform's own protocol. Order is the
+# help/report order; `all` means every entry.
+PLATFORM_TARGETS: dict[str, tuple[str, str]] = {
+    "claude": (".claude/settings.json", "claude-settings.json"),
+    "codex": (".codex/hooks.json", "codex-hooks.json"),
+    "copilot": (".github/hooks/govrail.json", "copilot-hooks.json"),
+    "gemini": (".gemini/settings.json", "gemini-settings.json"),
+}
 
 
 def _atomic_write(dest: Path, data: bytes) -> None:
@@ -186,11 +196,43 @@ def _install_ci(project: Path, created: list[str]) -> None:
     created.append(".github/workflows/gov.yml")
 
 
+def _install_platform(project: Path, name: str, created: list[str]) -> None:
+    """Write one platform's agent-hook config, create-if-missing (D60).
+
+    Same contract as every template install: an existing file is the
+    adopter's territory — named skip, never merged. Codex additionally
+    needs its one-time trust step named at install time: it hash-trusts
+    each hook and silently skips untrusted ones, so an install that
+    didn't say so would be a silent no-op for that platform.
+    """
+    rel, tpl_name = PLATFORM_TARGETS[name]
+    dest = project / rel
+    if dest.exists():
+        print(f"init: {rel} already exists; leaving it untouched — merge "
+              "the gov agent-hooks events in by hand (gov agent-hooks "
+              "--help lists them)")
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    atomicio.write_bytes(dest, TEMPLATES.joinpath(tpl_name).read_bytes())
+    created.append(rel)
+    note = {
+        "codex": " — review and trust it in codex via /hooks "
+                 "(untrusted hooks are skipped)",
+        "gemini": " (Gemini CLI shows a one-time trust confirm for "
+                  "project hooks)",
+        "copilot": " (GitHub Copilot CLI / VS Code agent hooks)",
+    }.get(name, "")
+    print(f"init: created {rel} ({name} agent lifecycle hooks: "
+          f"session-start/pre-tool-use/post-tool-use/"
+          f"user-prompt-submit/stop){note}")
+
+
 def init(project: Path, hooks: bool = False, ci: bool = False,
          upgrade: bool = False, adopt: list[str] | None = None,
          report_json: bool = False, preview: bool = False,
          adopt_new: str | None = None, pre_commit: bool = False,
-         preset: str | None = None) -> int:
+         preset: str | None = None,
+         platforms: list[str] | None = None) -> int:
     project = project.resolve()
     if not project.is_dir():
         print(f"init: {project} is not a directory", file=sys.stderr)
@@ -263,7 +305,7 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
             return _adopt(project, manifest_path, adopt, preview=preview)
         if upgrade:
             return _upgrade_report(project, manifest_path, json_mode=report_json)
-        if not (hooks or ci):
+        if not (hooks or ci or platforms):
             print(f"init: {project} is already initialized")
             if preset is not None:
                 # Retrofitting a preset onto an initialized project: same
@@ -271,7 +313,7 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
                 return presets.apply(project, preset)
             return 0
         rc = _add_ons(project, manifest_path, hooks, ci,  # F5: retrofit path
-                      pre_commit=pre_commit)
+                      pre_commit=pre_commit, platforms=platforms)
         if rc == 0 and preset is not None:
             rc = presets.apply(project, preset)
         return rc
@@ -403,10 +445,20 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
                              (ignore_line + "\n").encode("utf-8"))
         created.append(".gitignore")
 
+    # D60: agent platforms compose with a fresh init like --hooks/--ci —
+    # explicit opt-in only: a bare init's file set stays what it always
+    # was, and an unselected platform never gets files.
+    installed_platforms: list[str] = []
+    if platforms:
+        for name in platforms:
+            _install_platform(project, name, created)
+            installed_platforms.append(name)
+
     atomicio.write_text(
         gov_dir / "manifest.json",
         json.dumps(
             {"version": __version__, "created": created, "gitHooks": git_hooks,
+             "platforms": installed_platforms,
              "templates": _template_hashes(project, created)},
             indent=2,
         )
@@ -506,9 +558,9 @@ def _inventory(created: set[str]) -> list[tuple[str, Any]]:
         expected.append(("gates.json", TEMPLATES.joinpath("gates.json")))
     if ".github/workflows/gov.yml" in created:
         expected.append((".github/workflows/gov.yml", TEMPLATES.joinpath("gov.yml")))
-    if ".claude/settings.json" in created:
-        expected.append((".claude/settings.json",
-                         TEMPLATES.joinpath("claude-settings.json")))
+    for rel_p, tpl_name in PLATFORM_TARGETS.values():
+        if rel_p in created:
+            expected.append((rel_p, TEMPLATES.joinpath(tpl_name)))
     return expected
 
 
@@ -824,6 +876,15 @@ def _upgrade_report(project: Path, manifest_path: Path,
         print(f"  {rel:<40} matches the shipped template")
     for rel in missing:
         print(f"  {rel:<40} MISSING — adoptable: gov init --adopt {rel}")
+    # D60 discoverability: a plane initialized before a platform shipped
+    # should hear about it here — the drift report is where adopters look.
+    # Disk existence, not created[]: an adopter-owned hook config counts
+    # as present (init would only name-skip it).
+    pending = [p for p, (rel, _) in PLATFORM_TARGETS.items()
+               if not (project / rel).exists()]
+    if pending:
+        print(f"  agent platforms not installed: {', '.join(pending)} — "
+              f"add with: gov init --platforms {','.join(pending)}")
     import hashlib
     recorded = json.loads(
         manifest_path.read_text(encoding="utf-8")).get("templates", {})
@@ -867,12 +928,16 @@ def _upgrade_report(project: Path, manifest_path: Path,
 
 
 def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
-             pre_commit: bool = False) -> int:
-    """Install --hooks/--ci on an already-initialized project (F5).
+             pre_commit: bool = False,
+             platforms: list[str] | None = None) -> int:
+    """Install --hooks/--ci/--platforms on an already-initialized project (F5).
 
     Only the requested add-ons are touched — rules, gates, notes, skills,
     and the AGENTS.md reference line stay exactly as they are, so
-    retrofitting a hook never resets customizations.
+    retrofitting a hook never resets customizations. ``platforms=None``
+    keeps the pre-D60 shape (the claude config rides along); an explicit
+    ``--platforms`` list replaces that default and installs exactly what
+    was named.
     """
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -912,24 +977,12 @@ def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
             print("init: created .github/workflows/gov.yml (CI runs gov run)")
         # _install_ci itself reports the already-exists case.
 
-    # Agent hooks: govrail's lifecycle events wired into the agent
-    # framework (Claude Code's PreToolUse / SessionStart / Stop etc.),
-    # so the plane has a presence at every point of the agent's
-    # workflow — not just at push time.
-    hooks_settings = project / ".claude" / "settings.json"
-    if hooks_settings.exists():
-        print("init: .claude/settings.json already exists; leaving it "
-              "untouched — merge the gov agent-hooks events in by hand "
-              "(gov agent-hooks --help lists them)")
-    else:
-        hooks_settings.parent.mkdir(parents=True, exist_ok=True)
-        atomicio.write_bytes(
-            hooks_settings,
-            TEMPLATES.joinpath("claude-settings.json").read_bytes())
-        created.append(".claude/settings.json")
-        print("init: created .claude/settings.json (agent lifecycle hooks: "
-              "session-start/pre-tool-use/post-tool-use/"
-              "user-prompt-submit/stop)")
+    # Agent hooks (D59/D60): the plane's lifecycle events wired into each
+    # selected agent platform's own hook config — presence at every point
+    # of the agent's workflow, not just at push time.
+    selected = list(platforms) if platforms else ["claude"]
+    for name in selected:
+        _install_platform(project, name, created)
 
     # Merge, not rebuild: the manifest's other keys (notably "templates",
     # the adoption-hash record `init --adopt` writes, D34) must survive an
@@ -937,10 +990,13 @@ def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
     # so a later `gov init --upgrade/--preview` misread every adopted file
     # as never-recorded.
     manifest = dict(data) if isinstance(data, dict) else {}
+    merged_platforms = list(dict.fromkeys(
+        list(manifest.get("platforms", [])) + selected))
     manifest.update({
         "version": __version__,
         "created": created,
         "gitHooks": git_hooks,
+        "platforms": merged_platforms,
     })
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n",
                              encoding="utf-8")
@@ -961,8 +1017,9 @@ def _template_for(rel: str):
         return TEMPLATES.joinpath("postmortem-README.md")
     if rel == ".github/workflows/gov.yml":
         return TEMPLATES.joinpath("gov.yml")
-    if rel == ".claude/settings.json":
-        return TEMPLATES.joinpath("claude-settings.json")
+    for rel_p, tpl_name in PLATFORM_TARGETS.values():
+        if rel == rel_p:
+            return TEMPLATES.joinpath(tpl_name)
     if rel.startswith(".agents/skills/") and rel.endswith("/SKILL.md"):
         return TEMPLATES.joinpath("skills") / rel.split("/")[2] / "SKILL.md"
     return None
@@ -1274,6 +1331,10 @@ COMMAND_FLAGS: dict[str, tuple[tuple[str, str], ...]] = {
                          "hook — cheap content gates (pairing sidecar freshness, "
                          "conflict markers) on the staged files (#110)"),
         ("--ci", "add the CI runner (.github/workflows/gov.yml)"),
+        ("--platforms LIST", "install agent-hook configs for the named "
+                             "platforms (claude, codex, copilot, gemini; "
+                             "'all' = every one) — fresh or retrofitted, "
+                             "create-if-missing (D60)"),
         ("--upgrade", "report template drift; reads, never writes"),
         ("--json", "with --upgrade: exactly one machine-readable report"),
         ("--adopt [FILE...]", "land MISSING template files, never overwrite "
@@ -1310,15 +1371,45 @@ def _command_help(cmd: str) -> None:
     print(f"  {'-h, --help':<{width}}  show this help and exit")
 
 
+def _parse_platforms(value: str) -> list[str] | None:
+    """`--platforms` value → validated platform list (None = bad, named).
+
+    Rule 5: an unknown or empty name aborts with the offender, never a
+    silent skip; duplicates dedupe preserving order; 'all' selects every
+    shipped platform.
+    """
+    names: list[str] = []
+    for raw in value.split(","):
+        name = raw.strip()
+        if not name:
+            print(f"gov init: --platforms has an empty name in '{value}' "
+                  f"(known: {', '.join(PLATFORM_TARGETS)}, all)",
+                  file=sys.stderr)
+            return None
+        if name == "all":
+            names.extend(p for p in PLATFORM_TARGETS if p not in names)
+            continue
+        if name not in PLATFORM_TARGETS:
+            print(f"gov init: unknown platform '{name}' "
+                  f"(known: {', '.join(PLATFORM_TARGETS)}, all)",
+                  file=sys.stderr)
+            return None
+        if name not in names:
+            names.append(name)
+    return names
+
+
 def _init_uninstall_args(
     args: list[str], what: str
 ) -> tuple[Path, bool, bool, bool, bool] | None:
-    """Parse --project (+ init's --hooks/--ci/--upgrade/--preset, uninstall's --force)."""
+    """Parse --project (+ init's --hooks/--ci/--upgrade/--preset/
+    --platforms, uninstall's --force)."""
     project = "."
     hooks = ci = force = upgrade = adopt = report_json = preview = pre_commit = False
     adopt_targets: list[str] = []
     adopt_new: str | None = None
     preset: str | None = None
+    platforms: list[str] | None = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -1353,6 +1444,16 @@ def _init_uninstall_args(
                 return None
             preset = args[i + 1]
             i += 2
+        elif what == "init" and a == "--platforms":
+            if i + 1 >= len(args) or args[i + 1].startswith("--"):
+                print("gov init: --platforms requires a comma-separated "
+                      f"list (known: {', '.join(PLATFORM_TARGETS)}, all)",
+                      file=sys.stderr)
+                return None
+            platforms = _parse_platforms(args[i + 1])
+            if platforms is None:
+                return None
+            i += 2
         elif what == "init" and a == "--adopt":
             adopt = True
             i += 1
@@ -1375,7 +1476,7 @@ def _init_uninstall_args(
             return None
     return (Path(project), hooks, ci, force, upgrade,
             (adopt_targets if adopt else None), report_json, preview,
-            adopt_new, pre_commit, preset)
+            adopt_new, pre_commit, preset, platforms)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1425,7 +1526,8 @@ def main(argv: list[str] | None = None) -> int:
                                             preview=parsed[7],
                                             adopt_new=parsed[8],
                                             pre_commit=parsed[9],
-                                            preset=parsed[10])
+                                            preset=parsed[10],
+                                            platforms=parsed[11])
     if cmd == "uninstall":
         parsed = _init_uninstall_args(rest, "uninstall")
         return 2 if parsed is None else uninstall(parsed[0], force=parsed[3])
