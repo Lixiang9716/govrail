@@ -98,6 +98,9 @@ gov verify conflict-markers   # fail when changed files carry git conflict marke
 gov review --base <ref> --grade  # dossier + interactive rubric grading
 gov trend                     # gate duration trends from --record history
 gov stats                     # structural facts per language (lines, symbols, nesting depth) — facts, not verdicts
+gov parse <files>             # per-file function spans, line counts, depth (--json);
+                              # govrail ships the tree-sitter stack — custom gates may
+                              # import it, never pin tree-sitter yourself
 gov check                     # syntax-class checks over the parse layer; suppressions counted, never invisible
 gov receipt verify <commit>   # was a full green run recorded on this tree? (#124)
 gov recall <terms>            # retrieve notes, decisions, postmortems (--any relaxes the AND)
@@ -138,6 +141,7 @@ commands:
   lease            lease locks for parallel agents (acquire/release/list; busy exits 3; --wait S polls, --ttl S bounds the lease)
   verify           content gates without a family hub (pairing/rubric/conflict-markers/doc-sync)
   check            syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)
+  parse            per-file structure facts from the parse layer (function spans, line counts, nesting depth) — facts, not verdicts; the primitive a size/complexity gate reads (#265)
   review           assemble the review dossier for a diff (scope, notes, recall, rubric)
   trend            gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)
   stats            structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger

@@ -88,6 +88,8 @@ gov verify conflict-markers    # 变更文件携带 git 冲突标记时失败
 gov review --base <ref> --grade  # 评审档案 + 交互式量规打分
 gov trend                      # --record 历史的门禁耗时趋势
 gov stats                      # 按语言的结构事实（行数、符号、嵌套深度）——是事实，不是判决
+gov parse <files>              # 逐文件函数 span、行数、嵌套深度（--json）；govrail 随包
+                               # 分发 tree-sitter 栈 —— 门禁可直接 import，勿单独钉版本
 gov check                      # 解析层上的语法类检查；抑制会被计数，绝不隐形
 gov receipt verify <commit>    # 这棵树上录过完整全绿运行吗？（#124）
 gov recall <terms>             # 检索笔记、决策、postmortem（--any 放宽 AND）

@@ -217,3 +217,78 @@ class TestSurface:
     def test_unknown_lang_fails_loud(self, capsys):
         assert stats.main(["--lang", "no-such-lang"]) == 2
         assert "no language pack named" in capsys.readouterr().err
+
+
+# --- #265: `gov parse` — the parse layer as a first-class primitive ----
+
+def _write_module(tmp_path: Path) -> Path:
+    f = tmp_path / "mod.py"
+    f.write_text(
+        "import subprocess\n"
+        "\n"
+        "def outer():\n"
+        "    def inner():\n"
+        "        pass\n"
+        "    return inner\n"
+        "\n"
+        "class Thing:\n"
+        "    def method(self):\n"
+        "        if True:\n"
+        "            return 1\n",
+        encoding="utf-8")
+    return f
+
+
+def test_parse_reports_function_spans_and_depth(tmp_path, monkeypatch,
+                                                capsys):
+    """Known answers by construction: outer spans lines 3-6 at depth 0
+    with inner nested; method sits at depth 1 inside the class; the
+    counts are per file."""
+    from gov import stats
+    f = _write_module(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert stats.parse_main([str(f), "--json"]) == 0
+    import json as _json
+    reports = _json.loads(capsys.readouterr().out)
+    assert len(reports) == 1
+    r = reports[0]
+    assert r["path"] == "mod.py" and r["language"] == "python"
+    assert r["lines"]["total"] == 11
+    by_name = {fn["name"]: fn for fn in r["functions"]}
+    assert by_name["outer"] == {"name": "outer", "start": 3, "end": 6,
+                                "depth": 0}
+    # depth counts NESTING-NODE levels inside the function body — a
+    # nested def is not a nesting node (pack.nesting); inner's body is
+    # just `pass`, method's body holds one if, hence 1.
+    assert by_name["inner"]["depth"] == 0
+    assert by_name["method"]["depth"] == 1
+    assert r["max_depth"] == 1
+    assert r["parse_errors"] == 0
+
+
+def test_parse_skips_unsupported_files_named(tmp_path, monkeypatch,
+                                             capsys):
+    f = tmp_path / "readme.txt"
+    f.write_text("not code\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert stats.parse_main([str(f)]) == 0
+    out = capsys.readouterr().out  # the skipped note rides the human report
+    assert "no shipped grammar matches" in out
+
+
+def test_parse_walks_directories(tmp_path, monkeypatch, capsys):
+    from gov import stats
+    _repo_fixture = tmp_path / "src"
+    _repo_fixture.mkdir()
+    (_repo_fixture / "a.py").write_text("def a():\n    pass\n",
+                                        encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert stats.parse_main([str(_repo_fixture), "--json"]) == 0
+    reports = json.loads(capsys.readouterr().out)
+    assert len(reports) == 1 and reports[0]["functions"][0]["name"] == "a"
+
+
+def test_parse_missing_path_is_named(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert stats.parse_main([str(tmp_path / "nope.py")]) == 0
+    assert "no such file" in capsys.readouterr().out

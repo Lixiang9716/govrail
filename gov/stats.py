@@ -47,7 +47,7 @@ class _Metrics:
 
     __slots__ = ("total", "blank", "comment", "code", "functions",
                  "classes", "public", "error_nodes", "depths", "deepest",
-                 "comment_spans")
+                 "comment_spans", "function_spans", "max_depth")
 
     def __init__(self) -> None:
         self.total = self.blank = self.comment = self.code = 0
@@ -56,6 +56,10 @@ class _Metrics:
         self.depths: list[int] = []
         self.deepest: list[tuple[str, int, int]] = []
         self.comment_spans: list[tuple[int, int]] = []
+        # #265: per-function spans for `gov parse` — the size/complexity
+        # gate primitive (name, first line, last line, inner depth).
+        self.function_spans: list[tuple[str, int, int, int]] = []
+        self.max_depth = 0
 
     def absorb(self, per: "_Metrics", path: str | None = None) -> None:
         for key in ("total", "blank", "comment", "code", "functions",
@@ -100,7 +104,9 @@ def _walk_metrics(src: bytes, root, pack) -> _Metrics:
                 inner = max(inner, visit(c, 0))
             m.depths.append(inner)
             m.deepest.append((name, inner, node.start_point[0] + 1))
-            return inner
+            m.function_spans.append((name, node.start_point[0] + 1,
+                                     node.end_point[0] + 1, inner))
+            m.max_depth = max(m.max_depth, inner)
         if node.type in pack.classes:
             m.classes += 1
             name_node = node.child_by_field_name("name")
@@ -298,3 +304,120 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# ── #265: `gov parse` — the parse layer as a first-class primitive ──
+
+def _pack_for(path: Path, names: list[str]):
+    """The language pack whose globs match this file, or None."""
+    import fnmatch
+    from . import parse
+    for name in names:
+        pack = parse.load_pack(name)
+        if any(fnmatch.fnmatch(path.as_posix(), pat) or
+               fnmatch.fnmatch(path.name, pat) for pat in pack.globs):
+            return name, pack
+    return None, None
+
+
+def _file_report(path: Path, src: bytes, name: str, pack) -> dict:
+    """One file's structure facts: spans, depths, line counts — the
+    declaration a size/complexity gate needs, no project-side parser."""
+    from . import parse
+    parser = parse.load_parser(pack)
+    per = _walk_metrics(src, parser.parse(src).root_node, pack)
+    cwd = Path.cwd()
+    rel = (path.relative_to(cwd).as_posix()
+           if path.is_absolute() and path.is_relative_to(cwd)
+           else path.as_posix())
+    return {
+        "path": rel,
+        "language": name,
+        "lines": {"total": per.total, "code": per.code,
+                  "comment": per.comment, "blank": per.blank},
+        "functions": [{"name": n, "start": s, "end": e, "depth": d}
+                      for n, s, e, d in per.function_spans],
+        "max_depth": per.max_depth,
+        "parse_errors": per.error_nodes,
+    }
+
+
+def parse_report(paths: list[Path], lang: str | None = None) -> tuple[list[dict], list[str]]:
+    """Per-file structure facts for every supported file under/being
+    ``paths``. Returns (reports, skipped) — skipped are unsupported
+    files, named for the stderr (facts, not verdicts: nothing here
+    fails)."""
+    try:
+        from .checks import available_langs
+    except ImportError:  # direct script execution
+        from checks import available_langs
+    names = [lang] if lang else available_langs()
+    reports: list[dict] = []
+    skipped: list[str] = []
+    from . import parse
+    for target in paths:
+        target = Path(target)
+        if target.is_dir():
+            for name in names:
+                pack = parse.load_pack(name)
+                for path, src in parse.iter_files(target, pack):
+                    reports.append(_file_report(path, src, name, pack))
+            continue
+        if not target.is_file():
+            skipped.append(f"{target}: no such file")
+            continue
+        name, pack = _pack_for(target, names)
+        if pack is None:
+            skipped.append(f"{target}: no shipped grammar matches")
+            continue
+        reports.append(_file_report(
+            target, target.read_bytes(), name, pack))
+    return reports, skipped
+
+
+def parse_main(argv: list[str] | None = None) -> int:
+    """`gov parse <path>... [--json] [--lang L]` — per-file structure
+    facts from the same walk `gov stats` aggregates. Facts, not
+    verdicts (D44): a size/complexity gate declares its limits and
+    reads these numbers; the plane does not judge them."""
+    from .root import anchor_to_git_root
+    anchor_to_git_root("parse")
+    parser = argparse.ArgumentParser(
+        prog="gov parse",
+        description="Per-file structure facts from the parse layer "
+                    "(function spans, line counts, nesting depth) — "
+                    "the primitive a size gate declares its limits "
+                    "against. Facts, not verdicts.")
+    parser.add_argument("paths", nargs="+", metavar="PATH",
+                        help="files or directories (directories walk "
+                             "every shipped grammar's file set)")
+    parser.add_argument("--lang", metavar="LANG",
+                        help="only this language (directories)")
+    parser.add_argument("--json", action="store_true",
+                        help="one JSON array on stdout; the human report "
+                             "moves to stderr")
+    args = parser.parse_args(argv)
+
+    reports, skipped = parse_report([Path(p) for p in args.paths],
+                                    lang=args.lang)
+
+    def emit(text: str) -> None:
+        print(text, file=sys.stderr if args.json else sys.stdout)
+
+    for note in skipped:
+        emit(f"gov parse: skipped {note}")
+    if args.json:
+        print(json.dumps(reports, indent=2))
+        return 0
+    for r in reports:
+        emit(f"--- {r['path']} ({r['language']}): "
+             f"{r['lines']['total']} lines (code {r['lines']['code']}), "
+             f"{len(r['functions'])} function(s), max depth "
+             f"{r['max_depth']}"
+             + (f", {r['parse_errors']} parse error(s)"
+                if r["parse_errors"] else ""))
+        for n, s, e, d in r["functions"]:
+            emit(f"    {n}  {s}-{e}  depth {d}")
+    if not reports:
+        emit("gov parse: nothing matched a shipped grammar")
+    return 0
