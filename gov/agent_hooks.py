@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""`gov hooks` — the plane's presence at every agent lifecycle event.
+"""`gov agent-hooks` — the plane's presence at every agent lifecycle event.
 
 Claude Code (and compatible frameworks) fire hooks at lifecycle events:
 SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop, etc.
-Each hook invokes `gov hooks <event>` with a JSON payload on stdin.
+Each hook invokes `gov agent-hooks <event>` with a JSON payload on stdin.
 govrail reads the payload, runs the event's handler, and outputs JSON
 to control the agent (allow / deny / inject context).
 
@@ -17,6 +17,12 @@ The handlers form the governance pipeline:
 Handlers start as pass-through and grow logic as governance rules land.
 The STRUCTURE is the point: govrail has a presence at every lifecycle
 event from the moment `gov init` installs the hooks config.
+
+This is a presence, not a fence (D59): the pre-tool-use deny matches
+strings, not semantics — `gov run` and the pre-push gate remain the
+enforcement. A malformed payload is named on stderr and the handler
+runs without it: loud fail-open, because an exit 2 here would block
+every PreToolUse call for a framework that doesn't speak JSON.
 """
 from __future__ import annotations
 
@@ -30,21 +36,35 @@ except ImportError:
     from version import __version__
 
 
-def _read_stdin_json() -> dict:
-    """Read the hook payload from stdin (Claude Code sends JSON)."""
+def _read_stdin_json() -> tuple[dict, str | None]:
+    """Read the hook payload from stdin (Claude Code sends JSON).
+
+    Returns (payload, error). An empty stdin is a legitimate no-payload
+    call; a MALFORMED one comes back as a named error for the caller to
+    print — never a silently swallowed {} (rule 5).
+    """
     try:
         raw = sys.stdin.read()
-        if raw.strip():
-            return json.loads(raw)
-    except (json.JSONDecodeError, OSError):
-        pass
-    return {}
+    except OSError as e:
+        return {}, f"stdin unreadable ({e})"
+    if not raw.strip():
+        return {}, None
+    try:
+        return json.loads(raw), None
+    except json.JSONDecodeError as e:
+        return {}, f"malformed hook payload on stdin ({e})"
 
 
 def _output(data: dict | None = None) -> None:
     """Output JSON to stdout (Claude Code parses it when it starts with {)."""
     if data is not None:
         print(json.dumps(data, ensure_ascii=False))
+
+
+def _pascal(event: str) -> str:
+    """session-start → SessionStart — the framework's own event spelling
+    (the settings.json keys); hookSpecificOutput is validated against it."""
+    return "".join(part.capitalize() for part in event.split("-"))
 
 
 def _deny(reason: str) -> None:
@@ -58,11 +78,11 @@ def _deny(reason: str) -> None:
     })
 
 
-def _context(text: str) -> None:
+def _context(event: str, text: str) -> None:
     """Inject governance context into the agent's conversation."""
     _output({
         "hookSpecificOutput": {
-            "hookEventName": sys.argv[2] if len(sys.argv) > 2 else "",
+            "hookEventName": _pascal(event),
             "additionalContext": text,
         }
     })
@@ -79,21 +99,21 @@ def _governed(payload: dict) -> Path | None:
     return None
 
 
-def handle_session_start(payload: dict) -> None:
+def handle_session_start(payload: dict, event: str) -> None:
     """Session begins in a govrail-governed repo: check the plane."""
     root = _governed(payload)
     if root is None:
         return
     seal = root / ".gov" / "plane-seal.json"
     if seal.is_file():
-        _context(f"govrail {__version__}: plane sealed and intact. "
-                 "Follow .gov/rules.md. Run `gov run` before pushing.")
+        _context(event, f"govrail {__version__}: plane sealed and intact. "
+                        "Follow .gov/rules.md. Run `gov run` before pushing.")
     else:
-        _context(f"govrail {__version__}: plane present but unsealed. "
-                 "Run `gov verify-plane --write` to seal it.")
+        _context(event, f"govrail {__version__}: plane present but unsealed. "
+                        "Run `gov verify-plane --write` to seal it.")
 
 
-def handle_pre_tool_use(payload: dict) -> None:
+def handle_pre_tool_use(payload: dict, event: str) -> None:
     """The core gate: decide whether the agent's tool call is allowed."""
     root = _governed(payload)
     if root is None:
@@ -113,23 +133,22 @@ def handle_pre_tool_use(payload: dict) -> None:
               f"plane — '{command.strip()}' would bypass the plane's "
               "audit trail. Use `gov update --apply` for migrations or "
               "`git revert` for undos.")
-        return
 
 
-def handle_post_tool_use(payload: dict) -> None:
+def handle_post_tool_use(payload: dict, event: str) -> None:
     """Record what happened (audit trail). Pass-through for now."""
     pass
 
 
-def handle_user_prompt_submit(payload: dict) -> None:
+def handle_user_prompt_submit(payload: dict, event: str) -> None:
     """Inject governance context when the user submits a prompt."""
     root = _governed(payload)
     if root is None:
         return
-    _context("govrail: this repo is governed. Follow .gov/rules.md.")
+    _context(event, "govrail: this repo is governed. Follow .gov/rules.md.")
 
 
-def handle_stop(payload: dict) -> None:
+def handle_stop(payload: dict, event: str) -> None:
     """The agent is finishing. Final checks."""
     pass
 
@@ -159,11 +178,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     handler = HANDLERS.get(event)
     if handler is None:
-        print(f"gov hooks: unknown event '{event}' "
+        print(f"gov agent-hooks: unknown event '{event}' "
               f"(known: {', '.join(sorted(HANDLERS))})", file=sys.stderr)
         return 2
-    payload = _read_stdin_json()
-    handler(payload)
+    payload, err = _read_stdin_json()
+    if err:
+        print(f"gov agent-hooks: {event}: {err} — continuing without it",
+              file=sys.stderr)
+    handler(payload, event)
     return 0
 
 
