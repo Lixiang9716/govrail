@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.0](https://github.com/Lixiang9716/govrail/compare/v0.39.0...v0.40.0) (2026-09-18)
+
+
+### Features
+
+* gov update (D58) + agent hooks + rule 9 + round-15 batch ([#286](https://github.com/Lixiang9716/govrail/issues/286)) ([7535b6a](https://github.com/Lixiang9716/govrail/commit/7535b6ac2acf684b46cd0d651ea670114bd82cff))
+
 ## [0.39.0](https://github.com/Lixiang9716/govrail/compare/v0.38.2...v0.39.0) (2026-09-18)
 
 

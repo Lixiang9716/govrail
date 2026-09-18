@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.40.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- gov update (D58) + agent hooks + rule 9 + round-15 batch
+
 ## 0.39.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - rule 9 as a mechanical gate — open cards with unchecked items block the push
