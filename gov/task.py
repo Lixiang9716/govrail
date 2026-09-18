@@ -202,7 +202,7 @@ def _check_receipt(cid: str, card: dict) -> list[str]:
     return problems
 
 
-def cmd_check(_args: argparse.Namespace) -> int:
+def cmd_check(args: argparse.Namespace) -> int:
     combined, _files = rules_hash()
     cards = _load_cards()
     if not cards:
@@ -217,7 +217,14 @@ def cmd_check(_args: argparse.Namespace) -> int:
             problems.extend(_check_receipt(cid, card))
             print(f"done  {cid} {title}")
         elif status == "open":
-            if pinned != combined:
+            unchecked = ([item for item in card.get("checklist", [])]
+                         if getattr(args, "strict", False) else [])
+            if unchecked:
+                problems.append(
+                    f"{cid}: {len(unchecked)} unchecked checklist item(s) — "
+                    "close the card or check them off (rule 9)")
+                print(f"OPEN  {cid} {title} ({len(unchecked)} unchecked)")
+            elif pinned != combined:
                 problems.append(
                     f"{cid}: pins rules@{pinned[:12]} but the project is at "
                     f"rules@{combined[:12]} — the brief is stale after a "
@@ -478,6 +485,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p_check = sub.add_parser("check", help="name stale cards and verify "
                              "receipts (gate-scoped to .gov/tasks/**)")
+    p_check.add_argument("--strict", action="store_true",
+                         help="open cards with unchecked checklist items "
+                              "block (rule 9)")
     p_check.set_defaults(func=cmd_check)
 
     p_close = sub.add_parser("close", help="run the gate DAG now and close "
