@@ -40,10 +40,19 @@ case "$(git rev-parse --show-object-format 2>/dev/null | tr -d '[:space:]')" in
     *)      zero=0000000000000000000000000000000000000000 ;;
 esac
 
+checkout_ref=$(git symbolic-ref --quiet HEAD 2>/dev/null)
 base=""
 bases=0
 full=0
 while read -r local_ref local_sha remote_ref remote_sha; do
+    # W3: the worktree only represents the CHECKED-OUT branch — a push
+    # of any other ref cannot be summarized by a worktree diff and
+    # forces the full matrix. (Deletions were skipped above: they gate
+    # no content at all.)
+    if [ -n "$checkout_ref" ] && [ "$local_ref" != "$checkout_ref" ] \
+            && [ "$local_sha" != "$zero" ]; then
+        full=1
+    fi
     # A branch deletion pushes no content — nothing to gate. git reports
     # the deletion as local_ref="(delete)" with the ZERO OID in
     # local_sha, so the all-zero constant matches local_SHA, never

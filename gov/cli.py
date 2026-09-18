@@ -609,11 +609,21 @@ def _adopt(project: Path, manifest_path: Path, targets: list[str],
         applied += 1
     if not applied and not re_adopted:
         print("init: nothing to adopt (no missing template files)")
-    manifest_path.write_text(
-        json.dumps({"version": __version__, "created": created,
-                    "gitHooks": data.get("gitHooks", []),
-                    "templates": recorded}, indent=2) + "\n",
-        encoding="utf-8",
+    # U-7: dict-MERGE (unknown manifest keys survive), atomic write, and
+    # the N10 containment boundary — the pre-#275 rebuild dropped every
+    # key it did not name and followed a symlinked manifest out.
+    from . import atomicio
+    merged_manifest = dict(data)
+    merged_manifest.update({
+        "version": __version__,
+        "created": created,
+        "gitHooks": data.get("gitHooks", []),
+        "templates": recorded,
+    })
+    atomicio.write_text(
+        manifest_path,
+        json.dumps(merged_manifest, indent=2) + "\n",
+        root=project,
     )
     if applied or re_adopted:
         # D34: side effects are disclosed, never silent.
@@ -722,7 +732,7 @@ def _upgrade_files(project: Path, manifest_path: Path):
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
-        return None, None
+        return None, None, None
     created = set(data.get("created", []))
     init_version = data.get("version", "unknown")
     recorded = data.get("templates", {})
@@ -965,11 +975,26 @@ def uninstall(project: Path, force: bool = False) -> int:
                 "__GOV_VERSION__", __version__).encode("utf-8")
         return t.read_bytes()
 
+    import hashlib
+    try:
+        recorded = json.loads(
+            (project / ".gov" / "manifest.json").read_text(
+                encoding="utf-8")).get("templates", {})
+    except (OSError, json.JSONDecodeError, ValueError):
+        recorded = {}
     for rel, t in candidates:
         p = project / rel
         try:
-            if p.is_file() and p.read_bytes() != _rendered(rel, t):
-                customized.append(rel)
+            if not p.is_file():
+                continue
+            if p.read_bytes() == _rendered(rel, t):
+                continue  # pristine vs the current template
+            # U-18: pristine AS ADOPTED (the template moved upstream since)
+            # is equally not-customized — deletable, never mislabeled.
+            local_h = hashlib.sha256(p.read_bytes()).hexdigest()
+            if recorded.get(rel) == local_h:
+                continue
+            customized.append(rel)
         except OSError:
             pass
 

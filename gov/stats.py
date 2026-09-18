@@ -167,10 +167,10 @@ def compute(root: Path, packs: list) -> dict:
     """Aggregate metrics over every pack's declared file set under root."""
     agg: dict = {}
     for pack in packs:
-        parser = parse.load_parser(pack)
         m = _Metrics()
         files: list[dict] = []
         for path, src in parse.iter_files(root, pack):
+            parser = parse.parser_for(pack, path)
             per = _walk_metrics(src, parser.parse(src).root_node, pack)
             rel = path.relative_to(root).as_posix() if path.is_absolute() \
                 else path.as_posix()
@@ -322,7 +322,7 @@ def _file_report(path: Path, src: bytes, name: str, pack) -> dict:
     """One file's structure facts: spans, depths, line counts — the
     declaration a size/complexity gate needs, no project-side parser."""
     from . import parse
-    parser = parse.load_parser(pack)
+    parser = parse.parser_for(pack, path)
     per = _walk_metrics(src, parser.parse(src).root_node, pack)
     cwd = Path.cwd()
     rel = (path.relative_to(cwd).as_posix()
@@ -416,8 +416,11 @@ def parse_main(argv: list[str] | None = None) -> int:
     from .root import anchor_to_git_root
     anchor_to_git_root("parse")
     try:
+        from . import parse as parse_layer
+        parse_unavailable = parse_layer.ParseUnavailable
         from .checks import available_langs
     except ImportError:  # direct script execution
+        import parse as parse_layer
         from checks import available_langs
     names = available_langs()
     parser = argparse.ArgumentParser(
@@ -438,8 +441,24 @@ def parse_main(argv: list[str] | None = None) -> int:
                              "the human report moves to stderr")
     args = parser.parse_args(argv)
 
-    reports, skipped = parse_report([Path(p) for p in args.paths],
-                                    lang=args.lang)
+    # U-6: an explicit path that does not exist is a caller error
+    # (named, exit 2) — rc 0 with empty facts is reserved for real
+    # zero-match scopes, never for "your arguments pointed nowhere".
+    missing = [p for p in args.paths if not Path(p).exists()]
+    if missing:
+        for m in missing:
+            print(f"gov parse: no such file or directory: {m}",
+                  file=sys.stderr)
+        return 2
+
+    # U-4: an unknown --lang or a missing grammar is a named exit 2 —
+    # a traceback exiting 1 would read as "gate red" in CI.
+    try:
+        reports, skipped = parse_report([Path(p) for p in args.paths],
+                                        lang=args.lang)
+    except parse_unavailable.ParseUnavailable as e:
+        print(f"gov parse: {e}", file=sys.stderr)
+        return 2
 
     def emit(text: str) -> None:
         print(text, file=sys.stderr if args.json else sys.stdout)

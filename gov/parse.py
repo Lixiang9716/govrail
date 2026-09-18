@@ -184,14 +184,43 @@ def load_pack(name: str) -> LangPack:
     )
 
 
-def load_parser(pack: LangPack):
-    """A Parser bound to the pack's grammar (one per pack, per process)."""
+_PARSER_CACHE: dict = {}
+
+
+def load_parser(pack: LangPack, tsx: bool = False):
+    """A Parser bound to the pack's grammar (cached per pack+variant).
+
+    ``tsx`` selects the typescript grammar's TSX dialect: the binding
+    ships both factories, but the naive factory chain always lands on
+    ``language_typescript``, so every ``.tsx`` file parsed as plain TS —
+    JSX and angle generics produced ERROR nodes and the metrics lied
+    (U-11). The caller picks the dialect from the FILE suffix; a pack
+    that ships only one factory ignores the flag."""
     from tree_sitter import Language, Parser
+    key = (pack.grammar, tsx)
+    cached = _PARSER_CACHE.get(key)
+    if cached is not None:
+        return cached
     mod = import_module(pack.grammar)
-    lang_fn = (getattr(mod, "language", None)
-               or getattr(mod, "language_typescript", None)
-               or getattr(mod, "language_tsx"))
-    return Parser(Language(lang_fn()))
+    if tsx:
+        lang_fn = (getattr(mod, "language_tsx", None)
+                   or getattr(mod, "language_typescript", None)
+                   or getattr(mod, "language", None))
+    else:
+        lang_fn = (getattr(mod, "language", None)
+                   or getattr(mod, "language_typescript", None)
+                   or getattr(mod, "language_tsx", None))
+    parser = Parser(Language(lang_fn()))
+    _PARSER_CACHE[key] = parser
+    return parser
+
+
+def parser_for(pack: LangPack, path: Path):
+    """The parser for one file of this pack: typescript splits its
+    dialect by suffix (.tsx → TSX), every other pack is single-dialect."""
+    if pack.grammar == "tree_sitter_typescript" and path.suffix == ".tsx":
+        return load_parser(pack, tsx=True)
+    return load_parser(pack)
 
 
 @dataclass

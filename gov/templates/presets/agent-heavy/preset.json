@@ -5,7 +5,7 @@
     {
       "id": "verify-decisions",
       "label": "decisions table guard (numbering, alternatives)",
-      "command": ["gov", "verify-decisions"],
+      "command": ["gov", "decision", "verify"],
       "paths": ["docs/decisions.md"]
     }
   ],

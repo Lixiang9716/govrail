@@ -5,8 +5,8 @@
     {
       "id": "doc-sync",
       "label": "CHANGELOG ↔ HIGHLIGHTS pairing",
-      "command": ["gov", "verify-doc-sync"],
-      "paths": ["CHANGELOG.md", "HIGHLIGHTS.md"]
+      "command": ["gov", "verify", "doc-sync"],
+      "paths": ["CHANGELOG.md", "gov/HIGHLIGHTS.md", ".gov/docsync.json"]
     }
   ],
   "modes": {

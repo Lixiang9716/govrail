@@ -317,9 +317,9 @@ def run_lang(root: Path, lang: str, rules: list[Rule],
     from . import parse
     pack = parse.load_pack(lang)
     _pack_cache[lang] = pack
-    parser = parse.load_parser(pack)
     reports: list[FileReport] = []
     for path, src in parse.iter_files(root, pack):
+        parser = parse.parser_for(pack, path)
         rel = path.relative_to(root).as_posix() if path.is_absolute() \
             else path.as_posix()
         if only is not None and rel not in only:

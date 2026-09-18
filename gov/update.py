@@ -34,6 +34,17 @@ except ImportError:  # direct script execution
     from version import __version__
 
 
+def _ci_pin_plan(root: Path, version: str) -> str:
+    wf = root / ".github" / "workflows" / "gov.yml"
+    if not wf.is_file():
+        return "absent"
+    text = wf.read_text(encoding="utf-8")
+    n = sum(1 for line in text.splitlines()
+            if "pip install govrail" in line)
+    return (f"refresh {n} install line(s) to =={version}"
+            if n else "no govrail install line found — nothing to refresh")
+
+
 def _ci_pin_refresh(root: Path, version: str) -> tuple[int, str]:
     """Rewrite the workflow's `pip install govrail` line(s) to the new
     version — in place, line-level, so a customized-but-pinned workflow
@@ -127,17 +138,36 @@ def main(argv: list[str] | None = None) -> int:
               "--confirm-unattended", file=sys.stderr)
         return 2
 
-    # the plan (always printed — the dry run IS the deliverable until
-    # --apply says otherwise)
+    # ── U-9: every step is TRIED at plan time — the dry run carries the
+    # same information the apply will, so the two never diverge.
+    gates_plan = "absent"
+    if (root / "gates.json").is_file():
+        try:
+            from .gates import merge_gates_by_id, DriftRefused
+            local = json.loads((root / "gates.json").read_text(
+                encoding="utf-8"))
+            tpl = json.loads(
+                (root / "gov" / "templates" / "gates.json").read_text(
+                    encoding="utf-8"))
+            _merged, added, _note = merge_gates_by_id(
+                local, tpl, what="the template", on_drift="refuse")
+            gates_plan = (f"merge {len(added)} new shipped gate(s): "
+                          f"{', '.join(g['id'] for g in added)}"
+                          if added else "no new shipped gates to add")
+        except DriftRefused as e:
+            gates_plan = f"WOULD REFUSE — non-additive drift: {e}"
+        except (OSError, ValueError) as e:
+            gates_plan = f"WOULD REFUSE — {e}"
+
+    pin_plan = _ci_pin_plan(root, __version__)
+
     print(f"gov update — migration plan for {root}")
     print(f"  initialized with govrail {old_version} · "
           f"this package {__version__}")
     print(f"  adopt: {len(adoptable)} file(s) "
           f"({', '.join(adoptable) if adoptable else 'none'})")
-    print("  gates.json: adopt-new merge (additive — new shipped gate ids "
-          "only, your gates untouched)")
-    print("  ci pin: rewrite `pip install govrail...` to "
-          f"=={__version__} (line-level; custom files keep their shape)")
+    print(f"  gates.json: {gates_plan}")
+    print(f"  ci pin: {pin_plan}")
     print("  gitignore: ensure .gov/history/ is ignored")
     print("  seal: re-baseline over the migrated files (ritual, recorded "
           "in .gov/rituals.jsonl)")
@@ -146,48 +176,87 @@ def main(argv: list[str] | None = None) -> int:
         print("gov update: dry run — pass --apply to execute")
         return 0
 
-    if adoptable:
-        rc = cli_mod._adopt(root, manifest_path, adoptable, preview=False)
-        if rc != 0:
-            return rc
+    # ── U-1: the seal must never launder pre-existing drift. With the
+    # seal PRESENT, every drifted file must be one this migration writes;
+    # with the seal ABSENT this is a first-time adoption and the ritual
+    # consent IS the acceptance.
+    seal = root / ".gov" / "plane-seal.json"
+    if seal.exists():
+        drifted = {v.split(":")[0].strip()
+                   for v in verify_plane.violations() if ":" in v}
+        planned = set(adoptable) | {"gates.json", ".gov/manifest.json"}
+        unexpected = sorted(drifted - planned)
+        if unexpected:
+            print("gov update: REFUSED — pre-existing drift would be "
+                  "laundered by the re-baseline: "
+                  f"{', '.join(unexpected)}; adopt or fix those first "
+                  "(gov init --upgrade names them)", file=sys.stderr)
+            return 2
 
-    # additive-only merge of newly shipped gates (D39's mechanism)
-    gates_path = root / "gates.json"
-    if gates_path.is_file():
-        rc = cli_mod._adopt_new(root, manifest_path, "gates.json")
-        if rc not in (0,):
-            return rc
+    # ── U-8: serialize against concurrent updates and verify-plane
+    # --write via the plane's own guard flock.
+    steps_done = 0
 
-    changed, _note = _ci_pin_refresh(root, __version__)
-    print(f"gov update: ci pin — {changed} install line(s) refreshed")
-    _gitignore_history(root)
-
-    # manifest version LAST before the seal: the re-baseline snapshots
-    # the migrated state, version stamp included
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["version"] = __version__
-    atomicio.write_text(manifest_path,
-                        json.dumps(manifest, indent=2) + "\n", root=root)
-
-    files = verify_plane._sealed_files(root)
-    unattended = args.confirm_unattended or not sys.stdin.isatty()
-    verify_plane.baseline(root, unattended=unattended)
-    from . import rituals
-    try:
+    def _migrate() -> int:
+        nonlocal steps_done
+        if adoptable:
+            rc = cli_mod._adopt(root, manifest_path, adoptable,
+                                preview=False)
+            if rc != 0:
+                return rc
+        steps_done += 1
+        if (root / "gates.json").is_file():
+            rc = cli_mod._adopt_new(root, manifest_path, "gates.json")
+            if rc != 0:
+                return rc
+        steps_done += 1
+        changed, _note = _ci_pin_refresh(root, __version__)
+        print(f"gov update: ci pin — {changed} install line(s) refreshed",
+              file=sys.stderr)
+        steps_done += 1
+        _gitignore_history(root)
+        steps_done += 1
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["version"] = __version__
+        atomicio.write_text(manifest_path,
+                            json.dumps(manifest, indent=2) + "\n",
+                            root=root)
+        steps_done += 1
+        # ── U-10: the ritual is recorded WRITE-AHEAD — the ledger entry
+        # exists before the seal changes, so a crash can never leave an
+        # unrecorded constitution change. A symlinked/unwritable ledger
+        # refuses the whole migration here, before any mutation.
+        files = verify_plane._sealed_files(root)
         rituals.append(root, ritual="seal-rebaseline",
                        unattended=unattended,
                        files=sorted(files))
-    except OSError as e:
-        print(f"gov update: WARNING — the re-baseline could not be "
-              f"recorded in the tracked ledger: {e}; the seal itself "
-              "is updated, but the audit trail needs a manual entry",
-              file=sys.stderr)
+        steps_done += 1
+        verify_plane.baseline(root, unattended=unattended)
+        return 0
+
+    unattended = args.confirm_unattended or not sys.stdin.isatty()
+    from . import locks as locks_mod
+    from . import rituals
+    try:
+        rc = locks_mod._guarded(root, "plane/update", _migrate)
+    except (OSError, RuntimeError) as e:
+        print(f"gov update: FAILED after {steps_done}/6 step(s) — the "
+              "plane may be half-migrated with a stale seal. Recover: "
+              "`git restore . && git clean -fd`, then re-run. "
+              f"Cause: {e}", file=sys.stderr)
+        return 1
+    if rc != 0:
+        return rc
 
     try:
         from . import whatsnew
         whatsnew.main(["--since", old_version])
     except SystemExit:
         pass
+
+    print("gov update: done — commit these changes now")
+    return 0
+
 
     print("gov update: done — commit these changes now")
     return 0
