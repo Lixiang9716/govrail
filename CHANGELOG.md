@@ -1,12 +1,5 @@
 # Changelog
 
-## [0.42.0](https://github.com/Lixiang9716/govrail/compare/v0.41.0...v0.42.0) (2026-09-18)
-
-
-### Features
-
-* code design contracts — modular monolith, registry surfaces, self-hosted guardrails ([#290](https://github.com/Lixiang9716/govrail/issues/290)) ([6fb6fba](https://github.com/Lixiang9716/govrail/commit/6fb6fba89ff50f59f02669e9fa440f88b0c68d1d))
-
 ## [0.41.0](https://github.com/Lixiang9716/govrail/compare/v0.40.0...v0.41.0) (2026-09-18)
 
 
