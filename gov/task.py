@@ -217,7 +217,16 @@ def cmd_check(_args: argparse.Namespace) -> int:
             problems.extend(_check_receipt(cid, card))
             print(f"done  {cid} {title}")
         elif status == "open":
-            if pinned != combined:
+            # rule 9: an open card with unchecked items blocks the gate —
+            # the checklist IS the contract between the caller and the
+            # plane, and "in progress" is not "done".
+            unchecked = [item for item in card.get("checklist", [])]
+            if unchecked:
+                problems.append(
+                    f"{cid}: {len(unchecked)} unchecked item(s) — close the "
+                    "card or check them off")
+                print(f"OPEN  {cid} {title} ({len(unchecked)} unchecked)")
+            elif pinned != combined:
                 problems.append(
                     f"{cid}: pins rules@{pinned[:12]} but the project is at "
                     f"rules@{combined[:12]} — the brief is stale after a "

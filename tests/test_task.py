@@ -423,3 +423,30 @@ def test_list_outside_git_repo_claims_null(tmp_path, monkeypatch, capsys):
         task.main(["claim", "T-0001"])
     assert exc.value.code == 2
     assert "common dir" in capsys.readouterr().err
+
+
+# --- rule 9: open cards with unchecked items block the gate ------------
+
+def test_open_card_with_unchecked_items_exits_one(tmp_path, monkeypatch, capsys):
+    """rule 9: the card IS the contract — unchecked items mean the work
+    isn't done, and `task check` must say so with exit 1 (blocking the
+    push via the task gate)."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    combined, _ = task.rules_hash(proj)
+    (proj / ".gov/tasks/T-0001-fix.json").write_text(json.dumps({
+        "id": "T-0001", "title": "fix things",
+        "rules": {"hash": combined}, "checklist": [],
+        "status": "open", "receipt": None,
+    }), encoding="utf-8")
+    assert task.main(["check"]) == 0  # no checklist: informational
+
+    (proj / ".gov/tasks/T-0001-fix.json").write_text(json.dumps({
+        "id": "T-0001", "title": "fix things",
+        "rules": {"hash": combined},
+        "checklist": ["fix the seal", "update the pin"],
+        "status": "open", "receipt": None,
+    }), encoding="utf-8")
+    assert task.main(["check"]) == 1  # unchecked items: blocking
+    out = capsys.readouterr().out
+    assert "unchecked" in out
