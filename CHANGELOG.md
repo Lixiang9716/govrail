@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.0](https://github.com/Lixiang9716/govrail/compare/v0.38.2...v0.39.0) (2026-09-18)
+
+
+### Features
+
+* rule 9 as a mechanical gate — open cards with unchecked items block the push ([#284](https://github.com/Lixiang9716/govrail/issues/284)) ([3c5219d](https://github.com/Lixiang9716/govrail/commit/3c5219dd9c323c295fa39387c143366bb6b9a399))
+
 ## [0.38.2](https://github.com/Lixiang9716/govrail/compare/v0.38.1...v0.38.2) (2026-09-18)
 
 

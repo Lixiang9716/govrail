@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.39.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- rule 9 as a mechanical gate — open cards with unchecked items block the push
+
 ## 0.38.2 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - every remaining open item from the round-15 audit ledger
