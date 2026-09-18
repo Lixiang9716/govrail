@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.41.0](https://github.com/Lixiang9716/govrail/compare/v0.40.0...v0.41.0) (2026-09-18)
+
+
+### Features
+
+* multi-platform agent hooks — codex/copilot/gemini + dialect layer (D60) ([#288](https://github.com/Lixiang9716/govrail/issues/288)) ([0ca88e1](https://github.com/Lixiang9716/govrail/commit/0ca88e1c59218dfa584b6314a2ee66fd7ddd5f21))
+
 ## [0.40.0](https://github.com/Lixiang9716/govrail/compare/v0.39.0...v0.40.0) (2026-09-18)
 
 
