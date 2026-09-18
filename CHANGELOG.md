@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.0](https://github.com/Lixiang9716/govrail/compare/v0.37.1...v0.38.0) (2026-09-18)
+
+
+### Features
+
+* gov update — the migration choreography becomes one command (D58) ([#275](https://github.com/Lixiang9716/govrail/issues/275)) ([c35ce8b](https://github.com/Lixiang9716/govrail/commit/c35ce8ba77e9c5629ae87952f87d7bb8a85274c2))
+
 ## [0.37.1](https://github.com/Lixiang9716/govrail/compare/v0.37.0...v0.37.1) (2026-09-18)
 
 
