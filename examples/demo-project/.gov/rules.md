@@ -67,7 +67,20 @@ and even then the condition is asserted after the wait. Waiting for CI
 or another process is event-driven: `gh pr checks --watch`,
 `gh run watch --exit-status` — never a blind timed pause.
 
-## 9. A new command ships its discovery surface in the same PR
+## 9. Multi-step tasks carry a task card; open cards block pushes
+
+A task with three or more steps (or any step whose omission would be a
+silent regression) gets a task card: `gov task new "title" --check "step 1"
+--check "step 2"`. The card IS the checklist — anchored to the caller's
+verbatim instructions, stored in `.gov/tasks/`, and gated by the `task`
+gate in the default DAG. An open card means the work is in progress;
+the task gate fails on stale pins and receipt-less done cards, and the
+pre-push hook surfaces both. To push, close the card (all items checked
++ green receipt) or explicitly defer it. The checklist is not a
+self-authored todo — it is a gate-enforced contract between the caller
+and the plane.
+
+## 10. A new command ships its discovery surface in the same PR
 
 Adding a user-facing `gov` command (or renaming one) must update, in
 the same PR, the three homes that make it discoverable — each catches
