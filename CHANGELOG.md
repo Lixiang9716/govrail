@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.1](https://github.com/Lixiang9716/govrail/compare/v0.38.0...v0.38.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* the round-15 batch — gov update and gov parse meet their own contracts ([#279](https://github.com/Lixiang9716/govrail/issues/279)) ([2e5099d](https://github.com/Lixiang9716/govrail/commit/2e5099d807611c372defee61318a22865011bc16))
+
 ## [0.38.0](https://github.com/Lixiang9716/govrail/compare/v0.37.1...v0.38.0) (2026-09-18)
 
 
