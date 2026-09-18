@@ -1,0 +1,62 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gov agent-hooks session-start --dialect codex",
+            "timeout": 30,
+            "statusMessage": "govrail: session check"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gov agent-hooks user-prompt-submit --dialect codex",
+            "timeout": 30,
+            "statusMessage": "govrail: context"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gov agent-hooks pre-tool-use --dialect codex",
+            "timeout": 30,
+            "statusMessage": "govrail: governing the tool call"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gov agent-hooks post-tool-use --dialect codex",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "gov agent-hooks stop --dialect codex",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

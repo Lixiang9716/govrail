@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "command": "gov agent-hooks session-start --dialect copilot",
+        "timeoutSec": 30
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "command": "gov agent-hooks user-prompt-submit --dialect copilot",
+        "timeoutSec": 30
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "command": "gov agent-hooks pre-tool-use --dialect copilot",
+        "timeoutSec": 30
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "command": "gov agent-hooks post-tool-use --dialect copilot",
+        "timeoutSec": 30
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "command": "gov agent-hooks stop --dialect copilot",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

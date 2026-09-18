@@ -34,7 +34,9 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   MISSING templates (never overwrites); `--upgrade` reports drift and
   changes nothing. Use `--adopt` when a report says UPSTREAM MOVED and
   you want the new template; do NOT use it to paper over a real
-  customization.
+  customization. `--platforms <list>` adds agent platforms (claude,
+  codex, copilot, gemini; `all`) — fresh or retrofitted, each config
+  create-if-missing; a platform you never named gets no files.
 - `gov update --apply` — one deliberate migration step (adopt missing/
   moved templates + merge newly shipped gates + refresh the CI pin +
   re-seal). Dry run by default; use it when `gov init --upgrade`
@@ -43,12 +45,17 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   `--confirm-unattended`).
 - `gov init --preset <name>` — typed starters. Only when the project
   matches the preset's type; presets never load themselves.
-- `gov agent-hooks <event>` — the plane's presence at the agent's
-  lifecycle events (Claude Code-style hooks; `gov init` wires
-  `.claude/settings.json`). Framework-invoked, not a human verb. If
-  init reports the settings file already exists, merge the five events
-  in by hand. The pre-tool-use deny is a presence, not a fence —
-  `gov run` and the pre-push gate remain the enforcement.
+- `gov agent-hooks <event> [--dialect <platform>]` — the plane's
+  presence at the agent's lifecycle events across platforms: claude
+  (default), codex, copilot, gemini — same five events, each platform's
+  own deny/context contract. Framework-invoked, not a human verb; the
+  `--dialect` in a hook command must match the config file it is wired
+  from (`gov init --platforms` writes the matching spelling). If init
+  reports a platform's config already exists, merge the five events in
+  by hand — and on codex, trust the project hooks via `/hooks`
+  (untrusted hooks are silently skipped). The pre-tool-use deny is a
+  presence, not a fence — `gov run` and the pre-push gate remain the
+  enforcement.
 - `gov uninstall --force` — reverse init. `--force` is for customized
   trees AFTER copying out what you keep; without it, uninstall refuses
   to delete anything customized.

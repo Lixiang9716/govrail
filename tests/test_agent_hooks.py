@@ -7,6 +7,11 @@ silent {}, deriving hookEventName from sys.argv in kebab-case the
 framework ignores, and registering the install under a created[] entry
 uninstall could never match. Each test here is the rejection case for
 one of those failure modes: a guard that has never failed is decoration.
+
+D60 adds the multi-platform half: one handler core, one DIALECT per
+platform (the output contract each one actually parses), and the
+`--platforms` install surface whose templates must stay exactly
+reversible through the same _inventory/_template_for/uninstall readers.
 """
 from __future__ import annotations
 
@@ -113,6 +118,99 @@ def test_user_prompt_submit_event_name(tmp_path, capsys):
     assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
 
 
+# ── dialects: the contract each platform actually parses (D60) ────────
+
+def _deny_reason(out: dict) -> str:
+    """The reason field wherever the dialect put it."""
+    if "hookSpecificOutput" in out:  # claude/codex
+        return out["hookSpecificOutput"]["permissionDecisionReason"]
+    return out["permissionDecisionReason"]  # copilot
+
+
+def test_codex_deny_shares_the_claude_shape(tmp_path, capsys):
+    payload = {"cwd": str(_governed(tmp_path)),
+               "tool_input": {"command": "git reset --hard"}}
+    assert agent_hooks.handle_pre_tool_use(
+        payload, "pre-tool-use", dialect="codex") == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "git reset --hard" in _deny_reason(out)
+
+
+def test_copilot_deny_reads_top_level_permission_keys(tmp_path, capsys):
+    payload = {"cwd": str(_governed(tmp_path)),
+               "toolArgs": {"command": "rm -rf /"}}  # its camelCase payload
+    assert agent_hooks.handle_pre_tool_use(
+        payload, "pre-tool-use", dialect="copilot") == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["permissionDecision"] == "deny"
+    assert "rm -rf /" in _deny_reason(out)
+
+
+def test_gemini_deny_is_exit_two_with_stderr_reason(tmp_path, capsys):
+    payload = {"cwd": str(_governed(tmp_path)),
+               "tool_input": {"command": "rm -rf /"}}
+    assert agent_hooks.handle_pre_tool_use(
+        payload, "pre-tool-use", dialect="gemini") == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""  # no JSON a non-speaker could misparse
+    assert "rm -rf /" in captured.err  # stderr IS the rejection reason
+
+
+def test_codex_context_is_plain_text_developer_context(tmp_path, capsys):
+    agent_hooks.handle_session_start(
+        {"cwd": str(_governed(tmp_path))}, "session-start", dialect="codex")
+    out = capsys.readouterr().out
+    assert not out.lstrip().startswith("{")  # plain text, not JSON
+    assert "govrail" in out
+
+
+def test_copilot_context_is_top_level_additional_context(tmp_path, capsys):
+    agent_hooks.handle_session_start(
+        {"cwd": str(_governed(tmp_path))}, "session-start", dialect="copilot")
+    out = json.loads(capsys.readouterr().out)
+    assert "additionalContext" in out
+
+
+def test_gemini_context_spells_gemini_event_names(tmp_path, capsys):
+    agent_hooks.handle_user_prompt_submit(
+        {"cwd": str(_governed(tmp_path))}, "user-prompt-submit",
+        dialect="gemini")
+    out = json.loads(capsys.readouterr().out)
+    # gemini fires BeforeAgent where claude fires UserPromptSubmit — the
+    # hookSpecificOutput must name the event the CLI actually fired.
+    assert out["hookSpecificOutput"]["hookEventName"] == "BeforeAgent"
+
+
+def test_every_dialect_maps_every_event():
+    for event in agent_hooks.HANDLERS:
+        assert event in agent_hooks.GEMINI_EVENT_NAMES
+
+
+def test_unknown_dialect_exits_two_naming_known_set(capsys):
+    assert agent_hooks.main(["stop", "--dialect", "windsurf"]) == 2
+    err = capsys.readouterr().err
+    assert "unknown dialect 'windsurf'" in err
+    assert "gemini" in err  # the known set, for the next try
+
+
+def test_dialect_without_value_exits_two(capsys):
+    assert agent_hooks.main(["stop", "--dialect"]) == 2
+    assert "--dialect requires a name" in capsys.readouterr().err
+
+
+def test_unexpected_flag_exits_two(capsys):
+    assert agent_hooks.main(["stop", "--json"]) == 2
+    assert "unexpected argument '--json'" in capsys.readouterr().err
+
+
+def test_help_lists_dialect_flag_in_options_block(capsys):
+    assert agent_hooks.main(["--help"]) == 0
+    out = capsys.readouterr().out
+    options_at = out.index("options:")
+    assert "--dialect" in out[options_at:]  # the registry-synced surface
+
+
 # ── install + uninstall: exact reversal (D10/D59) ────────────────────
 
 def test_add_ons_installs_template_bytes_and_bare_created_entry(tmp_path):
@@ -156,3 +254,93 @@ def test_uninstall_keeps_customized_settings_until_force(tmp_path, capsys):
     assert settings.exists()
     assert cli.uninstall(tmp_path, force=True) == 0
     assert not settings.exists()
+
+
+# ── --platforms: one template per platform, exact reversal (D60) ──────
+
+def _add_ons_with_platforms(tmp_path, platforms):
+    manifest_path = _manifest(tmp_path)
+    rc = cli._add_ons(tmp_path, manifest_path, hooks=False, ci=False,
+                      platforms=platforms)
+    return rc, manifest_path
+
+
+def test_platforms_install_template_bytes_and_created_entries(tmp_path):
+    rc, manifest_path = _add_ons_with_platforms(tmp_path, ["codex", "gemini"])
+    assert rc == 0
+    for name, (rel, tpl) in cli.PLATFORM_TARGETS.items():
+        if name in ("codex", "gemini"):
+            assert (tmp_path / rel).read_bytes() == \
+                cli.TEMPLATES.joinpath(tpl).read_bytes()
+            assert rel in json.loads(
+                manifest_path.read_text(encoding="utf-8"))["created"]
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert data["platforms"] == ["codex", "gemini"]
+
+
+def test_platforms_all_installs_every_target(tmp_path):
+    rc, _ = _add_ons_with_platforms(tmp_path, list(cli.PLATFORM_TARGETS))
+    assert rc == 0
+    for rel, _tpl in cli.PLATFORM_TARGETS.values():
+        assert (tmp_path / rel).exists()
+
+
+def test_explicit_platforms_replace_the_claude_default(tmp_path):
+    rc, _ = _add_ons_with_platforms(tmp_path, ["codex"])
+    assert rc == 0
+    assert (tmp_path / ".codex" / "hooks.json").exists()
+    assert not (tmp_path / ".claude" / "settings.json").exists()
+
+
+def test_existing_platform_config_is_named_and_skipped(tmp_path, capsys):
+    existing = tmp_path / ".gemini" / "settings.json"
+    existing.parent.mkdir()
+    existing.write_text('{"model": "adopters-own"}', encoding="utf-8")
+    rc, manifest_path = _add_ons_with_platforms(tmp_path, ["gemini"])
+    assert rc == 0
+    assert existing.read_text() == '{"model": "adopters-own"}'
+    assert ".gemini/settings.json" not in json.loads(
+        manifest_path.read_text(encoding="utf-8"))["created"]
+    assert "already exists" in capsys.readouterr().out
+
+
+def test_platform_configs_uninstall_and_drift_like_any_template(tmp_path):
+    rc, _ = _add_ons_with_platforms(tmp_path, ["codex", "copilot"])
+    assert rc == 0
+    # drift classification knows the files (the _inventory reader)
+    classified = {f["path"] for f in
+                  cli._upgrade_files(tmp_path, tmp_path / ".gov" /
+                                     "manifest.json")[0]}
+    assert ".codex/hooks.json" in classified
+    assert ".github/hooks/govrail.json" in classified
+    assert cli.uninstall(tmp_path) == 0  # pristine → exact reversal (D10)
+    for rel, _tpl in cli.PLATFORM_TARGETS.values():
+        if rel in (".codex/hooks.json", ".github/hooks/govrail.json"):
+            assert not (tmp_path / rel).exists()
+
+
+def test_parse_platforms_validates_names_and_dedupes(capsys):
+    assert cli._parse_platforms("codex, gemini") == ["codex", "gemini"]
+    assert cli._parse_platforms("codex,codex") == ["codex"]
+    assert cli._parse_platforms("all") == list(cli.PLATFORM_TARGETS)
+    assert cli._parse_platforms("windsurf") is None
+    assert "unknown platform 'windsurf'" in capsys.readouterr().err
+    assert cli._parse_platforms("codex,") is None
+    assert "empty name" in capsys.readouterr().err
+
+
+def test_fresh_init_records_platforms_and_installs_exactly_them(tmp_path):
+    assert cli.init(tmp_path, platforms=["codex"]) == 0
+    assert (tmp_path / ".codex" / "hooks.json").exists()
+    assert not (tmp_path / ".claude" / "settings.json").exists()
+    data = json.loads((tmp_path / ".gov" / "manifest.json")
+                      .read_text(encoding="utf-8"))
+    assert data["platforms"] == ["codex"]
+
+
+def test_upgrade_report_names_platforms_still_available(tmp_path, capsys):
+    assert cli.init(tmp_path, platforms=["codex"]) == 0
+    assert cli.init(tmp_path, upgrade=True) == 0
+    out = capsys.readouterr().out
+    assert "agent platforms not installed: claude, copilot, gemini" in out
+    assert "gov init --platforms claude,copilot,gemini" in out

@@ -57,7 +57,8 @@ UNIVERSAL_FLAGS = {"-h", "--help", "-v", "--version"}
 # notes documenting working runs read as dead commands).
 FLAGS: dict[str, set[str]] = {
     "init": {"--project", "--hooks", "--pre-commit", "--ci", "--upgrade",
-             "--json", "--adopt", "--adopt-new", "--preview", "--preset"},
+             "--json", "--adopt", "--adopt-new", "--preview", "--preset",
+             "--platforms"},
     "uninstall": {"--project", "--force"},
     "run": {"--config", "--allow-unsealed-config", "--mode", "--base", "--gate", "--every-gate",
             "--merge", "--tag", "--no-record", "--receipt", "--json",
@@ -94,7 +95,7 @@ FLAGS: dict[str, set[str]] = {
     "audit-notes": {"--json"},
     "change-scope": {"--base"},
     "archive-notes": {"--rebaseline"},
-    "agent-hooks": set(),
+    "agent-hooks": {"--dialect"},  # D60: the installed platform's output contract
     "task": {"--check", "--rules", "--mode", "--timeout",
              "--agent", "--ttl", "--wait", "--json", "--force"},  # across subcommands; --agent/--force on close
     "preset": {"--project"},  # on the `apply` subcommand (list/show are flagless)
