@@ -8,7 +8,7 @@ never renumber or reuse a row — decisions are addresses, not prose.
 Every entry records what the decision BEAT under its Alternatives
 heading; a decision without its alternatives invites re-litigation,
 which is the exact failure this log exists to prevent.
-`gov verify-decisions` checks numbering, the alternatives record, and
+`gov decision verify` checks numbering, the alternatives record, and
 orphaned references; `gov recall` searches these entries.
 
 ## D0 — Adopt the govrail governance plane

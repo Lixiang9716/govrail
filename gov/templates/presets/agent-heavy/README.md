@@ -10,7 +10,7 @@ and never overwriting local state.
 
 | Item | Content | Adoption contract |
 |---|---|---|
-| gate `verify-decisions` | `gov verify-decisions` scoped to `docs/decisions.md` | merged into `gates.json` by id (D39) — a local gate with the same id is kept untouched |
+| gate `verify-decisions` | `gov decision verify` scoped to `docs/decisions.md` | merged into `gates.json` by id (D39) — a local gate with the same id is kept untouched |
 | mode `governance` | `+= verify-decisions` (mode created when absent) | membership converges: an existing mode gains the declared ids it lacks, local order untouched — even when the gate arrived in an earlier round (D39) |
 | skill `parallel-workers` | the worker protocol: lease → verify → preflight → blind coordination | copied byte-for-byte when missing (D29); an existing skill is skipped and named |
 | manifest hint `note_presence_exempt` | `[".gov/tasks/**"]` | written only when the key is absent (D49); the local value always wins |

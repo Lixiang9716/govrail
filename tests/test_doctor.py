@@ -90,7 +90,7 @@ def test_unadopted_shipped_gates_are_named(tmp_path, monkeypatch, capsys):
     assert "conflict-markers" in out  # a template gate this version ships
     assert "gov init --adopt-new gates.json lands them" in out
     # #147's motivating case: the hand-adoption tools are named too
-    assert "`gov verify-decisions`, decisions table guard" in out
+    assert "`gov decision verify`, decisions table guard" in out
     assert "wire one into a mode by hand" in out
 
 

@@ -26,13 +26,11 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-from . import (archive_notes, atomicio, audit_notes, change_scope, decision,
+from . import (atomicio, change_scope, decision,
                gates, gitutil, hookcmd, locks, recall, review, stats, task,
-               verify_archive, verify_conflict_markers, verify_decisions,
-               verify_doc_sync, verify_plane)
+               verify_conflict_markers, verify_doc_sync, verify_plane)
 from . import checks, doctor, note, presets, receipt, self_test, trend, whatsnew
-from . import verify_note_presence
-from . import verify_notes, verify_rubric
+from . import verify_rubric
 from . import verify_translation_pairing
 from . import __version__
 
@@ -1051,6 +1049,25 @@ def uninstall(project: Path, force: bool = False) -> int:
     return 0
 
 
+# Wave-1 consolidation (D57): the 13 absorbed top-level commands keep
+# working as aliases — same behavior, one deprecation line on stderr.
+# The alias goes away after a full deprecation window (two minors).
+_DEPRECATED_ALIASES = {
+    "verify-notes": ["note", "verify"],
+    "verify-note-presence": ["note", "presence"],
+    "audit-notes": ["note", "audit"],
+    "archive-notes": ["note", "archive"],
+    "verify-archive": ["note", "archive-verify"],
+    "verify-decisions": ["decision", "verify"],
+    "verify-pairing": ["verify", "pairing"],
+    "verify-rubric": ["verify", "rubric"],
+    "verify-conflict-markers": ["verify", "conflict-markers"],
+    "verify-doc-sync": ["verify", "doc-sync"],
+    "acquire": ["lease", "acquire"],
+    "release": ["lease", "release"],
+    "locks": ["lease", "list"],
+}
+
 _COMMANDS = {
     "init": "inject the plane into a project (--hooks/--ci add runners; --hooks "
             "--pre-commit adds the opt-in commit-stage gates; --adopt-new "
@@ -1063,48 +1080,38 @@ _COMMANDS = {
     "self-test": "run governance rejection cases",
     "receipt": "verifiable run receipts (verify/show): verify a cited "
                "receipt against a commit (issue #124/D42)",
-    "verify-notes": "check note format",
-    "verify-pairing": "check bilingual pairing (--write re-confirms; --staged "
-                     "checks the index; --explain prints the schema)",
-    "verify-note-presence": "warn when a non-trivial diff carries no note (e.g. --base <ref>, --strict)",
-    "verify-rubric": "check the review rubric's structure (ids, fields, parity)",
-    "verify-archive": "verify the archived-notes seal (pinned sha256 per file)",
-    "verify-decisions": "verify the decisions table (numbering, alternatives, orphans; --base checks branch collisions)",
-    "decision": "decision-row tooling (next free D-number; atomic validated add)",
-    "verify-doc-sync": "CHANGELOG ↔ HIGHLIGHTS pairing (every version has a "
-                "section; --write drafts the missing ones from CHANGELOG)",
-    "verify-conflict-markers": "fail when changed files carry git conflict markers (e.g. --base <ref>, --staged)",
+    "verify-plane": "tamper-evidence for the plane's own config "
+                    "(rules.md, gates.json, pairing/decisions/surfaces, "
+                    ".gov/rejections/**; --write re-baselines — interactive "
+                    "consent, --confirm-unattended for agents)",
+    "hooks": "git-hook gate runners (the installed hooks delegate here; "
+             "'hooks pre-commit' runs the gates whose 'stages' include "
+             "'pre-commit' under their configured advisory/blocking contract)",
+    "doctor": "environment self-check (PATH, python, hooks, gates schema)",
+    "note": "note scaffold, read side, and the notes gates "
+            "(new/check/list/show/verify/presence/audit/archive/"
+            "archive-verify; list --stale marks audit signals)",
+    "decision": "decision-row tooling (next/add/verify: next free D-number; "
+                "atomic validated add; table structure guard)",
+    "lease": "lease locks for parallel agents (acquire/release/list; "
+             "busy exits 3; --wait S polls, --ttl S bounds the lease)",
+    "verify": "content gates without a family hub (pairing/rubric/"
+              "conflict-markers/doc-sync)",
+    "check": "syntax-class static checks over the parse layer (shipped + "
+             ".gov/checks/ rules; suppressions counted; --strict makes "
+             "warnings block)",
     "review": "assemble the review dossier for a diff (scope, notes, recall, rubric)",
     "trend": "gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)",
     "stats": "structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger",
-    "check": "syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)",
-    "doctor": "environment self-check (PATH, python, hooks, gates schema)",
-    "note": "note scaffold, read side, and pre-commit check "
-            "(new/check/list/show; list --stale marks audit signals)",
     "whatsnew": "usage-oriented highlights since a version",
     "recall": "retrieve notes, decisions, and postmortems (all terms, ranked)",
-    "audit-notes": "report mechanical staleness signals in implemented notes",
     "change-scope": "report touched surfaces (e.g. --base <ref>)",
-    "archive-notes": "seal the archived-notes manifest",
     "task": "task cards for subagent briefs (new/check/close/claim/release/"
             "list; rules@hash pin + checklist + green-run receipt; claim/"
             "release lease a card so two workers cannot take one)",
     "preset": "typed adoption bundles (list/show/apply): a project type's "
               "gates, skills, and manifest hints — additive, never "
               "overwriting (D53)",
-    "acquire": "take a lease lock on a resource (cross-process, "
-               "cross-duration; busy exits 3; --wait S polls, --ttl S "
-               "bounds the lease)",
-    "release": "release a lease you hold (--agent must match the holder)",
-    "locks": "list current lease locks in the git common dir (diagnostic "
-             "only, never an admission decision)",
-    "hooks": "git-hook gate runners (the installed hooks delegate here; "
-             "'hooks pre-commit' runs the gates whose 'stages' include "
-             "'pre-commit' under their configured advisory/blocking contract)",
-    "verify-plane": "tamper-evidence for the plane's own config "
-                    "(rules.md, gates.json, pairing/decisions/surfaces, "
-                    ".gov/rejections/**; --write re-baselines — interactive "
-                    "consent, --confirm-unattended for agents)",
 }
 
 
@@ -1308,6 +1315,13 @@ def main(argv: list[str] | None = None) -> int:
         _usage()
         return 2
     cmd, rest = argv[0], argv[1:]
+    while cmd in _DEPRECATED_ALIASES:
+        # D57 Wave 1: absorbed commands keep working — same behavior,
+        # one deprecation line, and the alias dies after the window.
+        new = _DEPRECATED_ALIASES[cmd]
+        print(f"gov: '{cmd}' is deprecated — use 'gov {' '.join(new)}'",
+              file=sys.stderr)
+        cmd, rest = new[0], [*new[1:], *rest]
 
     if cmd in _HELP_FLAGS:
         _usage()
@@ -1343,24 +1357,31 @@ def main(argv: list[str] | None = None) -> int:
         return receipt.main(rest)
     if cmd == "self-test":
         return self_test.main(rest)
-    if cmd == "verify-notes":
-        return verify_notes.main(rest)
-    if cmd == "verify-pairing":
-        return verify_translation_pairing.main(rest)
-    if cmd == "verify-note-presence":
-        return verify_note_presence.main(rest)
-    if cmd == "verify-rubric":
-        return verify_rubric.main(rest)
-    if cmd == "verify-archive":
-        return verify_archive.main(rest)
-    if cmd == "verify-decisions":
-        return verify_decisions.main(rest)
+    if cmd == "verify":
+        hub = {"pairing": verify_translation_pairing,
+               "rubric": verify_rubric,
+               "conflict-markers": verify_conflict_markers,
+               "doc-sync": verify_doc_sync}
+        sub = rest[0] if rest else ""
+        if sub in ("-h", "--help") or not rest:
+            print("usage: gov verify <target> [flags]")
+            print("content gates without a family hub:")
+            for name, help_text in (
+                    ("pairing", "bilingual pairing (--write re-confirms; "
+                     "--staged checks the index; --explain prints the schema)"),
+                    ("rubric", "review rubric structure (--path)"),
+                    ("conflict-markers", "conflict markers "
+                     "(--base, --staged)"),
+                    ("doc-sync", "CHANGELOG ↔ HIGHLIGHTS pairing (--write)")):
+                print(f"  {name:<20} {help_text}")
+            return 0
+        if sub not in hub:
+            print(f"gov verify: unknown target '{sub}' (known: "
+                  f"{', '.join(sorted(hub))})", file=sys.stderr)
+            return 2
+        return hub[sub].main(rest[1:])
     if cmd == "decision":
         return decision.main(rest)
-    if cmd == "verify-doc-sync":
-        return verify_doc_sync.main(rest)
-    if cmd == "verify-conflict-markers":
-        return verify_conflict_markers.main(rest)
     if cmd == "review":
         return review.main(rest)
     if cmd == "trend":
@@ -1377,16 +1398,26 @@ def main(argv: list[str] | None = None) -> int:
         return whatsnew.main(rest)
     if cmd == "recall":
         return recall.main(rest)
-    if cmd == "audit-notes":
-        return audit_notes.main(rest)
+    if cmd == "lease":
+        sub = rest[0] if rest else ""
+        if sub in ("-h", "--help"):
+            print("usage: gov lease <subcommand> [flags]")
+            print("lease locks for parallel agents (busy exits 3):")
+            print("  acquire  take a lease on a resource "
+                  "(--agent ID --ttl DUR --wait S)")
+            print("  release  release a lease you hold (--agent ID)")
+            print("  list     list current lease locks (diagnostic)")
+            return 0
+        if sub not in ("acquire", "release", "list"):
+            print(f"gov lease: unknown subcommand '{sub}' "
+                  "(known: acquire, release, list)", file=sys.stderr)
+            return 2
+        mapped = "locks" if sub == "list" else sub
+        return locks.main([mapped, *rest[1:]])
     if cmd == "change-scope":
         return change_scope.main(rest)
-    if cmd == "archive-notes":
-        return archive_notes.main(rest)
     if cmd == "task":
         return task.main(rest)
-    if cmd in ("acquire", "release", "locks"):
-        return locks.main([cmd, *rest])
     if cmd == "hooks":
         return hookcmd.main(rest)
     if cmd == "verify-plane":

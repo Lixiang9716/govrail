@@ -9,7 +9,7 @@ Reviews grade against this rubric, item by item, with evidence.
 - **Checks:** behavior-bearing diffs carry a note with real alternatives.
 - **Evidence:** the note's Alternatives lost for stated reasons.
 - **Anti-pattern:** a note that records what was done but not what it beat.
-- **Gate candidate:** no — presence is gated (`gov verify-note-presence`).
+- **Gate candidate:** no — presence is gated (`gov note presence`).
 
 ### R2 — A new or changed gate proves it can reject
 

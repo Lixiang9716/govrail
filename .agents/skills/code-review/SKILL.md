@@ -19,7 +19,7 @@ A short review with one substantiated blocker beats a list of nits. Machines alr
    change's own keywords, and the rubric items — grade from the dossier,
    not from a cold repository. A dirty worktree means the PR author must
    either commit or exclude those files.
-2. Find the PR's Agent Note. A non-trivial change without a note in the same PR is a blocker by rule 2 — and `gov verify-note-presence` will have said so.
+2. Find the PR's Agent Note. A non-trivial change without a note in the same PR is a blocker by rule 2 — and `gov note presence` will have said so.
 
 ## Grade against the rubric
 

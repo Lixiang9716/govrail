@@ -18,7 +18,7 @@ counterpart: foo.zh.md
 编辑任意一侧后，在同一改动中重新确认：
 
 ```sh
-gov verify-pairing --write docs/example.md
+gov verify pairing --write docs/example.md
 ```
 
 当记录的哈希不再匹配文件时门禁变红——单侧编辑永远不会静默。
@@ -46,7 +46,7 @@ gov verify-pairing --write docs/example.md
 译文命名为 `foo_CN.md` 的项目设 `"counterparts": ["{stem}_CN.md"]`。不符合任何约定的一次性配对显式登记——记录里的 `counterpart` 字段钉住名字：
 
 ```sh
-gov verify-pairing --write en:docs/foo.md zh:docs/foo_CN.md
+gov verify pairing --write en:docs/foo.md zh:docs/foo_CN.md
 ```
 
 ## 诚实的边界

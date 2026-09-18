@@ -41,15 +41,15 @@ you are ready to enforce pairing, record the existing pairs and remove
 `allowFailure` from the pairing gate in `gates.json`:
 
 ```sh
-gov verify-pairing --write       # baseline every pair (writes .i18n.yaml records)
+gov verify pairing --write       # baseline every pair (writes .i18n.yaml records)
 ```
 
 Projects that name translations differently (e.g. `foo_CN.md`) configure the
 convention in `.gov/pairing.json`, or register pairs one by one with
-`gov verify-pairing --write en:<path> zh:<path>`.
+`gov verify pairing --write en:<path> zh:<path>`.
 
 A change that touches behavior-bearing surfaces with no Agent Note draws a
-warning from `gov verify-note-presence` (naming the rule); add the note, or
+warning from `gov note presence` (naming the rule); add the note, or
 pass `--strict` once your team wants that warning to block. Routine
 bookkeeping never warns — task-card receipts (`.gov/tasks/**`) are exempt
 by default — and a repo can exempt more surfaces by declaring

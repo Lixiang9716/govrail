@@ -16,7 +16,7 @@ gov run                         # pairing 以 advisory 运行直到 baseline
 新装不该红。有文档要配对时：
 
 ```sh
-gov verify-pairing --write      # 全部配对建立基线（部分成功：能记的记，
+gov verify pairing --write      # 全部配对建立基线（部分成功：能记的记，
                                 # 不能记的报）
 ```
 
@@ -53,7 +53,7 @@ apply 经平面的采纳契约增量落地——同 id 的本地门保留并点�
 报错自带修复——照抄即可：
 
 ```
-docs/foo.md: out of sync — re-confirm: gov verify-pairing --write docs/foo
+docs/foo.md: out of sync — re-confirm: gov verify pairing --write docs/foo
 (the en side last moved in a1b2c3d, confirmed 2026-09-01T10:00:00+00:00)
 ```
 
@@ -81,7 +81,7 @@ zh_commit: 113b230  # 不是 HEAD，也不是确认提交；仅为上下文
 一条只读命令即可得：
 
 ```sh
-gov verify-pairing --explain
+gov verify pairing --explain
 ```
 
 ## 漂移在提交时抓到，而不是推送时
@@ -98,7 +98,7 @@ gov init --hooks --pre-commit   # 加装项；单用 --hooks 仍是 push 阶段
 复——照跑、重新暂存，提交直接落地，不经 push 往返：
 
 ```
-docs/foo.md: out of sync — re-confirm: gov verify-pairing --write docs/foo
+docs/foo.md: out of sync — re-confirm: gov verify pairing --write docs/foo
 verify_translation_pairing: 1 violation(s) in 1 staged pair(s)
 ```
 
@@ -135,8 +135,8 @@ verify_translation_pairing: 1 violation(s) in 1 staged pair(s)
 自带，读的是变更文件的内容：
 
 ```sh
-gov verify-conflict-markers            # 变更文件 vs auto 基线
-gov verify-conflict-markers --staged   # 只查暂存区——pre-commit 轻量版
+gov verify conflict-markers            # 变更文件 vs auto 基线
+gov verify conflict-markers --staged   # 只查暂存区——pre-commit 轻量版
 ```
 
 diff 里存在带标记文件时的预期输出（exit 1）：
@@ -208,7 +208,7 @@ D 引用明示"未核对"——绝不静默跳过。
 
 ## 决策表
 
-`gov verify-decisions` 守卫编号（唯一、连续）、备选（每条 D 记录
+`gov decision verify` 守卫编号（唯一、连续）、备选（每条 D 记录
 打败了什么）、并报告孤儿（无笔记引用——信息性）。上下文可能过期
 的决策带 `review-by: 2027-01-01`；过期打 review-due 提示。
 
@@ -217,7 +217,7 @@ D 引用明示"未核对"——绝不静默跳过。
 ```sh
 gov decision next --base origin/master   # 合并后历史会显示的号
 gov decision add --from draft.md --against origin/master  # --against = --base
-gov verify-decisions --base origin/master
+gov decision verify --base origin/master
 ```
 
 两个 worktree 从同一基线各算"下一个空闲号"都会拿到 D39；`--base`
@@ -262,9 +262,9 @@ merge）`gov receipt verify <commit>` 证明落地的树就是绿过的那棵。
 ## 多个 agent 共写一个文件，如何不互踩
 
 ```sh
-gov acquire reports/summary.md --agent w1 --ttl 600  # exit 0 = 拿到租约
-gov acquire reports/summary.md --agent w2            # exit 3，点名持有者
-gov release reports/summary.md --agent w1            # 只有持有者能释放
+gov lease acquire reports/summary.md --agent w1 --ttl 600  # exit 0 = 拿到租约
+gov lease acquire reports/summary.md --agent w2            # exit 3，点名持有者
+gov lease release reports/summary.md --agent w1            # 只有持有者能释放
 ```
 
 **症状**：几个并行 agent 写同一个文件，互相覆盖——变成"谁最后写谁
@@ -281,7 +281,7 @@ gov release reports/summary.md --agent w1            # 只有持有者能释放
 输家在 stderr 得到
 `acquire: REFUSED — 'reports/summary.md' is held by 'w1' until …`，
 退出码 3——同 holder 重复 acquire 也是 3，锁不可重入。非持有者的
-release 会被点名冒充者并 exit 2。`gov locks` 列出当前租约（纯诊断）。
+release 会被点名冒充者并 exit 2。`gov lease list` 列出当前租约（纯诊断）。
 持有者崩溃时，租约在 `--ttl` 后过期，下一个 acquire 懒接管——此后
 可能双持。这正是锁不承担正确性的原因：落地的内容仍由你的门禁与评审
 裁决，master 的正确性锚在 push CAS。
@@ -386,7 +386,7 @@ gov trend --cost   # 按 caller：各单位的总量与早→晚窗拆分
 ## 长会话被未跟踪文件警告淹没
 
 ```sh
-gov verify-note-presence --staged     # 只看 index；干净即静默
+gov note presence --staged     # 只看 index；干净即静默
 ```
 
 超五条折叠（`…and N more`）。

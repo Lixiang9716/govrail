@@ -25,12 +25,12 @@ doing.
 1. **Lease before editing.** Before the first edit of any shared resource:
 
    ```sh
-   gov acquire <resource> --ttl <2-3x your estimate> --agent <worker id> --wait <generous>
+   gov lease acquire <resource> --ttl <2-3x your estimate> --agent <worker id> --wait <generous>
    ```
 
    Exit 3 means busy — pause and retry (the holder's lease expires at the
    named instant); never edit a locked resource "quickly". When done:
-   `gov release <resource> --agent <worker id>`.
+   `gov lease release <resource> --agent <worker id>`.
 2. **Edit only under the lease; verify before releasing.** Make the edits,
    run `gov run --every-gate`, and let it go green BEFORE releasing — a
    released-but-red resource hands the next worker your breakage as their
@@ -73,7 +73,7 @@ ever end in exit 3 at its own deadline.
   short: a slow holder is taken over mid-edit. Too long: every loser
   waits out the whole TTL, not the work.
 - `--wait` ≥ the holder's remaining TTL + margin — or skip `--wait` and
-  go do other work, polling `gov task list` / `gov locks` instead.
+  go do other work, polling `gov task list` / `gov lease list` instead.
 - Work outgrew the TTL? Release and re-acquire with a fresh TTL rather
   than letting rivals wait for a stale holder.
 
@@ -82,6 +82,6 @@ ever end in exit 3 at its own deadline.
 - Leases are the liveness layer, not correctness: they prevent duplicated
   work and never replace the gates. A crashed holder's lease expires by
   TTL; correctness stays anchored in the gates and the landing checks.
-- `gov locks` is a read-only diagnostic — never an admission decision.
+- `gov lease list` is a read-only diagnostic — never an admission decision.
 - Single-agent work needs none of this: `gov run` before push remains the
   whole discipline.

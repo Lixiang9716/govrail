@@ -71,17 +71,23 @@ FLAGS: dict[str, set[str]] = {
     "verify-archive": set(),
     "verify-decisions": {"--path", "--base", "--json"},
     "decision": {"--count", "--base", "--against", "--from", "--id",
-                 "--dry-run"},  # --against aliases --base (#147)
+                 "--dry-run", "--path", "--json"},  # --against aliases
+                 # --base (#147); D57: the verify passthrough's flags ride
+                 # the hub
     "verify-doc-sync": {"--write"},
     "verify-conflict-markers": {"--base", "--staged"},
+    "note": {"--class", "--ref", "--json", "--stale", "--base", "--strict",
+            "--staged",
+             "--rebaseline"},  # D57: verify/presence/audit/archive ride
+             # the hub; their flags land here
+    "lease": {"--agent", "--ttl", "--wait"},  # D57: acquire/release/list
+    "verify": {"--write", "--staged", "--explain", "--path",
+               "--base"},  # D57: pairing/rubric/conflict-markers/doc-sync
     "review": {"--base", "--hits", "--grade"},
     "trend": {"--last", "--gate", "--base", "--by-tag", "--cost", "--stats"},
     "stats": {"--lang", "--record", "--json"},
     "check": {"--lang", "--strict", "--record", "--json", "--base", "--all"},
     "doctor": {"--json"},
-    # across subcommands: --class/--ref on `new`; --class/--json/--stale
-    # on `list` (a note citing `gov note list --stale` must not read as drift)
-    "note": {"--class", "--ref", "--json", "--stale"},
     "whatsnew": {"--since"},
     "recall": {"--any", "--snippet"},
     "audit-notes": {"--json"},
@@ -103,7 +109,10 @@ def _known_commands() -> set[str] | None:
         from . import cli
     except ImportError:
         return None
-    return set(cli._COMMANDS)
+    # D57 Wave 1: absorbed commands still work via the deprecated
+    # aliases — a note citing `gov verify-notes` describes a run that
+    # can still happen, so aliases count as known (they are not dead).
+    return set(cli._COMMANDS) | set(cli._DEPRECATED_ALIASES)
 
 
 def _known_decisions() -> set[str] | None:

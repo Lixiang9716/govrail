@@ -284,6 +284,77 @@ def main(argv: list[str] | None = None) -> int:
     p_show = sub.add_parser("show", help="print one implemented note (id or path prefix)")
     p_show.add_argument("ref", help="filename, stem, or path substring (e.g. 2026-09-15-plane)")
     p_show.set_defaults(func=_show)
+
+    # D57 Wave 1: the notes family's gates and tools live under this hub.
+    # Each passthrough DECLARES the child's flags (so --help is honest and
+    # the flag registry matches) and forwards exactly those to the child
+    # module, which keeps its own contract.
+    def _delegate(module_name, extra, rest):
+        try:
+            mod = __import__(f"gov.{module_name}", fromlist=[module_name])
+        except ImportError:
+            mod = __import__(module_name)
+        return mod.main([*extra, *rest])
+
+    def _run_presence(args):
+        extra = []
+        if args.base:
+            extra += ["--base", args.base]
+        if args.strict:
+            extra += ["--strict"]
+        if args.staged:
+            extra += ["--staged"]
+        return _delegate("verify_note_presence", extra, args.rest)
+
+    def _run_audit(args):
+        extra = ["--json"] if args.json else []
+        return _delegate("audit_notes", extra, args.rest)
+
+    def _run_archive(args):
+        extra = ["--rebaseline"] if args.rebaseline else []
+        return _delegate("archive_notes", extra, args.rest)
+
+    def _run_archive_verify(args):
+        return _delegate("verify_archive", [], args.rest)
+
+    def _run_verify(args):
+        return _delegate("verify_notes", [], getattr(args, "rest", []))
+
+    p_verify = sub.add_parser("verify", help="check note format (the notes gate)")
+    p_verify.add_argument("rest", nargs=argparse.REMAINDER,
+                          help=argparse.SUPPRESS)
+    p_verify.set_defaults(func=_run_verify)
+    p_presence = sub.add_parser(
+        "presence", help="warn when a non-trivial diff carries no note (--strict)")
+    p_presence.add_argument("--base", metavar="REF",
+                            help="diff against this git ref (default: auto)")
+    p_presence.add_argument("--strict", action="store_true",
+                            help="make the advisory blocking")
+    p_presence.add_argument("--staged", action="store_true",
+                            help="only the index — pre-commit-light")
+    p_presence.add_argument("rest", nargs=argparse.REMAINDER,
+                          help=argparse.SUPPRESS)
+    p_presence.set_defaults(func=_run_presence)
+    p_audit = sub.add_parser(
+        "audit", help="mechanical staleness signals in implemented notes (--json)")
+    p_audit.add_argument("--json", action="store_true",
+                         help="one JSON array on stdout")
+    p_audit.add_argument("rest", nargs=argparse.REMAINDER,
+                          help=argparse.SUPPRESS)
+    p_audit.set_defaults(func=_run_audit)
+    p_archive = sub.add_parser(
+        "archive", help="seal the archived-notes manifest (--rebaseline)")
+    p_archive.add_argument("--rebaseline", action="store_true",
+                           help="re-baseline the manifest over the current archive")
+    p_archive.add_argument("rest", nargs=argparse.REMAINDER,
+                          help=argparse.SUPPRESS)
+    p_archive.set_defaults(func=_run_archive)
+    p_archive_verify = sub.add_parser(
+        "archive-verify", help="verify the archived-notes seal (pinned sha256 per file)")
+    p_archive_verify.add_argument("rest", nargs=argparse.REMAINDER,
+                          help=argparse.SUPPRESS)
+    p_archive_verify.set_defaults(func=_run_archive_verify)
+
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
         parser.error("a subcommand is required (new|check|list|show)")

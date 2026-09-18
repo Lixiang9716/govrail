@@ -17,7 +17,7 @@ gov run                         # pairing runs advisory until baselined
 A fresh install must not go red. When you have documents to pair:
 
 ```sh
-gov verify-pairing --write      # baseline every pair (partial: records
+gov verify pairing --write      # baseline every pair (partial: records
                                 # what it can, reports the rest)
 ```
 
@@ -68,7 +68,7 @@ preset name? Exit 2 lists what does exist.
 The error carries its own fix — copy it:
 
 ```
-docs/foo.md: out of sync — re-confirm: gov verify-pairing --write docs/foo
+docs/foo.md: out of sync — re-confirm: gov verify pairing --write docs/foo
 (the en side last moved in a1b2c3d, confirmed 2026-09-01T10:00:00+00:00)
 ```
 
@@ -98,7 +98,7 @@ wrote. The generated record plus the full schema and this project's
 conventions are one read-only command away:
 
 ```sh
-gov verify-pairing --explain
+gov verify pairing --explain
 ```
 
 ## Catch the drift at commit, not at push
@@ -116,7 +116,7 @@ same scoped fix inline — run it, re-stage, and the commit lands without
 the push round-trip:
 
 ```
-docs/foo.md: out of sync — re-confirm: gov verify-pairing --write docs/foo
+docs/foo.md: out of sync — re-confirm: gov verify pairing --write docs/foo
 verify_translation_pairing: 1 violation(s) in 1 staged pair(s)
 ```
 
@@ -156,8 +156,8 @@ quoted one, so it stays silent. The conflict-markers gate ships in the
 template's `all` mode and reads the changed files' content:
 
 ```sh
-gov verify-conflict-markers            # changed files vs the auto base
-gov verify-conflict-markers --staged   # only the index — pre-commit-light
+gov verify conflict-markers            # changed files vs the auto base
+gov verify conflict-markers --staged   # only the index — pre-commit-light
 ```
 
 Expected output when a marked file is in the diff (exit 1):
@@ -236,7 +236,7 @@ never silently skipped.
 
 ## The decisions table
 
-`gov verify-decisions` guards numbering (unique, contiguous),
+`gov decision verify` guards numbering (unique, contiguous),
 alternatives (every D records what it beat), and reports orphans
 (no note references — informational). A decision with a context that
 may expire carries `review-by: 2027-01-01`; past dates print a
@@ -247,7 +247,7 @@ review-due note.
 ```sh
 gov decision next --base origin/master   # the number merged history will show
 gov decision add --from draft.md --against origin/master  # --against = --base
-gov verify-decisions --base origin/master
+gov decision verify --base origin/master
 ```
 
 Two worktrees computing "next free" from the same base both get D39;
@@ -300,9 +300,9 @@ went green.
 ## Several agents write one file — how not to stomp on each other
 
 ```sh
-gov acquire reports/summary.md --agent w1 --ttl 600  # exit 0 = you hold the lease
-gov acquire reports/summary.md --agent w2            # exit 3, names the holder
-gov release reports/summary.md --agent w1            # only the holder can release
+gov lease acquire reports/summary.md --agent w1 --ttl 600  # exit 0 = you hold the lease
+gov lease acquire reports/summary.md --agent w2            # exit 3, names the holder
+gov lease release reports/summary.md --agent w1            # only the holder can release
 ```
 
 **Symptom**: several parallel agents write the same file and clobber each
@@ -322,7 +322,7 @@ work on something else.
 loser gets on stderr
 `acquire: REFUSED — 'reports/summary.md' is held by 'w1' until …` with
 exit code 3 — same holder included, the lock is not reentrant. A release
-by anyone but the holder names the impostor and exits 2. `gov locks`
+by anyone but the holder names the impostor and exits 2. `gov lease list`
 lists the current leases (pure diagnostics). If a holder crashes, the
 lease expires after `--ttl` and the next acquirer takes it over — which
 can overlap two writers (double-hold). That is exactly why the lock is
@@ -436,7 +436,7 @@ loud naming the fragment.
 ## Long session, drowning in untracked-file warnings
 
 ```sh
-gov verify-note-presence --staged     # index only; silent when clean
+gov note presence --staged     # index only; silent when clean
 ```
 
 Lists fold past five (`…and N more`).

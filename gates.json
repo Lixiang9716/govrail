@@ -41,7 +41,8 @@
       "label": "note format",
       "command": [
         "gov",
-        "verify-notes"
+        "note",
+        "verify"
       ],
       "paths": [
         ".agents/notes/**"
@@ -52,7 +53,8 @@
       "label": "bilingual pairing",
       "command": [
         "gov",
-        "verify-pairing"
+        "verify",
+        "pairing"
       ],
       "paths": [
         "docs/**",
@@ -68,7 +70,8 @@
       "label": "non-trivial changes carry an Agent Note (advisory)",
       "command": [
         "gov",
-        "verify-note-presence"
+        "note",
+        "presence"
       ]
     },
     {
@@ -76,7 +79,8 @@
       "label": "no unresolved conflict markers in changed files",
       "command": [
         "gov",
-        "verify-conflict-markers"
+        "verify",
+        "conflict-markers"
       ],
       "stages": [
         "pre-commit"
@@ -96,7 +100,8 @@
       "label": "review rubric structure",
       "command": [
         "gov",
-        "verify-rubric"
+        "verify",
+        "rubric"
       ],
       "paths": [
         "docs/review-rubric.md",
@@ -108,7 +113,8 @@
       "label": "archived-notes seal",
       "command": [
         "gov",
-        "verify-archive"
+        "note",
+        "archive-verify"
       ],
       "paths": [
         ".agents/notes/archived/**"
@@ -119,7 +125,8 @@
       "label": "decisions table guard",
       "command": [
         "gov",
-        "verify-decisions"
+        "decision",
+        "verify"
       ],
       "paths": [
         "docs/decisions.md",
@@ -144,7 +151,8 @@
       "label": "CHANGELOG ↔ HIGHLIGHTS pairing",
       "command": [
         "gov",
-        "verify-doc-sync"
+        "verify",
+        "doc-sync"
       ],
       "paths": [
         "CHANGELOG.md",
