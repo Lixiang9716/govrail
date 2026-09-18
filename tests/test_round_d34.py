@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from gov import cli, plane
+from gov import plane
 
 
 def _repo(root):

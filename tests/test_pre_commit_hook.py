@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from gov import cli, plane
+from gov import plane
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 

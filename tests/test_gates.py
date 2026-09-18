@@ -703,7 +703,6 @@ def test_receipt_ledger_symlink_refuses_the_receipt(tmp_path, monkeypatch,
     """A receipts ledger symlinked outside: the receipt is not taken —
     named on the output, the chain untouched, the external file intact."""
     import subprocess as sp
-    from gov import cli
     sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
     sp.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
     sp.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)

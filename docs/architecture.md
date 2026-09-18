@@ -297,6 +297,10 @@ as it grows:
    shape — a size gate is declared limits plus the facts `gov
    parse`/`gov stats` already produce).
 
+The CI lint job is gate-ized too: `lint` runs the same ruff inside the
+DAG, so pre-push catches what CI used to catch first (blocking — this
+tree is self-hosted, there is no adopter first-run to protect).
+
 Explicitly **not** adopted, with the reasons on record: a plugin
 framework or entry-points (D53 chose data bundles; install-time plugins
 break the one `pip install` + `gov init` model); an abstract `Gate`
