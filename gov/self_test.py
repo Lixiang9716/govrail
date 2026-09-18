@@ -234,6 +234,71 @@ def test_gates_rejects_duplicate_id() -> None:
         _case("gates.py", root, 2, "duplicate gate ids must fail loud")
 
 
+def test_d57_hubs_and_aliases() -> None:
+    """D57 Wave 1: the 13 absorbed top-level commands keep working as
+    deprecated aliases — identical rc and output to their hub forms.
+    The lease hub reports busy as exit 3, and gov parse --json emits a
+    valid object. Each assertion is a real subprocess (the contract is
+    the process exit code, not an in-process return value)."""
+    import json as _json
+    import subprocess as sp
+
+    def _run_repo(td):
+        sp.run(["git", "init", "-q", "."], cwd=td, check=True)
+        sp.run(["git", "config", "user.email", "t@t"], cwd=td, check=True)
+        sp.run(["git", "config", "user.name", "t"], cwd=td, check=True)
+
+    def _gov(*argv, cwd, env):
+        return sp.run(
+            [sys.executable, "-m", "gov", *argv], cwd=cwd,
+            capture_output=True, text=True, timeout=60,
+            encoding="utf-8", errors="replace", env=env)
+
+    env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent.parent),
+           "PYTHONUTF8": "1"}
+
+    # alias forwarding: verify-notes and note verify agree on rc+stdout
+    with tempfile.TemporaryDirectory() as td:
+        _run_repo(td)
+        notes = Path(td) / ".agents" / "notes" / "implemented" / "bug-fix"
+        notes.mkdir(parents=True)
+        (notes / "2026-01-01-x.md").write_text(
+            "# Agent Note: x\n\nStatus: implemented\n\n"
+            "## Problem\np\n\n## Decision\nd\n\n"
+            "## Alternatives considered\na\n", encoding="utf-8")
+        old = _gov("verify-notes", cwd=td, env=env)
+        new = _gov("note", "verify", cwd=td, env=env)
+        assert old.returncode == new.returncode, (
+            f"alias rc diverged: {old.returncode} vs {new.returncode}")
+        assert old.stdout == new.stdout, "alias stdout diverged"
+
+    # lease hub: busy resource exits 3 through the hub form
+    with tempfile.TemporaryDirectory() as td:
+        _run_repo(td)
+        lease_env = {**env, "GOV_BIN": f"{sys.executable} -m gov"}
+        sp.run(["gov", "acquire", "r", "--agent", "a", "--ttl", "60"],
+               cwd=td, check=True, capture_output=True,
+               env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent.parent),
+                    "PYTHONUTF8": "1"})
+        r = sp.run(
+            [sys.executable, "-m", "gov", "lease", "acquire", "r",
+             "--agent", "b"], cwd=td, capture_output=True, text=True,
+            timeout=60, env=lease_env, encoding="utf-8", errors="replace")
+        assert r.returncode == 3, f"lease busy must exit 3, got {r.returncode}"
+
+    # parse --json: valid object with files and skipped
+    with tempfile.TemporaryDirectory() as td:
+        f = Path(td) / "a.py"
+        f.write_text("x = 1\n", encoding="utf-8")
+        r = sp.run(
+            [sys.executable, "-m", "gov", "parse", str(f), "--json"],
+            capture_output=True, text=True, timeout=60,
+            env={**env, "PYTHONPATH": str(Path(__file__).resolve().parent.parent)},
+            encoding="utf-8", errors="replace")
+        value = _json.loads(r.stdout)
+        assert "files" in value and "skipped" in value
+
+
 def test_gates_rejects_cycle() -> None:
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -1732,6 +1797,7 @@ CASES = [
     test_verify_notes_rejects_missing_section,
     test_verify_notes_rejects_unknown_argument,
     test_verify_notes_rejects_hollow_skeleton,
+    test_d57_hubs_and_aliases,
     test_gates_rejects_duplicate_id,
     test_gates_rejects_cycle,
     test_gates_rejects_unknown_needs,

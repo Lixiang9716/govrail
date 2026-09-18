@@ -505,6 +505,20 @@ DEFAULT_TIMEOUT_MS = 600_000
 # chatty gate grew every future `gov run` and `gov trend`. A ceiling on
 # the *record* (report untouched) bounds the growth; 0 disables.
 HISTORY_DETAIL_CAP = int(os.environ.get("GOV_HISTORY_DETAIL_CAP", "262144"))
+HISTORY_DETAIL_LINES = 40
+
+
+def detail_clip(detail: str) -> str:
+    """Ledger detail: the first HISTORY_DETAIL_LINES lines plus a count —
+    a 300-line pairing failure used to embed 46KB per record (the
+    ledger is trend data, not a full dump; the human report keeps the
+    full output)."""
+    lines = detail.splitlines()
+    if len(lines) <= HISTORY_DETAIL_LINES:
+        return detail
+    kept = "\n".join(lines[:HISTORY_DETAIL_LINES])
+    return (kept + f"\n... [{len(lines) - HISTORY_DETAIL_LINES} more "
+            "line(s); the run report keeps the full output]")
 HISTORY_ROTATE_BYTES = 50 * 1024 * 1024
 
 # Popen handles of gates currently running, so --fail-fast can kill the
@@ -918,9 +932,7 @@ def run_gates(
         run_record = {
             "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "gates": [
-                ({**r, "detail": r["detail"][:HISTORY_DETAIL_CAP]
-                  + f"\n... [clipped at {HISTORY_DETAIL_CAP} chars; the run "
-                    "report keeps the full output]"}
+                ({**r, "detail": detail_clip(r["detail"])}
                  if HISTORY_DETAIL_CAP and len(r.get("detail", "")) > HISTORY_DETAIL_CAP
                  else r)
                 for r in records

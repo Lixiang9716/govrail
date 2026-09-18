@@ -18,6 +18,9 @@ contract (interface / schema / format), process or tooling, or a decision a
 maintainer may reasonably revisit. Test: would a maintainer a month later ask
 "why was this done?" If yes, write a note. Purely mechanical or local edits
 (typo, format, local rename, comment sync) are exempt.
+The presence gate is advisory until you flip it blocking (P0-3: a fresh install never goes red on day one).
+The presence gate is advisory until you flip it blocking (P0-3: a fresh
+install never goes red on day one).
 
 ## 3. A note has three required sections
 
@@ -49,8 +52,10 @@ gate ships a rejection case that proves it catches the violation it claims to;
 A human-facing document is a three-file pair: source + counterpart +
 `.i18n.yaml` record, under the naming conventions this project declared
 in `.gov/pairing.json` (govrail's own convention: `foo.md` + `foo.zh.md`
-+ `foo.i18n.yaml`). Editing one side without re-confirming the pair fails
-the pairing gate; a PR never lands one language of a pair alone.
++ `foo.i18n.yaml`). Editing one side without re-confirming the pair
+fails the pairing gate (advisory until baselined — flip it blocking by
+removing `allowFailure` after your first green run); a PR never lands
+one language of a pair alone.
 
 
 ## 8. Wait on conditions, not on clocks
