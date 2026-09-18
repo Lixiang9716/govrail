@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.38.2](https://github.com/Lixiang9716/govrail/compare/v0.38.1...v0.38.2) (2026-09-18)
+
+
+### Bug Fixes
+
+* every remaining open item from the round-15 audit ledger ([#281](https://github.com/Lixiang9716/govrail/issues/281)) ([1f15945](https://github.com/Lixiang9716/govrail/commit/1f15945ddb590fa442dc7ae2316a4bd29ff420f8))
+
 ## [0.38.1](https://github.com/Lixiang9716/govrail/compare/v0.38.0...v0.38.1) (2026-09-18)
 
 
