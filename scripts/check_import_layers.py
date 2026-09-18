@@ -19,7 +19,10 @@ dispatcher and the leaves. Exit codes follow D2: 0 ok, 1 violation
 
 This checker imports nothing from the package it judges — it is plain
 AST over the source, so it can judge a fixture tree via ``--root`` too
-(that is how the rejection case proves it can go red).
+(that is how the rejection case proves it can go red). Declared scope:
+static ``import``/``from`` statements in both spellings;
+``importlib.import_module`` and other dynamic imports are invisible to
+an AST walk and out of this gate's contract.
 """
 from __future__ import annotations
 
@@ -50,26 +53,53 @@ def load_config(path: Path) -> dict:
         print(f"import-layers: {path}: 'leaves', 'top', 'cli_importers_allowed' "
               "must be arrays", file=sys.stderr)
         raise SystemExit(2)
+    unknown = set(raw) - {"package", "leaves", "top", "cli_importers_allowed"}
+    if unknown:
+        # rule 5: a misspelled key would silently stop meaning anything.
+        print(f"import-layers: {path}: unknown key(s) "
+              f"{', '.join(sorted(unknown))}", file=sys.stderr)
+        raise SystemExit(2)
     return raw
 
 
-def _edge_targets(node: ast.AST, prefix: str) -> set[str]:
+def _edge_targets(node: ast.AST, package: str) -> set[str]:
+    """Internal edges of one import statement, in BOTH spellings — the
+    relative form (`from . import x`, `from .x import y`) and the
+    absolute form (`from gov import x`, `from gov.x import y`,
+    `import gov.x`). Missing the absolute form once shipped a false
+    green: a declared leaf reached gates through `from gov.gates
+    import parse_cost` and the gate reported 54 modules ok (found by
+    the round's independent review)."""
     found: set[str] = set()
-    if isinstance(node, ast.ImportFrom) and node.level >= 1:
-        if node.module:
-            # from .mod import name — the dependency is mod, never the
-            # imported symbol (a symbol may share a module's name).
-            found.add(node.module.split(".")[0])
-        else:
-            # from . import mod1, mod2 — the names ARE the modules.
+    prefix = package.split(".")[-1]
+    if isinstance(node, ast.ImportFrom):
+        if node.level >= 1:
+            if node.module:
+                # from .mod import name — the dependency is mod, never the
+                # imported symbol (a symbol may share a module's name).
+                found.add(node.module.split(".")[0])
+            else:
+                # from . import mod1, mod2 — the names ARE the modules.
+                for alias in node.names:
+                    if alias.name != "*":
+                        found.add(alias.name.split(".")[0])
+        elif node.module == package:
+            # from gov import mod1, mod2 — same as the relative bare form.
             for alias in node.names:
                 if alias.name != "*":
                     found.add(alias.name.split(".")[0])
+        elif node.module and node.module.startswith(package + "."):
+            # from gov.mod import name — the dependency is mod.
+            found.add(node.module[len(package) + 1:].split(".")[0])
     elif isinstance(node, ast.Import):
         for alias in node.names:
             parts = alias.name.split(".")
-            if parts[0] == prefix and len(parts) > 1:
-                found.add(parts[1])
+            if parts[0] == prefix:
+                if len(parts) > 1:
+                    found.add(parts[1])
+                else:
+                    # bare `import gov` — the package __init__ edge
+                    found.add("__init__")
     return found
 
 
@@ -103,7 +133,7 @@ def internal_imports(path: Path, package: str) -> tuple[set[str], set[str]]:
     lazy: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            targets = _edge_targets(node, prefix)
+            targets = _edge_targets(node, package)
             if id(node) in static_ids:
                 static |= targets
             else:

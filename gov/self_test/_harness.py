@@ -7,7 +7,6 @@ import. Runner machinery that never feeds a case module stays in
 """
 from __future__ import annotations
 
-import argparse
 import contextlib
 import io
 import json
@@ -18,8 +17,6 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent  # the gov/ package root (the monolith's parent)
@@ -53,9 +50,6 @@ _PASS_CMD = [sys.executable, "-c", "pass"]
 _FAIL_CMD = [sys.executable, "-c", "raise SystemExit(1)"]
 
 
-_FAIL_CMD = [sys.executable, "-c", "raise SystemExit(1)"]
-
-
 _GOOD_NOTE = (
     "# Agent Note: t\n\nStatus: implemented\n\n"
     "## Problem\np\n\n## Decision\nd\n\n## Alternatives considered\na\n"
@@ -64,10 +58,6 @@ _GOOD_NOTE_BODY = (
     "## Problem\np\n\n## Decision\nd\n\n## Alternatives considered\na\n"
 )
 
-
-_GOOD_NOTE_BODY = (
-    "## Problem\np\n\n## Decision\nd\n\n## Alternatives considered\na\n"
-)
 
 
 def _case_env() -> dict:

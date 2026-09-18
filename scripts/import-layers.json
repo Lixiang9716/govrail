@@ -6,7 +6,6 @@
     "commands",
     "gitutil",
     "lockfile",
-    "merge",
     "pathmatch",
     "root",
     "version",

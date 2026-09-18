@@ -7,7 +7,6 @@ set -u
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 
-cfg="$PWD/scripts/import-layers.json"
 
 # A clean two-module package passes.
 mkdir -p "$scratch/gov"
@@ -83,6 +82,23 @@ if python3 scripts/check_import_layers.py --root "$scratch" --config "$scratch/c
 fi
 grep -q "leaf 'gov/lazyleaf.py'" "$scratch/out.txt" || {
   echo "case-import-layers: the lazy leaf violation is not named" >&2
+  cat "$scratch/out.txt" >&2
+  exit 1
+}
+
+# 5. The ABSOLUTE spelling is judged identically: a leaf reaching a gov
+#    module via `from gov import x` (the form the first checker missed,
+#    shipping a false green) is named too.
+printf 'x = 1\n' > "$scratch/gov/atomicio.py"
+printf 'def later():\n    from gov import core_mod\n' > "$scratch/gov/atomicio.py"
+printf 'from . import atomicio\n' > "$scratch/gov/core_mod.py"
+printf 'q = 1\n' > "$scratch/gov/cli.py"
+if python3 scripts/check_import_layers.py --root "$scratch" --config "$scratch/cfg-lazy.json" >"$scratch/out.txt" 2>&1; then
+  echo "case-import-layers: an absolute-form leaf violation passed the gate" >&2
+  exit 1
+fi
+grep -q "leaf 'gov/atomicio.py'" "$scratch/out.txt" || {
+  echo "case-import-layers: the absolute-form leaf violation is not named" >&2
   cat "$scratch/out.txt" >&2
   exit 1
 }

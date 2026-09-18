@@ -262,12 +262,11 @@ commitment, not an accident — five contracts hold the 16k lines together
 as it grows:
 
 1. **Modular monolith.** One flat package, one module per bounded
-   concern, three layers with no exception: leaf utilities (`atomicio`,
-   `gitutil`, `pathmatch`, `root`, `lockfile`, `version`, `anchor`,
-   `merge`, and the dependency-free registries `commands`,
-   `decisions`, `whatsnew`) → domain modules (one per command family)
-   → the dispatcher (`cli.py`) on top, imported by declared entrypoints
-   only. The `import-layers` gate judges this graph — leaves stay
+   concern, three layers with no exception: leaf utilities (the exact
+   set is declared in `scripts/import-layers.json` — the gate's config,
+   not this prose, is that list's home) → domain modules (one per
+   command family) → the dispatcher (`cli.py`) on top, imported by
+   declared entrypoints only. The `import-layers` gate judges this graph — leaves stay
    leaves, nothing reaches up to the dispatcher, and the import-*time*
    graph stays cycle-free. Function-level lazy imports are the
    established decoupling device (direction rules still apply to them);

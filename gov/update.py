@@ -200,13 +200,13 @@ def main(argv: list[str] | None = None) -> int:
     def _migrate() -> int:
         nonlocal steps_done
         if adoptable:
-            rc = plane_mod._adopt(root, manifest_path, adoptable,
+            rc = plane_mod.adopt_missing(root, manifest_path, adoptable,
                                 preview=False)
             if rc != 0:
                 return rc
         steps_done += 1
         if (root / "gates.json").is_file():
-            rc = plane_mod._adopt_new(root, manifest_path, "gates.json")
+            rc = plane_mod.adopt_new_gates(root, manifest_path, "gates.json")
             if rc != 0:
                 return rc
         steps_done += 1

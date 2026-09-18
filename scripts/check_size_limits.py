@@ -8,7 +8,9 @@ creation promptly split). This gate reads declared limits from
 ``scripts/size-limits.json`` and names every file over its budget.
 
 Limits are data, not code (#265's shape: a size gate = declared limits +
-facts from the tree). Raising a limit is a diff a reviewer sees; the
+facts from the tree). The scan set is a closed glob list — a file outside
+the globs is unjudged, so adding a code tree means editing the config,
+which is the point. Raising a limit is a diff a reviewer sees; the
 default budget is generous on purpose — this gate catches runaway
 monoliths, not style. Exit codes follow D2: 0 ok, 1 over-limit files
 (each named with its count), 2 config/usage error.
@@ -32,6 +34,12 @@ def load_config(path: Path) -> dict:
     if not isinstance(raw, dict) or "default" not in raw:
         print(f"size-limits: {path} must be an object with a 'default' limit",
               file=sys.stderr)
+        raise SystemExit(2)
+    unknown = set(raw) - {"default", "overrides", "scan"}
+    if unknown:
+        # rule 5: a misspelled key would silently stop meaning anything.
+        print(f"size-limits: {path}: unknown key(s) "
+              f"{', '.join(sorted(unknown))}", file=sys.stderr)
         raise SystemExit(2)
     limits = raw.get("overrides", {})
     if not isinstance(limits, dict):

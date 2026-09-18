@@ -40,15 +40,10 @@ tools-family case in isolation (the replay's own building block).
 from __future__ import annotations
 
 import argparse
-import contextlib
-import io
 import json
 import os
-import re
-import shutil
 import subprocess
 import sys
-import sysconfig
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -290,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("self-test")
     try:
         from ..root import force_utf8_stdio
-    except ImportError:  # direct-script execution (python gov/self_test.py)
+    except ImportError:  # non-package execution (kept for parity with the other fallbacks)
         from root import force_utf8_stdio
     force_utf8_stdio()  # case reports leave as UTF-8 on every OS (#168)
     parser = argparse.ArgumentParser(

@@ -14,9 +14,9 @@ Status: implemented
 
 ## Decision
 
-按"先立契约、再动刀、门来守约"三步落地（docs/architecture.md 新节 "Code design contracts"，en/zh 同步）：
+设计姿态已锁入 D61；五条契约成文于 docs/architecture.md 新节 "Code design contracts"（en/zh 同步）。三步落地：
 
-1. **注册表单一来源**：`gov/commands.py` 持有命令面板（`COMMANDS`/`DEPRECATED_ALIASES`/help-version 契约/`COMMAND_FLAGS`），`--help`、audit-notes 已知命令集、退出码契约测试四方同读一份；init/uninstall 机制整体迁入 `gov/plane.py`（`_upgrade_files` 升公共名 `upgrade_files` 供 update 消费）；cli.py 瘦身为纯分发器（1625→约 560 行），全仓不再有跨模块私有 import。
+1. **注册表单一来源**：`gov/commands.py` 持有命令面板（`COMMANDS`/`DEPRECATED_ALIASES`/help-version 契约/`COMMAND_FLAGS`），`--help`、audit-notes 已知命令集、退出码契约测试四方同读一份；init/uninstall 机制整体迁入 `gov/plane.py`，三个跨模块消费者升公共名 `upgrade_files`/`adopt_missing`/`adopt_new_gates`（update 消费；tests 对 `_add_ons` 的白盒引用除外，产品代码不再有跨模块私有 import）；cli.py 瘦身为纯分发器（1625→352 行）。
 2. **self_test 包化**：`gov/self_test/` 按平面族分模块（notes/gates/knowledge/surface/evidence，最大 466 行），共享夹具入 `_harness.py`；案例经 `@case` 装饰器在导入时注册——定义即登记，手工 `CASES` 列表废除。对 tests/ 的历史符号面（`main`、`CASES`、`_git_repo`、`_run_tool_case`、probes）保持 re-export。watchdog 子进程的 PYTHONPATH 随包化修正到 checkout 根。
 3. **两个自吃门（advisory 先行，P0-3 惯例）**：`import-layers`（叶不导 gov 模块、仅声明入口可达 cli、导入期图无环；函数级惰性边方向照查、环豁免，且计入门汇总行保持可见——43 条；层图是数据：`scripts/import-layers.json`）与 `size-limits`（声明限额 + 逐文件计数，默认 1600 行，`scripts/size-limits.json`）。各自带 `.gov/rejections/` 拒绝案例（rule 6），D2 退出码词汇。翻转 blocking 留作单独的可见决定。
 

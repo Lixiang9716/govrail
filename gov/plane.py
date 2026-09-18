@@ -295,9 +295,9 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         return 2
     if manifest_path.exists():
         if adopt_new is not None:
-            return _adopt_new(project, manifest_path, adopt_new)
+            return adopt_new_gates(project, manifest_path, adopt_new)
         if adopt is not None:
-            return _adopt(project, manifest_path, adopt, preview=preview)
+            return adopt_missing(project, manifest_path, adopt, preview=preview)
         if upgrade:
             return _upgrade_report(project, manifest_path, json_mode=report_json)
         if not (hooks or ci or platforms):
@@ -559,7 +559,7 @@ def _inventory(created: set[str]) -> list[tuple[str, Any]]:
     return expected
 
 
-def _adopt(project: Path, manifest_path: Path, targets: list[str],
+def adopt_missing(project: Path, manifest_path: Path, targets: list[str],
            preview: bool = False) -> int:
     """Wish 1/D29 + D34: apply template files that are locally MISSING —
     never overwrite a customized file. A copy that is byte-identical to
@@ -682,7 +682,7 @@ def _adopt(project: Path, manifest_path: Path, targets: list[str],
     return 0
 
 
-def _adopt_new(project: Path, manifest_path: Path, target: str) -> int:
+def adopt_new_gates(project: Path, manifest_path: Path, target: str) -> int:
     """Issue #108/D39: additive adoption of NEW shipped entries into a
     customized gates.json. Gate id is identity: shipped gates whose id is
     absent locally are appended; every local gate is preserved untouched;
