@@ -4,7 +4,7 @@ For bilingual documentation repositories where release-facing docs move in
 pairs: the CHANGELOG is updated (by release tooling or by hand) and the
 usage-oriented HIGHLIGHTS file must follow, version numbers read from the
 CHANGELOG — never guessed (D37). Applying lands one gate,
-`doc-sync` (`gov verify-doc-sync`), scoped to `CHANGELOG.md` +
+`doc-sync` (`gov verify doc-sync`), scoped to `CHANGELOG.md` +
 `HIGHLIGHTS.md`, registered in the `all` mode. Premise, stated plainly:
 the repository must really carry the two files — `CHANGELOG.md` at the
 root and the HIGHLIGHTS file where `verify-doc-sync` reads it

@@ -81,28 +81,28 @@ gov run --gate pairing         # rerun a single gate
 gov self-test                  # rejection cases: the tools' + yours (.gov/rejections/)
 gov run --json                 # machine-readable: [{gate, outcome, duration_ms, detail,
                                #  selected_by, scoped_out, ...}] — the whole gate set, incl. scoped-out
-gov verify-pairing --write    # re-confirm a bilingual pair after editing one side
+gov verify pairing --write    # re-confirm a bilingual pair after editing one side
                               #   (names the field values it wrote; the record's
                               #    comments state the field semantics — #150)
-gov verify-pairing --write en:docs/a.md zh:docs/a_CN.md  # register any naming
-gov verify-pairing --explain  # the record schema + conventions, read-only
-gov verify-note-presence      # warn when a non-trivial diff carries no Agent Note
+gov verify pairing --write en:docs/a.md zh:docs/a_CN.md  # register any naming
+gov verify pairing --explain  # the record schema + conventions, read-only
+gov note presence      # warn when a non-trivial diff carries no Agent Note
                               #   (task receipts exempt; manifest note_presence_exempt names more)
-gov verify-rubric             # check the review rubric's structure
-gov verify-decisions          # guard the decisions table (ids, alternatives)
-gov verify-decisions --base <ref>  # + parallel-branch number collisions
-gov verify-decisions --json    # machine-readable: {violations, orphans, overdue, ...}
+gov verify rubric             # check the review rubric's structure
+gov decision verify          # guard the decisions table (ids, alternatives)
+gov decision verify --base <ref>  # + parallel-branch number collisions
+gov decision verify --json    # machine-readable: {violations, orphans, overdue, ...}
 gov decision next --base <ref>     # next free D-number (branch-aware; warns on a stale base)
 gov decision add --from FILE       # append a decision, validated + atomic (--against = --base)
-gov verify-conflict-markers   # fail when changed files carry git conflict markers
+gov verify conflict-markers   # fail when changed files carry git conflict markers
 gov review --base <ref> --grade  # dossier + interactive rubric grading
 gov trend                     # gate duration trends from --record history
 gov stats                     # structural facts per language (lines, symbols, nesting depth) — facts, not verdicts
 gov check                     # syntax-class checks over the parse layer; suppressions counted, never invisible
 gov receipt verify <commit>   # was a full green run recorded on this tree? (#124)
 gov recall <terms>            # retrieve notes, decisions, postmortems (--any relaxes the AND)
-gov audit-notes               # staleness signals in implemented notes
-gov audit-notes --json         # machine-readable: {findings: [{file, signal}], ...}
+gov note audit               # staleness signals in implemented notes
+gov note audit --json         # machine-readable: {findings: [{file, signal}], ...}
 gov change-scope --base <ref> # smallest sufficient set (.gov/surfaces.json maps paths)
 gov task new "Title" --check "criterion"  # task card: one-line rules@<hash> pin for a subagent brief
 gov task check                 # after a rules adoption: name the stale cards
@@ -112,12 +112,12 @@ gov task release T-0001 --agent w1          # release the card lease you hold
 gov task close T-0001          # run the gates; the green run becomes the completion receipt
 gov task list --json           # cards as [{id, title, status, rules, claim}] — claim read
                                #  from the lease file; expired reads as unclaimed
-gov acquire reports/summary.md --agent w1  # lease a shared resource (busy → exit 3;
+gov lease acquire reports/summary.md --agent w1  # lease a shared resource (busy → exit 3;
                                            #  --wait S polls, --ttl S bounds the lease;
                                            #  both outcomes announce the lock root)
-gov release reports/summary.md --agent w1  # release a lease you hold (never on another
+gov lease release reports/summary.md --agent w1  # release a lease you hold (never on another
                                            #  holder's behalf)
-gov locks                      # list current leases (diagnostic only)
+gov lease list                      # list current leases (diagnostic only)
 ```
 
 The full command surface, verbatim from `gov --help`:
@@ -130,33 +130,22 @@ commands:
   run              run the project's gate DAG (args forwarded to gates.py; --receipt records a tamper-evident run receipt, #124; --merge preflights the union of parallel branches in a scratch worktree before landing)
   self-test        run governance rejection cases
   receipt          verifiable run receipts (verify/show): verify a cited receipt against a commit (issue #124/D42)
-  verify-notes     check note format
-  verify-pairing   check bilingual pairing (--write re-confirms; --staged checks the index; --explain prints the schema)
-  verify-note-presence warn when a non-trivial diff carries no note (e.g. --base <ref>, --strict)
-  verify-rubric    check the review rubric's structure (ids, fields, parity)
-  verify-archive   verify the archived-notes seal (pinned sha256 per file)
-  verify-decisions verify the decisions table (numbering, alternatives, orphans; --base checks branch collisions)
-  decision         decision-row tooling (next free D-number; atomic validated add)
-  verify-doc-sync  CHANGELOG ↔ HIGHLIGHTS pairing (every version has a section; --write drafts the missing ones from CHANGELOG)
-  verify-conflict-markers fail when changed files carry git conflict markers (e.g. --base <ref>, --staged)
+  verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
+  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
+  doctor           environment self-check (PATH, python, hooks, gates schema)
+  note             note scaffold, read side, and the notes gates (new/check/list/show/verify/presence/audit/archive/archive-verify; list --stale marks audit signals)
+  decision         decision-row tooling (next/add/verify: next free D-number; atomic validated add; table structure guard)
+  lease            lease locks for parallel agents (acquire/release/list; busy exits 3; --wait S polls, --ttl S bounds the lease)
+  verify           content gates without a family hub (pairing/rubric/conflict-markers/doc-sync)
+  check            syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)
   review           assemble the review dossier for a diff (scope, notes, recall, rubric)
   trend            gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)
   stats            structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger
-  check            syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)
-  doctor           environment self-check (PATH, python, hooks, gates schema)
-  note             note scaffold, read side, and pre-commit check (new/check/list/show; list --stale marks audit signals)
   whatsnew         usage-oriented highlights since a version
   recall           retrieve notes, decisions, and postmortems (all terms, ranked)
-  audit-notes      report mechanical staleness signals in implemented notes
   change-scope     report touched surfaces (e.g. --base <ref>)
-  archive-notes    seal the archived-notes manifest
   task             task cards for subagent briefs (new/check/close/claim/release/list; rules@hash pin + checklist + green-run receipt; claim/release lease a card so two workers cannot take one)
   preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
-  acquire          take a lease lock on a resource (cross-process, cross-duration; busy exits 3; --wait S polls, --ttl S bounds the lease)
-  release          release a lease you hold (--agent must match the holder)
-  locks            list current lease locks in the git common dir (diagnostic only, never an admission decision)
-  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
-  verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
 ```
 <!-- gov:commands END -->
 
@@ -174,7 +163,7 @@ inline instead of one stage later at push (#110). `uninstall` reverses
 everything exactly; when a file drifted from its template it names the
 file and requires `--force` to proceed (a genuine two-step). A fresh
 install never goes red on its first run: the pairing gate ships advisory,
-`gov verify-pairing --write` baselines the existing pairs, and removing
+`gov verify pairing --write` baselines the existing pairs, and removing
 `allowFailure` turns it enforcing. `enabled: false` parks a gate without
 deleting its definition.
 

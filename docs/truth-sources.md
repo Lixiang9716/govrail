@@ -28,11 +28,11 @@ extends it to code constants, ledgers, and seals.
 | 7 | `.gov/rules.md` | the constitution (8 rules) | `gov/templates/rules.md`, the demo specimen's copy | `tests/test_template_sync.py` |
 | 8 | `gov/templates/gates.json` | the adopter gate DAG base | the demo's gates (base + its typed extras); the repo root's `gates.json` is a **dogfood instance**, not the base | `tests/test_template_sync.py` |
 | 9 | `gov/templates/gov.yml` | the adopter CI shape | `gov init --ci` renders it (version pinned) | `tests/test_template_sync.py` |
-| 10 | `.gov/pairing.json` + each `*.i18n.yaml` | bilingual pair truth (git blob hashes per side) | — | `gov verify-pairing` (the pairing gate) |
+| 10 | `.gov/pairing.json` + each `*.i18n.yaml` | bilingual pair truth (git blob hashes per side) | — | `gov verify pairing` (the pairing gate) |
 | 11 | `.gov/plane-seal.json` | sha256 seal over the plane's own config | — | `gov verify-plane` (in-DAG and out-of-band) |
 | 12 | `.gov/rituals.jsonl` | the append-only ritual ledger (tracked) | — | created by the first ritual; `tests/test_rituals.py` |
-| 13 | `docs/decisions.md` | the decision log and D-number allocation | `.gov/decisions.json` may override path/format (absent here = default) | `gov verify-decisions`, `gov decision next` |
-| 14 | `CHANGELOG.md` ↔ `gov/HIGHLIGHTS.md` | released-version pairing | HIGHLIGHTS sections are drafted from CHANGELOG | `gov verify-doc-sync` (the doc-sync gate) |
+| 13 | `docs/decisions.md` | the decision log and D-number allocation | `.gov/decisions.json` may override path/format (absent here = default) | `gov decision verify`, `gov decision next` |
+| 14 | `CHANGELOG.md` ↔ `gov/HIGHLIGHTS.md` | released-version pairing | HIGHLIGHTS sections are drafted from CHANGELOG | `gov verify doc-sync` (the doc-sync gate) |
 | 15 | `.agents/skills/*/SKILL.md` | the shipped skills | `gov/templates/skills/`, the demo's copies, the agent-heavy preset's `parallel-workers` copy | `tests/test_template_sync.py` |
 | 16 | `.gov/rejections/case-*.sh` | the rejection cases (rule 6) | the demo's copies (plus demo-own cases for demo-own gates) | `tests/test_template_sync.py` |
 

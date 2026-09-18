@@ -550,7 +550,7 @@ def test_presets_are_reachable_as_package_data():
     assert PYTHON_LIB in names
     assert DOCS_BILINGUAL in names
     skill = root / AGENT_HEAVY / "skills" / "parallel-workers" / "SKILL.md"
-    assert b"gov acquire" in skill.read_bytes()
+    assert b"gov lease acquire" in skill.read_bytes()
     # every shipped preset dir carries its README through the same glob
     for name in (AGENT_HEAVY, PYTHON_LIB, DOCS_BILINGUAL):
         assert (root / name / "README.md").is_file(), name

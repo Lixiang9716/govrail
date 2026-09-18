@@ -385,9 +385,39 @@ def main(argv: list[str] | None = None) -> int:
                        help="print what would be written; write nothing")
     p_add.set_defaults(func=_add)
 
+    # D57 Wave 1: the decisions family's gate lives under this hub as a
+    # passthrough — verify_decisions keeps its own flags and contract.
+    p_verify = sub.add_parser(
+        "verify", help="check the decisions table (numbering, alternatives; "
+                       "--base checks branch collisions)")
+    p_verify.add_argument("--path", metavar="PATH",
+                          help="decisions source path (overrides the config)")
+    p_verify.add_argument("--base", metavar="REF",
+                          help="check branch collisions against this ref")
+    p_verify.add_argument("--json", action="store_true",
+                          help="machine-readable output")
+    p_verify.add_argument("rest", nargs=argparse.REMAINDER,
+                          help=argparse.SUPPRESS)
+
+    def _verify(args):
+        try:
+            from . import verify_decisions
+        except ImportError:  # direct script execution
+            import verify_decisions
+        extra = []
+        if args.path:
+            extra += ["--path", args.path]
+        if args.base:
+            extra += ["--base", args.base]
+        if args.json:
+            extra += ["--json"]
+        return verify_decisions.main([*extra, *args.rest])
+
+    p_verify.set_defaults(func=_verify)
+
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
-        parser.error("a subcommand is required (next|add)")
+        parser.error("a subcommand is required (next|add|verify)")
     return args.func(args)
 
 

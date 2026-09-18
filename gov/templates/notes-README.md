@@ -2,7 +2,7 @@
 
 One kind of design doc lives here. An **Agent Note** records a decision — the
 *why* and *what we gave up*, the parts code and docs cannot carry. Agents and
-humans write them; `gov verify-notes` enforces the format mechanically.
+humans write them; `gov note verify` enforces the format mechanically.
 
 ## Layout
 
@@ -44,7 +44,7 @@ The body carries three required sections, in this order:
   **Mandatory**: a decision recorded without what it beat invites re-litigation.
 
 `## Consequences` is optional: state what the trade-off cost and bought. Other
-sections (`## Testing`, `## Related`) are allowed and not enforced. `gov verify-notes`
+sections (`## Testing`, `## Related`) are allowed and not enforced. `gov note verify`
 rejects a note missing any required section.
 
 ## When to write one

@@ -77,7 +77,7 @@ tests/test_docs_cli_consistency.py 保障。
    索引可能滞后发布约一分钟；发布后立刻 `pip install -U` 可能拿不到
    新 wheel——先重试，再怀疑发布。
 3. 发布 PR 存续期间，工作流会起草缺失的 HIGHLIGHTS 小节
-   （`gov verify-doc-sync --write`：条目逐字复制自 CHANGELOG，每个
+   （`gov verify doc-sync --write`：条目逐字复制自 CHANGELOG，每个
    标题自声明为草稿，D46）并把它 amend 进 release 提交本身——分支头
    是一个完整提交（CHANGELOG + 版本 + HIGHLIGHTS 同在），任何 CI 运行
    都不可能捕获到半成品 SHA；起草 job 还会自动取消被取代的待批 run，

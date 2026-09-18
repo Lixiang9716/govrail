@@ -153,9 +153,13 @@ def test_real_flags_are_not_drift_dead_flags_are(tmp_path, monkeypatch, capsys):
 
 def test_registry_covers_exactly_the_command_set():
     """Every CLI command must carry a flag entry (possibly empty): a
-    missing entry would silently skip flag checks for it (rule 5)."""
+    missing entry would silently skip flag checks for it (rule 5). D57:
+    the absorbed commands remain in the registry while their deprecated
+    aliases work — the extras must be exactly those aliases."""
     from gov import cli
-    assert set(audit_notes.FLAGS) == set(cli._COMMANDS)
+    assert set(cli._COMMANDS) <= set(audit_notes.FLAGS)
+    assert (set(audit_notes.FLAGS) - set(cli._COMMANDS)
+            == set(cli._DEPRECATED_ALIASES))
 
 
 def test_registry_mismatch_fails_loud(tmp_path, monkeypatch, capsys):

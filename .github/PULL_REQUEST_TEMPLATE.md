@@ -17,7 +17,7 @@ carry alone.
       config changed, the re-baseline was recorded
       (`gov verify-plane --write`; see `.gov/rituals.jsonl`).
 - [ ] **Bilingual pairs**: docs pairs I touched are re-confirmed
-      (`gov verify-pairing --write <doc>`); no pair lands one side alone.
+      (`gov verify pairing --write <doc>`); no pair lands one side alone.
 - [ ] **New gate?** It ships a rejection case that proves it can reject
       (rule 6; `gov self-test` runs it).
 

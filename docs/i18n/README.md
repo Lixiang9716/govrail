@@ -21,7 +21,7 @@ counterpart: foo.zh.md
 After editing either side, re-confirm in the same change:
 
 ```sh
-gov verify-pairing --write docs/example.md
+gov verify pairing --write docs/example.md
 ```
 
 The gate fails when a recorded hash no longer matches its file — a one-sided
@@ -52,7 +52,7 @@ A project that names translations `foo_CN.md` sets
 is registered explicitly — the record's `counterpart` field pins the name:
 
 ```sh
-gov verify-pairing --write en:docs/foo.md zh:docs/foo_CN.md
+gov verify pairing --write en:docs/foo.md zh:docs/foo_CN.md
 ```
 
 ## Honest limits

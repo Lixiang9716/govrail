@@ -9,7 +9,7 @@
 - **查什么：** 行为面 diff 带有真实备选的笔记。
 - **合格证据：** 备选因明确理由落败。
 - **反模式：** 只记做了什么、不记打败了什么。
-- **Gate candidate:** no —— 存在性已由 `gov verify-note-presence` 把关。
+- **Gate candidate:** no —— 存在性已由 `gov note presence` 把关。
 
 ### R2 — 新增或修改的门禁证明自己能拒绝
 

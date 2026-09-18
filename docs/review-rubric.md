@@ -10,7 +10,7 @@ the items the diff touches, not every item every time.
 An item lives here while it needs judgment. When its promise becomes
 mechanically checkable it leaves the rubric and becomes a gate with a
 rejection case — the `Gate candidate` field says which way each item flows.
-`gov verify-rubric` checks this file's structure; the pairing gate checks
+`gov verify rubric` checks this file's structure; the pairing gate checks
 its bilingual pair.
 
 ### R1 — Non-trivial changes carry an honest note
@@ -18,7 +18,7 @@ its bilingual pair.
 - **Checks:** the diff changes behavior, architecture, a cross-file contract, process or tooling — and carries a new or updated Agent Note whose `## Alternatives considered` names real alternatives.
 - **Evidence:** the note's Problem stands without the solution; the alternatives lost for stated reasons, not straw men.
 - **Anti-pattern:** a note that records what was done but not what it beat — presence without honesty.
-- **Gate candidate:** no — presence is already gated (`gov verify-note-presence`); honesty is judgment.
+- **Gate candidate:** no — presence is already gated (`gov note presence`); honesty is judgment.
 
 ### R2 — A new or changed gate proves it can reject
 
@@ -44,9 +44,9 @@ its bilingual pair.
 ### R5 — Bilingual pairs merge whole
 
 - **Checks:** a human-facing doc change updates both languages and re-confirms the pair in the same PR.
-- **Evidence:** `gov verify-pairing` green in the PR; the two sides semantically equivalent, not lexically parallel.
+- **Evidence:** `gov verify pairing` green in the PR; the two sides semantically equivalent, not lexically parallel.
 - **Anti-pattern:** landing `foo.md` with `foo.zh.md` "to follow"; machine-flavored translation.
-- **Gate candidate:** yes — the hashes are gated (`gov verify-pairing`); semantic equivalence is judgment.
+- **Gate candidate:** yes — the hashes are gated (`gov verify pairing`); semantic equivalence is judgment.
 
 ### R6 — The check set is chosen, not reflexive
 

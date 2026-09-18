@@ -41,7 +41,7 @@ rationale, query the memory planes.
 6. If nothing matches, you are likely first — write the note because the
    change is non-trivial on its own merits (rule 2's test: would a
    maintainer ask why?), never because an empty result set "proved"
-   anything. `gov verify-note-presence` will say so again at diff time.
+   anything. `gov note presence` will say so again at diff time.
    (Exit 2 from `gov recall` means the memory plane is empty — nothing
    to search yet, not "no match"; exit 1 is the searched-and-found-
    nothing signal.)
@@ -50,6 +50,6 @@ rationale, query the memory planes.
 
 - Recall reads repository memory only (notes, decisions, postmortems).
   What this session already knows is not recall's business.
-- When touching an old area, `gov audit-notes` reports staleness signals
+- When touching an old area, `gov note audit` reports staleness signals
   (dead commands, missing D-refs, unresolved paths) — discovery aids for
   the archive skill, never verdicts.

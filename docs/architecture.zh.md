@@ -12,7 +12,7 @@
 
 门禁用 `paths` glob（`**` 跨目录）声明自己覆盖的范围：`gov run --base <ref>` 按 diff 选中 paths 命中的门（无 paths 的门永远相关）并报告哪些门出了范围——最小充分集出自同一事实源，`gov change-scope` 的建议也读同一份 `paths`。`gov run --gate <id>` 单门重跑。
 
-模板还自带一个查内容而非只看退出码的门：`gov verify-conflict-markers`（issue #104/D38）读变更文件的工作区内容，发现行首的 git 冲突标记即以 `file:line` 点名失败——git 拒绝自查的那种 rebase 失败模式由门禁接管；确实要写字面量的行追加令牌 `gov:ignore-marker` 即豁免，孤立的裸 `=======`（Markdown 标题下划线）不算标记。
+模板还自带一个查内容而非只看退出码的门：`gov verify conflict-markers`（issue #104/D38）读变更文件的工作区内容，发现行首的 git 冲突标记即以 `file:line` 点名失败——git 拒绝自查的那种 rebase 失败模式由门禁接管；确实要写字面量的行追加令牌 `gov:ignore-marker` 即豁免，孤立的裸 `=======`（Markdown 标题下划线）不算标记。
 
 ### 落地前预演并集（run --merge）
 
@@ -20,7 +20,7 @@
 
 ### worker 自己的租约锁（acquire/release/locks）
 
-预演协调的是落地前的分支；分支内部的 worker 之间也可能要协调共享资源——几个互相盲态的 agent 共写一个文件。`gov acquire <resource> [--agent ID] [--ttl S] [--wait S]` 取一份租约：在 git common dir（D32#9 的先例）下以 O_CREAT|O_EXCL 原子创建一个小 JSON 文件，同 clone 的全部 worktree 天然共享；`gov release --agent ID` 做持有者校验（不匹配即 exit 2 点名实际持有者——租约绝不代他人释放）；`gov locks` 只读列出。资源被占是 exit 3——D2 词汇的 additive 扩展，0/1/2 语义不变（D52）。过期租约在 flock 守护的临界区内懒接管——这是 flock 的合法形态（仅单命令时长）：评审 P0 的结论仍然成立，flock 属于持有进程、进程退出即失锁，任何长持物都绝不建在它上面。分层才是重点：租约是**活性层**（避免重复劳动；`--ttl` 封顶，绝不永久阻塞），刻意不承载正确性——holder 挂起超过 TTL 就可能双持，正确性仍锚在它本来就在的地方（master 的 push CAS、文档的交付 rebase）。`gov locks` 永不参与准入决策：JSON 只是诊断层。
+预演协调的是落地前的分支；分支内部的 worker 之间也可能要协调共享资源——几个互相盲态的 agent 共写一个文件。`gov lease acquire <resource> [--agent ID] [--ttl S] [--wait S]` 取一份租约：在 git common dir（D32#9 的先例）下以 O_CREAT|O_EXCL 原子创建一个小 JSON 文件，同 clone 的全部 worktree 天然共享；`gov lease release --agent ID` 做持有者校验（不匹配即 exit 2 点名实际持有者——租约绝不代他人释放）；`gov lease list` 只读列出。资源被占是 exit 3——D2 词汇的 additive 扩展，0/1/2 语义不变（D52）。过期租约在 flock 守护的临界区内懒接管——这是 flock 的合法形态（仅单命令时长）：评审 P0 的结论仍然成立，flock 属于持有进程、进程退出即失锁，任何长持物都绝不建在它上面。分层才是重点：租约是**活性层**（避免重复劳动；`--ttl` 封顶，绝不永久阻塞），刻意不承载正确性——holder 挂起超过 TTL 就可能双持，正确性仍锚在它本来就在的地方（master 的 push CAS、文档的交付 rebase）。`gov lease list` 永不参与准入决策：JSON 只是诊断层。
 
 每个门禁落到五种结局之一——`PASS` / `FAIL` / `TIMEOUT` / `MISSING`（可执行文件不存在）/ `SKIP`——`allowFailure: true` 让该门禁的失败仅作 advisory：结局行与输出带 `advisory` 标记照常报告，退出码保持 0。通过但有输出的门禁以 `(passed with output)` 块保留其末尾几行——"有话说的通过"绝不被静默（D20）。退出码 0 = 全绿，1 = 有阻塞失败；阻塞失败末尾追加摘要块：哪个门挂了 + 首行输出 + 单门重跑命令。
 
@@ -28,11 +28,11 @@
 
 ## 知识平面
 
-- **Agent Notes** 承载决策（`implemented/` 然后冻结的 `archived/`）。`gov verify-notes` 强制三段必填：`## Problem`、`## Decision`、`## Alternatives considered`（`## Consequences` 可选）。`gov verify-note-presence` 检查规则 2 可观察的那一半——diff 触及行为面而无 note 变更时警告（带规则出处）；`--strict` 升级为拦截。日常簿记永不警告：任务卡回执（`.gov/tasks/**`）默认豁免，仓库还可在 `.gov/manifest.json` 里用 `"note_presence_exempt": [glob]` 申报更多豁免面（与门 paths 同款 glob 语义）——advisory 只在仓库声明"确实期望 note"的范围外触发（#149）。其 base 是 auto：脏树审查工作树，干净树审查领先 upstream 的提交（无 upstream 则最后一个提交）——push 钩子与 CI 永远看到干净树，因此审查的是被推送的工作而非空 diff。记忆的读侧：`gov recall <terms>` 跨笔记、决策、postmortem 检索（按命中位置排序）。每次运行都在 stderr 陈述搜过的语料（按类计数），miss 时打印逐词命中计数——"某个词拖垮了 AND"与"语料里根本没有这个词"从此可分辨（#148）；`--any` 对部分命中做排序返回而不是拒绝——严格 AND 仍是默认。`gov audit-notes` 报机械新鲜度信号——世界已不再满足的引用——作为归档技能判断的证据。
-- **双语配对** 承载对外展示文档：源 `foo.md` + 译文侧 + `foo.i18n.yaml` 记录，用 git blob 哈希钉死两侧（并钉住译文侧文件名）。命名约定是 `.gov/pairing.json` 里的配置（`include`、`counterparts`、`exclude`）；不符合任何约定的配对用 `gov verify-pairing --write en:<path> zh:<path>` 显式登记。单边编辑失败。
+- **Agent Notes** 承载决策（`implemented/` 然后冻结的 `archived/`）。`gov note verify` 强制三段必填：`## Problem`、`## Decision`、`## Alternatives considered`（`## Consequences` 可选）。`gov note presence` 检查规则 2 可观察的那一半——diff 触及行为面而无 note 变更时警告（带规则出处）；`--strict` 升级为拦截。日常簿记永不警告：任务卡回执（`.gov/tasks/**`）默认豁免，仓库还可在 `.gov/manifest.json` 里用 `"note_presence_exempt": [glob]` 申报更多豁免面（与门 paths 同款 glob 语义）——advisory 只在仓库声明"确实期望 note"的范围外触发（#149）。其 base 是 auto：脏树审查工作树，干净树审查领先 upstream 的提交（无 upstream 则最后一个提交）——push 钩子与 CI 永远看到干净树，因此审查的是被推送的工作而非空 diff。记忆的读侧：`gov recall <terms>` 跨笔记、决策、postmortem 检索（按命中位置排序）。每次运行都在 stderr 陈述搜过的语料（按类计数），miss 时打印逐词命中计数——"某个词拖垮了 AND"与"语料里根本没有这个词"从此可分辨（#148）；`--any` 对部分命中做排序返回而不是拒绝——严格 AND 仍是默认。`gov note audit` 报机械新鲜度信号——世界已不再满足的引用——作为归档技能判断的证据。
+- **双语配对** 承载对外展示文档：源 `foo.md` + 译文侧 + `foo.i18n.yaml` 记录，用 git blob 哈希钉死两侧（并钉住译文侧文件名）。命名约定是 `.gov/pairing.json` 里的配置（`include`、`counterparts`、`exclude`）；不符合任何约定的配对用 `gov verify pairing --write en:<path> zh:<path>` 显式登记。单边编辑失败。
 - **`gov self-test`** 为每个治理门禁跑一个拒绝用例——证明每个门禁都能拦住所声称的违规，所以没有空转脚本。它是工具自身的回归，进模板默认运行（`governance` 模式保留为单跑自检的快捷方式）：模板 CI 装的是未钉版本的 govrail，工具自身的冒烟测试因此在采用者侧运行。每个已启用门禁必须属于某个 mode——停靠只有 `"enabled": false` 这一条响的机制（DISABLED 行）；`gov run --every-gate` 是显式全矩阵。每个 FAIL 都会被分类（#139/D47）：用例在最小干净环境（仅包副本、清空宿主 `PYTHON*`；编译依赖 tree-sitter 在两侧都从本解释器的 site-packages 解析，D54）重放一次，FAIL 行据此标注 `environment-suspect`（重放通过）或 `tool-defect`（重放仍红）——分类只是诊断，绝不改判；`--case NAME` 可按名单单跑一个用例。
 - **任务卡** 承载子代理交接（`gov task`，#125/D43）：`gov task new "标题" --check "验收项"` 写出 `.gov/tasks/T-0001-*.json`，以内容哈希钉住当前规则集（`.gov/rules.md` + `gates.json`），任务简报只需一行 `obey rules@<hash>` 而不复述纪律。`gov task check`（门禁，paths 限定 `.gov/tasks/**`）在治理采纳后点名过期卡片，并复核已完成卡片的回执；`gov task close T-0001` 跑门禁 DAG，把全绿运行记为卡片的完成回执。
-- **评审量规** 承载门禁查不了的判断标准：[review-rubric.md](review-rubric.zh.md) 对 PR 逐条带证据判定；每条的 `Gate candidate` 字段写明承诺可机械化后是否毕业成门禁。`gov verify-rubric` 检查量规自身的结构——永不检查判断本身。
+- **评审量规** 承载门禁查不了的判断标准：[review-rubric.md](review-rubric.zh.md) 对 PR 逐条带证据判定；每条的 `Gate candidate` 字段写明承诺可机械化后是否毕业成门禁。`gov verify rubric` 检查量规自身的结构——永不检查判断本身。
 
 ## 采用：gov init / uninstall
 
@@ -42,7 +42,7 @@
 
 可选的 pre-commit 钩子（`gov init --hooks --pre-commit`，#110）只对暂存文件跑廉价内容门——`verify-pairing --staged`（被暂存 `.md`/`.zh.md` 对的 sidecar 新鲜度；暂存源侧、对侧或 sidecar 记录任一即算触及该对）与 `verify-conflict-markers --staged`——配对漂移因此在 `git commit` 即现形并内联点名修复命令，比 pre-push 拦截早一个阶段。觉得 commit 钩子侵入的仓库留在 pre-push 模型（不加 flag，提交阶段零变化）；完整门禁 DAG 绝不在 commit 时跑——commit 必须快，规则 1 把最小充分集交给 push。单用 `--pre-commit` fail loud（它随 `--hooks` 一起装）；外来的 pre-commit 绝不覆盖。
 
-新装项目首跑不红：pairing 门禁以 advisory 落地（`allowFailure: true`），报告哪些文档待 baseline；`gov verify-pairing --write` 记录存量配对后，摘除 `allowFailure` 即升级为强制。`init` 会打印这些 next steps。
+新装项目首跑不红：pairing 门禁以 advisory 落地（`allowFailure: true`），报告哪些文档待 baseline；`gov verify pairing --write` 记录存量配对后，摘除 `allowFailure` 即升级为强制。`init` 会打印这些 next steps。
 
 ### preset：类型化采用（D53）
 

@@ -37,9 +37,12 @@ DOCS += glob.glob(str(REPO / ".agents/skills/*/SKILL.md"))
 DOCS += glob.glob(str(REPO / "gov/templates/skills/*/SKILL.md"))
 
 SUBS = {
-    "note": {"new", "check", "list", "show"},
+    "note": {"new", "check", "list", "show", "verify", "presence",
+             "audit", "archive", "archive-verify"},
+    "decision": {"next", "add", "verify"},
+    "lease": {"acquire", "release", "list"},
+    "verify": {"pairing", "rubric", "conflict-markers", "doc-sync"},
     "task": {"new", "check", "close", "claim", "release", "list"},
-    "decision": {"next", "add"},
     "preset": {"list", "show", "apply"},
     "receipt": {"verify", "show"},
     "hooks": {"pre-commit"},
@@ -73,7 +76,10 @@ def test_readme_command_block_matches_help():
 def test_docs_cite_only_real_commands_flags_and_subcommands():
     """Every `gov ...` citation in the doc set resolves: command in the
     CLI table, subcommand in the parser, flags in the registry."""
-    commands = set(cli._COMMANDS)
+    # D57 Wave 1: absorbed commands remain REAL (deprecated aliases with
+    # identical behavior) — citations of them are valid until Wave 2
+    # flips the docs and retires the aliases.
+    commands = set(cli._COMMANDS) | set(cli._DEPRECATED_ALIASES)
     problems = []
     for rel in DOCS:
         text = (REPO / rel).read_text(encoding="utf-8")

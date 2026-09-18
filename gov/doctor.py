@@ -184,9 +184,9 @@ def _check_gates(checks: list[dict]) -> None:
 # would have named the number collisions (verify-decisions) sat unadopted
 # and nothing ever pointed at it (#147).
 HAND_SHIPPED_GATES = {
-    "rubric": ("verify-rubric", "review rubric structure"),
-    "decisions": ("verify-decisions", "decisions table guard"),
-    "doc-sync": ("verify-doc-sync", "CHANGELOG/HIGHLIGHTS pairing"),
+    "rubric": (("verify", "rubric"), "review rubric structure"),
+    "decisions": (("decision", "verify"), "decisions table guard"),
+    "doc-sync": (("verify", "doc-sync"), "CHANGELOG/HIGHLIGHTS pairing"),
 }
 
 
@@ -231,8 +231,8 @@ def _check_gate_adoption(checks: list[dict]) -> None:
                                  "adoption check skipped"})
         return
     for gid, (tool, what) in HAND_SHIPPED_GATES.items():
-        if not adopted(gid, (tool,)):
-            hand_missing.append(f"{gid} (`gov {tool}`, {what})")
+        if not adopted(gid, tool):
+            hand_missing.append(f"{gid} (`gov {' '.join(tool)}`, {what})")
 
     if not tpl_missing and not hand_missing:
         checks.append({"name": "gate-adoption", "state": "ok",

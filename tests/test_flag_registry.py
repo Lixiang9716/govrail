@@ -31,11 +31,20 @@ LEADING_DASH_RX = re.compile(r"((?:-h|--[\w-]+)(?:,\s*(?:-h|--[\w-]+))*)(?=\s|$)
 # lives on `next`, --from/--id on `add`) — every listed surface is probed
 # and the registry must equal the union (#107).
 HELP_ARGV: dict[str, list[list[str]]] = {
-    # --class/--ref are `note new` flags; --class/--json/--stale are
-    # `note list`'s — the registry is the union across subcommands
-    "note": [["note", "new", "--help"], ["note", "list", "--help"]],
-    "decision": [["decision", "next", "--help"],
-                 ["decision", "add", "--help"]],
+    "note": [["note", "--help"], ["note", "new", "--help"],
+             ["note", "list", "--help"], ["note", "verify", "--help"],
+             ["note", "presence", "--help"], ["note", "audit", "--help"],
+             ["note", "archive", "--help"],
+             ["note", "archive-verify", "--help"]],
+    "decision": [["decision", "--help"], ["decision", "next", "--help"],
+                 ["decision", "add", "--help"],
+                 ["decision", "verify", "--help"]],
+    "lease": [["lease", "--help"], ["lease", "acquire", "--help"],
+              ["lease", "release", "--help"]],
+    "verify": [["verify", "--help"], ["verify", "pairing", "--help"],
+               ["verify", "rubric", "--help"],
+               ["verify", "conflict-markers", "--help"],
+               ["verify", "doc-sync", "--help"]],
     # --check/--rules live on `new`; --mode/--timeout on `close`;
     # --agent/--ttl/--wait on `claim` and --agent on `release`; --json on
     # `list` (#125's claim semantics)

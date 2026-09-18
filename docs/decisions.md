@@ -472,3 +472,11 @@
 - **决定**：(b)。当日兑现：rituals/review 的错误报告改走 stderr；`gov --help` 载明退出码契约（0 ok · 1 failure · 2 config/usage · 3 lease busy），置于 commands 段之前——README 命令块从 `commands:` 起切片派生，机器契约行不进派生块。**`--json` 增量推广的判定**：出现第二个机器消费者（CI 步骤、包装脚本、其他工具）的命令先做；形状沿用既定范式（恰一个 JSON 值，summary/findings 分层，人读内容去 stderr），每个新 `--json` 配形状钉测试。**与审查的结构性发现（N12"修复不完整"）的呼应**：本决策把"机器接口"立为有 homes 的契约（流向规则、exit 词汇表、--json 形状范式），后续每次新增命令时 verify 清单可对照，而不是靠记忆。
 - **被否**：(a) 一次铺满——25 个命令的 JSON 形状在没有第二个机器消费者之前只能靠猜，为形状稳定而预先设计会产出没人消费的接口，还要为每个猜测养形状钉测试；(c) 只修两处流向——修实例不立纪律正是审查点名的"修复只落在最容易的调用点"模式本身，第 26 个命令会原样再犯。
 - **修订（落地当日评审补两缺）**：① **默认极性是契约不是偶然**——`gov run --json` 的帮助写明：无 `--json` 时 stdout 是人读报告（错误仍一律 stderr），`--json` 把 stdout 换成恰一个机器值。不为 run 单点翻转默认：全命令族（verify-*/check/trend）同一极性，单点翻转制造第二个方言；翻转整族则是没有消费者署名的破坏。② **退出码契约从 prose 升级为钉测试**（`tests/test_exit_code_contract.py`）：以 `cli._COMMANDS` 为母名单断言"未知旗标 → 2"——探针当场抓到 `verify-notes` 吞掉未知旗标并以绿色裁决应答（31/32 都拒，就它不拒）；failure-leg 登记表逐命令钉 1；acquire 忙 = 3；`--help` 契约行的存在性钉也迁入此文件单源。登记表即"新命令从第一天遵守"的机械形态：未声明 failure-leg 的新命令让集成测试变红。
+
+## D57 — 命令面收敛：四个家族 hub，13 个顶层命令退居弃用别名
+
+- **问题**：命令面 32 个顶层命令，其中 8 个 `verify-*` 平铺顶层（它们是门的 CLI 面，不是独立动词）、notes 家族三个动词散落（`gov note new` 与 `gov audit-notes`/`gov archive-notes` 同族不同名）、租约三兄弟各占顶层。新手面板与技能路由表暴露的是"名词清单"，不是"动词路径"——第 13 轮后的 first-use 评审判定：数量是副产品，taxonomy 才是病灶。
+- **选项**：(a) 维持现状（路由 skill 已解决发现成本）；(b) 家族优先：notes 族归 `gov note`、decisions 归 `gov decision`、租约归 `gov lease`、无家族的 4 个 verify 进 `gov verify` 大杂院——22 个顶层命令；(c) 统一 `gov verify <name>` 收编全部 8 个 verify-*
+- **状态**：已决
+- **决定**：(b)，三波迁移。**Wave 1（本次）**：四个 hub 上线，13 个被吸收命令保留为**弃用别名**——行为不变、stderr 一行弃用提示、`audit-notes` 的 known-commands 并入别名集（引用旧名的笔记不算死命令）、D56 登记表保留旧键；模板/根/demo gates.json 的门命令翻到新形式并重封 seal；当前文档对（CONTRIBUTING/adoption/cookbook/architecture/review-rubric/truth-sources/i18n-README/AGENTS/skills）同步翻转并重确认配对；**历史 notes 与 decisions/CHANGELOG/HIGHLIGHTS 不改写**——它们是有日期的记录，不是当前文档。**Wave 2**：文档全量翻转已随 Wave 1 完成；别名在两个 minor 后下线（下线前 print 弃用行已满一个窗口）。`verify-notes` 是无旗标命令，曾对未知旗标回绿裁决——退出码契约测试抓出后同轮修正（未知旗标 → 点名 exit 2，CLI 与脚本两条路径都覆盖）。
+- **被否**：(a) 维持现状——路由 skill 解决的是"发现"，解决不了"同一族两个命名法"的词汇分裂；(c) 全部收进 `gov verify`——`gov note verify`（notes 门）与 `gov verify rubric`（量规门）分属两个家族，统一院子反而制造"同一族两个门面"；**直接删除旧名**——采用者的 gates.json、脚本、笔记引用的是旧词汇，破坏性变更没有消费者署名就不做。

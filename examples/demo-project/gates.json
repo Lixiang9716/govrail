@@ -29,7 +29,8 @@
       "label": "note format",
       "command": [
         "gov",
-        "verify-notes"
+        "note",
+        "verify"
       ],
       "paths": [
         ".agents/notes/**"
@@ -41,7 +42,8 @@
       "label": "bilingual pairing (advisory until baselined)",
       "command": [
         "gov",
-        "verify-pairing"
+        "verify",
+        "pairing"
       ],
       "allowFailure": true,
       "stages": [
@@ -59,7 +61,8 @@
       "label": "non-trivial changes carry an Agent Note (advisory)",
       "command": [
         "gov",
-        "verify-note-presence"
+        "note",
+        "presence"
       ],
       "timeoutMs": 60000
     },
@@ -68,7 +71,8 @@
       "label": "no unresolved conflict markers in changed files (issue #104)",
       "command": [
         "gov",
-        "verify-conflict-markers"
+        "verify",
+        "conflict-markers"
       ],
       "stages": [
         "pre-commit"
@@ -89,7 +93,8 @@
       "label": "archived-notes seal",
       "command": [
         "gov",
-        "verify-archive"
+        "note",
+        "archive-verify"
       ],
       "paths": [
         ".agents/notes/archived/**"
@@ -129,7 +134,8 @@
       "label": "decisions table guard",
       "command": [
         "gov",
-        "verify-decisions"
+        "decision",
+        "verify"
       ],
       "paths": [
         "docs/decisions.md"
@@ -140,7 +146,8 @@
       "label": "review rubric structure",
       "command": [
         "gov",
-        "verify-rubric"
+        "verify",
+        "rubric"
       ],
       "paths": [
         "docs/review-rubric.md",

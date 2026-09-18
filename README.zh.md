@@ -72,27 +72,27 @@ gov run --gate pairing         # 单门重跑
 gov self-test                  # 拒绝用例：工具自带 + 你的（.gov/rejections/）
 gov run --json                 # 机器可读：[{gate, outcome, duration_ms, detail,
                                #  selected_by, scoped_out, ...}] —— 含被路径排除的整张门禁集
-gov verify-pairing --write     # 编辑一侧后重新确认双语配对
+gov verify pairing --write     # 编辑一侧后重新确认双语配对
                                #   （写出时逐字段点名；记录的注释声明字段语义——#150）
-gov verify-pairing --write en:docs/a.md zh:docs/a_CN.md  # 登记任意命名的配对
-gov verify-pairing --explain   # 记录 schema 与约定，只读
-gov verify-note-presence       # 非平凡 diff 未带 Agent Note 时警告
+gov verify pairing --write en:docs/a.md zh:docs/a_CN.md  # 登记任意命名的配对
+gov verify pairing --explain   # 记录 schema 与约定，只读
+gov note presence       # 非平凡 diff 未带 Agent Note 时警告
                                #   （任务回执默认豁免；manifest 的 note_presence_exempt 申报更多）
-gov verify-rubric              # 检查评审量规的结构
-gov verify-decisions           # 守卫决策表（编号、被否段、孤儿）
-gov verify-decisions --base <ref> # 另查并行分支的编号冲突
-gov verify-decisions --json    # 机器可读：{violations, orphans, overdue, ...}
+gov verify rubric              # 检查评审量规的结构
+gov decision verify           # 守卫决策表（编号、被否段、孤儿）
+gov decision verify --base <ref> # 另查并行分支的编号冲突
+gov decision verify --json    # 机器可读：{violations, orphans, overdue, ...}
 gov decision next --base <ref>    # 下一个空闲 D 号（感知分支；基线陈旧时警告）
 gov decision add --from FILE      # 原子追加决策行（写前校验；--against = --base）
-gov verify-conflict-markers    # 变更文件携带 git 冲突标记时失败
+gov verify conflict-markers    # 变更文件携带 git 冲突标记时失败
 gov review --base <ref> --grade  # 评审档案 + 交互式量规打分
 gov trend                      # --record 历史的门禁耗时趋势
 gov stats                      # 按语言的结构事实（行数、符号、嵌套深度）——是事实，不是判决
 gov check                      # 解析层上的语法类检查；抑制会被计数，绝不隐形
 gov receipt verify <commit>    # 这棵树上录过完整全绿运行吗？（#124）
 gov recall <terms>             # 检索笔记、决策、postmortem（--any 放宽 AND）
-gov audit-notes                # implemented 笔记的新鲜度信号
-gov audit-notes --json          # 机器可读：{findings: [{file, signal}], ...}
+gov note audit                # implemented 笔记的新鲜度信号
+gov note audit --json          # 机器可读：{findings: [{file, signal}], ...}
 gov change-scope --base <ref>  # 最小充分集（.gov/surfaces.json 可映射路径）
 gov task new "标题" --check "验收项"  # 任务卡：一行 rules@<hash> 钉住子代理简报
 gov task check                 # 规则采纳后点名过期卡片
@@ -102,14 +102,14 @@ gov task release T-0001 --agent w1          # 释放自己持有的卡片租约
 gov task close T-0001          # 跑门禁，全绿运行即完成回执
 gov task list --json           # 卡片数组 [{id, title, status, rules, claim}]——claim 读自
                                #  租约文件，过期视为未认领
-gov acquire reports/summary.md --agent w1  # 租约占用共享资源（busy → exit 3；
+gov lease acquire reports/summary.md --agent w1  # 租约占用共享资源（busy → exit 3；
                                            #  --wait S 轮询，--ttl S 封顶；
                                            #  成功与 busy 都播报锁根路径）
-gov release reports/summary.md --agent w1  # 释放自己持有的租约（绝不代他人释放）
-gov locks                      # 列出当前租约（纯诊断）
+gov lease release reports/summary.md --agent w1  # 释放自己持有的租约（绝不代他人释放）
+gov lease list                      # 列出当前租约（纯诊断）
 ```
 
-`init` 非侵入且幂等：创建 `.gov/rules.md`，仅在缺失时添加 `gates.json`、笔记 README 与 agent 技能（recall-first、pre-push-checks、code-review、archive-agent-notes），向 AGENTS.md 追加一行引用，绝不覆盖项目自己的文件——包括它自己的技能。`--hooks`/`--ci` 可**事后补装**（已初始化项目 `gov init --hooks` 只装该加装，定制原样不动）；`--hooks --pre-commit` 额外安装可选的 pre-commit 钩子——只对暂存文件跑廉价内容门（配对 sidecar 新鲜度、冲突标记），配对漂移在 `git commit` 即被拦截并内联点名修复命令，而非晚一个阶段到 push 才现形（#110）。`uninstall` 精确反转一切；文件与模板有差异时点名并列出，需 `--force` 才继续（真两步）。新装首跑不红：pairing 门禁以 advisory 落地，`gov verify-pairing --write` 为存量文档建立基线后，摘除 `allowFailure` 即升级为强制。`enabled: false` 让门禁下线而不删除定义。
+`init` 非侵入且幂等：创建 `.gov/rules.md`，仅在缺失时添加 `gates.json`、笔记 README 与 agent 技能（recall-first、pre-push-checks、code-review、archive-agent-notes），向 AGENTS.md 追加一行引用，绝不覆盖项目自己的文件——包括它自己的技能。`--hooks`/`--ci` 可**事后补装**（已初始化项目 `gov init --hooks` 只装该加装，定制原样不动）；`--hooks --pre-commit` 额外安装可选的 pre-commit 钩子——只对暂存文件跑廉价内容门（配对 sidecar 新鲜度、冲突标记），配对漂移在 `git commit` 即被拦截并内联点名修复命令，而非晚一个阶段到 push 才现形（#110）。`uninstall` 精确反转一切；文件与模板有差异时点名并列出，需 `--force` 才继续（真两步）。新装首跑不红：pairing 门禁以 advisory 落地，`gov verify pairing --write` 为存量文档建立基线后，摘除 `allowFailure` 即升级为强制。`enabled: false` 让门禁下线而不删除定义。
 
 ## 内部内容
 

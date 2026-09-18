@@ -66,7 +66,7 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   receipts are exempt by design).
 
 **Pairing (bilingual docs)**
-- `gov verify-pairing --write` — confirm a pair after BOTH sides moved;
+- `gov verify pairing --write` — confirm a pair after BOTH sides moved;
   re-run after the first commit if a side was stamped `untracked`.
 - `--staged` — the commit-stage check. A PR never lands one language
   of a pair alone (rule 7).
@@ -81,7 +81,7 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   record says so out loud.
 
 **Leases and tasks (parallel agents)**
-- `gov acquire` / `release` / `locks` — only when ≥2 workers may touch
+- `gov lease acquire` / `release` / `locks` — only when ≥2 workers may touch
   one resource; busy is exit 3, `--wait S` polls. Single worker: skip.
 - `gov task new/check/close` — briefs for subagents; a `done` card
   without a green receipt is named by `task check`.
@@ -91,7 +91,7 @@ push (the pre-push hook re-runs the scoped DAG automatically).
 - `gov trend` / `gov stats` — facts, not verdicts; never gate on them.
 - `gov whatsnew --since <manifest version>` — what arrived since this
   checkout's init.
-- `gov archive-notes` + the archive-agent-notes skill — the audit →
+- `gov note archive` + the archive-agent-notes skill — the audit →
   archive handoff.
 
 **Review**

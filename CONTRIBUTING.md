@@ -86,7 +86,7 @@ red via tests/test_docs_cli_consistency.py.
    by ~a minute; a first `pip install -U` right after may miss the fresh
    wheel — retry before suspecting the release.
 3. While the release PR is open, the workflow drafts its missing HIGHLIGHTS
-   sections (`gov verify-doc-sync --write`: bullets copied verbatim from
+   sections (`gov verify doc-sync --write`: bullets copied verbatim from
    CHANGELOG, each heading self-declared as a draft, D46) and AMENDS them
    into the release commit itself — the branch head is one complete commit
    (CHANGELOG + version + HIGHLIGHTS together), so no CI run can capture a

@@ -63,22 +63,28 @@ def test_every_verify_tool_is_in_the_shipped_gate_set():
     """Row 6: the shipped-gate full set spans TWO files (the template's
     gates.json and doctor's HAND_SHIPPED_GATES). A new verify-* tool
     that lands in neither is invisible to every adoption check — the
-    exact #147 failure mode, now structural."""
-    # module stem -> CLI command where the names differ (the CLI
-    # shortened one historical module name; everything else is the
-    # mechanical underscore-to-dash of the stem)
-    command_alias = {"verify_translation_pairing": "verify-pairing"}
+    exact #147 failure mode, now structural. D57: each tool is pinned by
+    the token set of the gate command that carries it."""
+    expected_tokens = {
+        "verify_notes": {"note", "verify"},
+        "verify_note_presence": {"note", "presence"},
+        "verify_archive": {"note", "archive-verify"},
+        "verify_translation_pairing": {"verify", "pairing"},
+        "verify_rubric": {"verify", "rubric"},
+        "verify_decisions": {"decision", "verify"},
+        "verify_doc_sync": {"verify", "doc-sync"},
+        "verify_conflict_markers": {"verify", "conflict-markers"},
+    }
     template = json.loads(
         (REPO / "gov/templates/gates.json").read_text(encoding="utf-8"))
-    template_cmds = {
-        tok for g in template["gates"] for tok in g["command"]
-        if tok.startswith("verify-")}
-    hand_cmds = {tool for tool, _ in doctor.HAND_SHIPPED_GATES.values()}
-    covered_cmds = template_cmds | hand_cmds
-    tools = sorted(p.stem for p in (REPO / "gov").glob("verify_*.py"))
-    missing = [t for t in tools
-               if command_alias.get(t, t.replace("_", "-"))
-               not in covered_cmds]
+    template_token_sets = [set(g["command"]) - {"gov"}
+                           for g in template["gates"]]
+    hand_token_sets = [set(tool)
+                       for tool, _ in doctor.HAND_SHIPPED_GATES.values()]
+    covered = template_token_sets + hand_token_sets
+    missing = [stem for stem, tokens in expected_tokens.items()
+               if not any(tokens <= covered_set
+                          for covered_set in covered)]
     assert not missing, (
         f"verify tool(s) {missing} ship in neither the template's "
         "gates.json nor doctor.HAND_SHIPPED_GATES — wire one (or exempt "

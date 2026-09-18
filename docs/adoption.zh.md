@@ -28,12 +28,12 @@ gov change-scope --base HEAD~1   # 改了什么、哪些门覆盖它
 新装项目的 pairing 门禁是 advisory（`allowFailure: true`）：报告哪些存量文档还没有基线，但不拦截。准备强制配对时，先记录存量配对，再从 `gates.json` 的 pairing 门禁摘除 `allowFailure`：
 
 ```sh
-gov verify-pairing --write       # 为全部配对建立基线（写 .i18n.yaml 记录）
+gov verify pairing --write       # 为全部配对建立基线（写 .i18n.yaml 记录）
 ```
 
 译文命名不同的项目（如 `foo_CN.md`）在 `.gov/pairing.json` 里配置约定，或用
-`gov verify-pairing --write en:<path> zh:<path>` 逐个登记。
+`gov verify pairing --write en:<path> zh:<path>` 逐个登记。
 
-触及行为面却没有 Agent Note 的改动会被 `gov verify-note-presence` 警告（带规则出处）；补上笔记，或等团队准备好后加 `--strict` 让它拦截。日常簿记永不警告——任务卡回执（`.gov/tasks/**`）默认豁免；仓库还可在 `.gov/manifest.json` 里用 `"note_presence_exempt": ["docs/**", …]` 申报更多豁免面，advisory 只在确实期望 note 的范围外触发。
+触及行为面却没有 Agent Note 的改动会被 `gov note presence` 警告（带规则出处）；补上笔记，或等团队准备好后加 `--strict` 让它拦截。日常簿记永不警告——任务卡回执（`.gov/tasks/**`）默认豁免；仓库还可在 `.gov/manifest.json` 里用 `"note_presence_exempt": ["docs/**", …]` 申报更多豁免面，advisory 只在确实期望 note 的范围外触发。
 
 然后做一次真实改动，记为 Agent Note，再重跑门禁。

@@ -97,7 +97,7 @@ def _red_verify_notes(tmp_path):
     d.mkdir(parents=True)
     (d / "2026-01-01-b.md").write_text("no title, no sections\n",
                                        encoding="utf-8")
-    return ["verify-notes"]
+    return ["note", "verify"]
 
 
 def _red_verify_note_presence(tmp_path):
@@ -105,14 +105,14 @@ def _red_verify_note_presence(tmp_path):
     (tmp_path / "app.py").write_text("v1\n", encoding="utf-8")
     _commit(tmp_path, "x")
     (tmp_path / "app.py").write_text("v2\n", encoding="utf-8")
-    return ["verify-note-presence", "--strict"]
+    return ["note", "presence", "--strict"]
 
 
 def _red_verify_rubric(tmp_path):
     docs = tmp_path / "docs"
     docs.mkdir(parents=True)
     (docs / "review-rubric.md").write_text("not a rubric\n", encoding="utf-8")
-    return ["verify-rubric"]
+    return ["verify", "rubric"]
 
 
 def _red_verify_decisions(tmp_path):
@@ -121,7 +121,7 @@ def _red_verify_decisions(tmp_path):
     (docs / "decisions.md").write_text(
         "## D1 — a\n\n- **选项**：x\n\n## D1 — b\n\n- **选项**：y\n",
         encoding="utf-8")
-    return ["verify-decisions"]
+    return ["decision", "verify"]
 
 
 def _red_verify_doc_sync(tmp_path):
@@ -132,7 +132,7 @@ def _red_verify_doc_sync(tmp_path):
                                            encoding="utf-8")
     (tmp_path / ".gov" / "docsync.json").write_text(
         json.dumps({"highlights": "gov/HIGHLIGHTS.md"}), encoding="utf-8")
-    return ["verify-doc-sync"]
+    return ["verify", "doc-sync"]
 
 
 def _red_verify_conflict_markers(tmp_path):
@@ -140,7 +140,7 @@ def _red_verify_conflict_markers(tmp_path):
     (tmp_path / "tangled.md").write_text(
         "intro\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> side\n",
         encoding="utf-8")
-    return ["verify-conflict-markers"]
+    return ["verify", "conflict-markers"]
 
 
 def _red_check(tmp_path):
@@ -225,12 +225,9 @@ def _red_note(tmp_path):
 
 FAILURE_LEGS = {
     "run": _red_run,
-    "verify-notes": _red_verify_notes,
-    "verify-note-presence": _red_verify_note_presence,
-    "verify-rubric": _red_verify_rubric,
-    "verify-decisions": _red_verify_decisions,
-    "verify-doc-sync": _red_verify_doc_sync,
-    "verify-conflict-markers": _red_verify_conflict_markers,
+    "note": _red_verify_notes,          # gov note verify
+    "verify": _red_verify_conflict_markers,
+    "decision": _red_verify_decisions,  # gov decision verify
     "check": _red_check,
     "review": _red_review,
     "receipt": _red_receipt,
@@ -239,16 +236,15 @@ FAILURE_LEGS = {
     "doctor": _red_doctor,
     "verify-plane": _red_verify_plane,
     "recall": _red_recall,
-    "note": _red_note,
 }
 
 # Their red paths are pinned in the self-test's rejection cases and
 # verdict-free/read-only surfaces (0/2/3 only) — each named, so a new
-# command cannot silently land here.
+# command cannot silently land here. `lease` is deliberately 0/2/3: a
+# busy lease is 3, refusals are 2, and it has no failure verdict.
 NEVER_ONE_HERE = {
-    "init", "self-test", "verify-pairing", "verify-archive", "audit-notes",
-    "decision", "trend", "stats", "whatsnew", "change-scope",
-    "archive-notes", "preset", "acquire", "release", "locks", "hooks",
+    "init", "self-test", "hooks", "lease", "trend", "stats", "whatsnew",
+    "change-scope", "preset",
 }
 
 

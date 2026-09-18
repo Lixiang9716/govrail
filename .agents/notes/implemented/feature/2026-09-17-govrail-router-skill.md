@@ -17,7 +17,9 @@ conversations.
 
 ## Decision
 
-ONE router skill, `govrail`, injected FIRST in the skills list (and
+ONE router skill, `govrail`, injected FIRST in the skills list (related:
+D57 — the same review's command-surface consolidation, whose vocabulary
+this skill now routes). (and
 pointed to from the injected AGENTS.md reference line): it carries the
 when/when-not judgment for the whole surface, grouped by stage
 (adopt/upgrade, run, notes, pairing, seal, leases, memory, review) with

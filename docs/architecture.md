@@ -30,7 +30,7 @@ smallest sufficient set from one source of truth, the same `paths`
 single gate.
 
 One shipped gate inspects content rather than exit codes:
-`gov verify-conflict-markers` (issue #104/D38) reads the changed files'
+`gov verify conflict-markers` (issue #104/D38) reads the changed files'
 working-tree content and fails naming `file:line` when a line-initial
 git conflict marker survives — the rebase failure mode git itself
 refuses to police. Deliberate literals append the token
@@ -67,12 +67,12 @@ scheduling functions stay deferred.
 
 The preflight coordinates branches before landing; the workers inside a
 branch may also need to coordinate with each other — several oblivious
-agents writing one file. `gov acquire <resource> [--agent ID]
+agents writing one file. `gov lease acquire <resource> [--agent ID]
 [--ttl S] [--wait S]` takes a lease: an atomic O_CREAT|O_EXCL create of
 a small JSON file under the git common dir (D32#9's precedent), shared
-by every worktree of one clone; `gov release --agent ID` is
+by every worktree of one clone; `gov lease release --agent ID` is
 holder-verified (a mismatch is exit 2 naming the real holder — a lease
-is never released on another holder's behalf); `gov locks` lists them
+is never released on another holder's behalf); `gov lease list` lists them
 read-only. A busy resource is exit 3 — D2's vocabulary extended
 additively, 0/1/2 unchanged (D52). An expired lease is taken over
 lazily inside a flock-guarded critical section — flock's lawful
@@ -83,7 +83,7 @@ LIVENESS layer (no duplicated work; `--ttl` bounds it so it can never
 block forever) and deliberately carries no correctness — a holder
 stalling past its TTL can double-hold, and correctness stays anchored
 where it already lives (the push CAS for master, the delivery rebase
-for docs). `gov locks` never feeds an admission decision: the JSON is
+for docs). `gov lease list` never feeds an admission decision: the JSON is
 diagnostics only.
 
 Each gate resolves to one of five outcomes — `PASS`, `FAIL`, `TIMEOUT`,
@@ -115,9 +115,9 @@ signatures are future work.
 ## Knowledge planes
 
 - **Agent Notes** carry decisions (`implemented/` then a frozen `archived/`).
-  `gov verify-notes` enforces the three required sections: `## Problem`,
+  `gov note verify` enforces the three required sections: `## Problem`,
   `## Decision`, `## Alternatives considered` (`## Consequences` optional).
-  `gov verify-note-presence` checks the observable half of rule 2 — a diff
+  `gov note presence` checks the observable half of rule 2 — a diff
   that touches behavior-bearing surfaces with no note change warns (naming
   the rule); `--strict` makes it block. Routine bookkeeping never warns:
   task-card receipts (`.gov/tasks/**`) are exempt by default, and a repo can
@@ -134,7 +134,7 @@ signatures are future work.
   on stderr (per-class counts), a miss prints per-term hit counts so "one
   term failed the AND" is distinguishable from "the corpus lacks it"
   (#148), and `--any` ranks partial matches instead of refusing — the
-  strict AND stays the default. `gov audit-notes` reports mechanical
+  strict AND stays the default. `gov note audit` reports mechanical
   staleness signals — references the world no longer satisfies — as
   evidence for the archive skill's judgment.
 - **Bilingual pairs** carry the external-presentation docs: a source `foo.md`,
@@ -142,7 +142,7 @@ signatures are future work.
   by git blob hashes (plus the counterpart's name). Naming conventions are
   configuration in `.gov/pairing.json` (`include`, `counterparts`, `exclude`);
   a pair that follows no convention is registered explicitly with
-  `gov verify-pairing --write en:<path> zh:<path>`. A one-sided edit fails.
+  `gov verify pairing --write en:<path> zh:<path>`. A one-sided edit fails.
 - **`gov self-test`** runs a rejection case per governance gate — proving each
   gate rejects the violation it claims to catch, so no gate is a vacuous
   script. It is the tools' own regression and ships in the template's
@@ -170,7 +170,7 @@ signatures are future work.
   [review-rubric.md](review-rubric.md) grades PRs item by item with
   evidence; each item's `Gate candidate` field says whether it graduates
   into a gate when its promise becomes mechanically checkable.
-  `gov verify-rubric` checks the rubric's own structure — never the
+  `gov verify rubric` checks the rubric's own structure — never the
   judgment itself.
 
 ## Adoption: gov init / uninstall
@@ -204,7 +204,7 @@ with `--hooks`); a foreign pre-commit is never overwritten.
 
 A fresh install never goes red on its first run: the pairing gate ships
 advisory (`allowFailure: true`), reporting what needs baselining; after
-`gov verify-pairing --write` records the existing pairs, removing
+`gov verify pairing --write` records the existing pairs, removing
 `allowFailure` turns the gate enforcing. `init` prints these next steps.
 
 ### Presets: typed adoption (D53)
