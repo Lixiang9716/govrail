@@ -100,6 +100,12 @@ def test_apply_migrates_end_to_end(tmp_path):
     assert (tmp_path / ".gov" / "rituals.jsonl").is_file()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows reports the NUL device as a TTY, so the refusal's "
+           "isatty preflight cannot be driven deterministically from a "
+           "test; the POSIX jobs and the shared verify-plane consent "
+           "semantics carry the coverage")
 def test_apply_refuses_without_consent(tmp_path):
     """Non-interactive shell + no flag: the seal re-baseline is
     constitution acceptance — it refuses BEFORE touching anything."""
