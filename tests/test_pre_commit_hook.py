@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from gov import cli
+from gov import cli, plane
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -64,7 +64,7 @@ def _baseline_pair(root: Path) -> None:
 
 def test_init_pre_commit_installs_both_hooks(tmp_path):
     _git_repo(tmp_path)
-    assert cli.init(tmp_path, hooks=True, pre_commit=True) == 0
+    assert plane.init(tmp_path, hooks=True, pre_commit=True) == 0
     for d in (tmp_path / ".git" / "hooks", tmp_path / ".gov" / "hooks"):
         for name in ("pre-push", "pre-commit"):
             assert (d / name).is_file(), f"{d/name} missing"
@@ -84,8 +84,8 @@ def test_lone_pre_commit_flag_fails_loud(tmp_path):
 
 def test_uninstall_removes_both_hooks(tmp_path):
     _git_repo(tmp_path)
-    assert cli.init(tmp_path, hooks=True, pre_commit=True) == 0
-    assert cli.uninstall(tmp_path) == 0
+    assert plane.init(tmp_path, hooks=True, pre_commit=True) == 0
+    assert plane.uninstall(tmp_path) == 0
     for name in ("pre-push", "pre-commit"):
         assert not (tmp_path / ".git" / "hooks" / name).exists()
 
@@ -93,7 +93,7 @@ def test_uninstall_removes_both_hooks(tmp_path):
 def test_without_flag_commit_stage_unchanged(tmp_path):
     """Acceptance: no flag, no commit-stage gate — drift commits fine."""
     _git_repo(tmp_path)
-    assert cli.init(tmp_path, hooks=True) == 0
+    assert plane.init(tmp_path, hooks=True) == 0
     assert not (tmp_path / ".git" / "hooks" / "pre-commit").exists()
     _baseline_pair(tmp_path)
     (tmp_path / "docs" / "a.md").write_text("hello v2\n", encoding="utf-8")
@@ -109,7 +109,7 @@ def test_commit_of_stale_pair_fails_naming_scoped_fix(tmp_path):
     "remove allowFailure to enforce" step — after which the drift commit
     is blocked at `git commit` with the scoped fix inline."""
     _git_repo(tmp_path)
-    assert cli.init(tmp_path, hooks=True, pre_commit=True) == 0
+    assert plane.init(tmp_path, hooks=True, pre_commit=True) == 0
     _baseline_pair(tmp_path)
     (tmp_path / "docs" / "a.md").write_text("hello v2\n", encoding="utf-8")
     assert _git(tmp_path, "add", "docs/a.md").returncode == 0
@@ -140,7 +140,7 @@ def test_commit_of_stale_pair_fails_naming_scoped_fix(tmp_path):
 def test_commit_with_markers_blocked_by_hook(tmp_path):
     """The hook's second gate: staged conflict markers block the commit."""
     _git_repo(tmp_path)
-    assert cli.init(tmp_path, hooks=True, pre_commit=True) == 0
+    assert plane.init(tmp_path, hooks=True, pre_commit=True) == 0
     (tmp_path / "doc.md").write_text(
         "intro\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> side\n", encoding="utf-8")
     assert _git(tmp_path, "add", "doc.md").returncode == 0
@@ -152,7 +152,7 @@ def test_commit_with_markers_blocked_by_hook(tmp_path):
 def test_doctor_sound_with_pre_commit_installed(tmp_path, monkeypatch, capsys):
     """Acceptance: with the hook installed, doctor stays green on hooks."""
     _git_repo(tmp_path)
-    assert cli.init(tmp_path, hooks=True, pre_commit=True) == 0
+    assert plane.init(tmp_path, hooks=True, pre_commit=True) == 0
     monkeypatch.chdir(tmp_path)
     from gov import doctor
     doctor.main([])

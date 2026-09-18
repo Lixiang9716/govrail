@@ -20,7 +20,7 @@ import json
 import sys
 from pathlib import Path
 
-from gov import agent_hooks, cli
+from gov import agent_hooks, cli, plane
 
 
 def _governed(tmp_path: Path) -> Path:
@@ -215,10 +215,10 @@ def test_help_lists_dialect_flag_in_options_block(capsys):
 
 def test_add_ons_installs_template_bytes_and_bare_created_entry(tmp_path):
     manifest_path = _manifest(tmp_path)
-    assert cli._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
     settings = tmp_path / ".claude" / "settings.json"
     assert settings.read_bytes() == \
-        cli.TEMPLATES.joinpath("claude-settings.json").read_bytes()
+        plane.TEMPLATES.joinpath("claude-settings.json").read_bytes()
     assert ".claude/settings.json" in \
         json.loads(manifest_path.read_text(encoding="utf-8"))["created"]
 
@@ -229,7 +229,7 @@ def test_add_ons_reports_existing_settings_and_leaves_it(
     settings = tmp_path / ".claude" / "settings.json"
     settings.parent.mkdir()
     settings.write_text('{"hooks": {}}', encoding="utf-8")  # the adopter's
-    assert cli._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
     assert settings.read_text() == '{"hooks": {}}'
     assert ".claude/settings.json" not in \
         json.loads(manifest_path.read_text(encoding="utf-8"))["created"]
@@ -238,21 +238,21 @@ def test_add_ons_reports_existing_settings_and_leaves_it(
 
 def test_uninstall_removes_pristine_settings(tmp_path):
     manifest_path = _manifest(tmp_path)
-    assert cli._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
-    assert cli.uninstall(tmp_path) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane.uninstall(tmp_path) == 0
     assert not (tmp_path / ".claude" / "settings.json").exists()
 
 
 def test_uninstall_keeps_customized_settings_until_force(tmp_path, capsys):
     manifest_path = _manifest(tmp_path)
-    assert cli._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
     settings = tmp_path / ".claude" / "settings.json"
     settings.write_text('{"hooks": {}, "model": "adopters-own"}',
                         encoding="utf-8")
-    assert cli.uninstall(tmp_path) == 1  # refuses, names the file
+    assert plane.uninstall(tmp_path) == 1  # refuses, names the file
     assert ".claude/settings.json" in capsys.readouterr().err
     assert settings.exists()
-    assert cli.uninstall(tmp_path, force=True) == 0
+    assert plane.uninstall(tmp_path, force=True) == 0
     assert not settings.exists()
 
 
@@ -260,7 +260,7 @@ def test_uninstall_keeps_customized_settings_until_force(tmp_path, capsys):
 
 def _add_ons_with_platforms(tmp_path, platforms):
     manifest_path = _manifest(tmp_path)
-    rc = cli._add_ons(tmp_path, manifest_path, hooks=False, ci=False,
+    rc = plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False,
                       platforms=platforms)
     return rc, manifest_path
 
@@ -268,10 +268,10 @@ def _add_ons_with_platforms(tmp_path, platforms):
 def test_platforms_install_template_bytes_and_created_entries(tmp_path):
     rc, manifest_path = _add_ons_with_platforms(tmp_path, ["codex", "gemini"])
     assert rc == 0
-    for name, (rel, tpl) in cli.PLATFORM_TARGETS.items():
+    for name, (rel, tpl) in plane.PLATFORM_TARGETS.items():
         if name in ("codex", "gemini"):
             assert (tmp_path / rel).read_bytes() == \
-                cli.TEMPLATES.joinpath(tpl).read_bytes()
+                plane.TEMPLATES.joinpath(tpl).read_bytes()
             assert rel in json.loads(
                 manifest_path.read_text(encoding="utf-8"))["created"]
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -279,9 +279,9 @@ def test_platforms_install_template_bytes_and_created_entries(tmp_path):
 
 
 def test_platforms_all_installs_every_target(tmp_path):
-    rc, _ = _add_ons_with_platforms(tmp_path, list(cli.PLATFORM_TARGETS))
+    rc, _ = _add_ons_with_platforms(tmp_path, list(plane.PLATFORM_TARGETS))
     assert rc == 0
-    for rel, _tpl in cli.PLATFORM_TARGETS.values():
+    for rel, _tpl in plane.PLATFORM_TARGETS.values():
         assert (tmp_path / rel).exists()
 
 
@@ -309,12 +309,12 @@ def test_platform_configs_uninstall_and_drift_like_any_template(tmp_path):
     assert rc == 0
     # drift classification knows the files (the _inventory reader)
     classified = {f["path"] for f in
-                  cli._upgrade_files(tmp_path, tmp_path / ".gov" /
+                  plane.upgrade_files(tmp_path, tmp_path / ".gov" /
                                      "manifest.json")[0]}
     assert ".codex/hooks.json" in classified
     assert ".github/hooks/govrail.json" in classified
-    assert cli.uninstall(tmp_path) == 0  # pristine → exact reversal (D10)
-    for rel, _tpl in cli.PLATFORM_TARGETS.values():
+    assert plane.uninstall(tmp_path) == 0  # pristine → exact reversal (D10)
+    for rel, _tpl in plane.PLATFORM_TARGETS.values():
         if rel in (".codex/hooks.json", ".github/hooks/govrail.json"):
             assert not (tmp_path / rel).exists()
 
@@ -322,7 +322,7 @@ def test_platform_configs_uninstall_and_drift_like_any_template(tmp_path):
 def test_parse_platforms_validates_names_and_dedupes(capsys):
     assert cli._parse_platforms("codex, gemini") == ["codex", "gemini"]
     assert cli._parse_platforms("codex,codex") == ["codex"]
-    assert cli._parse_platforms("all") == list(cli.PLATFORM_TARGETS)
+    assert cli._parse_platforms("all") == list(plane.PLATFORM_TARGETS)
     assert cli._parse_platforms("windsurf") is None
     assert "unknown platform 'windsurf'" in capsys.readouterr().err
     assert cli._parse_platforms("codex,") is None
@@ -330,7 +330,7 @@ def test_parse_platforms_validates_names_and_dedupes(capsys):
 
 
 def test_fresh_init_records_platforms_and_installs_exactly_them(tmp_path):
-    assert cli.init(tmp_path, platforms=["codex"]) == 0
+    assert plane.init(tmp_path, platforms=["codex"]) == 0
     assert (tmp_path / ".codex" / "hooks.json").exists()
     assert not (tmp_path / ".claude" / "settings.json").exists()
     data = json.loads((tmp_path / ".gov" / "manifest.json")
@@ -339,8 +339,8 @@ def test_fresh_init_records_platforms_and_installs_exactly_them(tmp_path):
 
 
 def test_upgrade_report_names_platforms_still_available(tmp_path, capsys):
-    assert cli.init(tmp_path, platforms=["codex"]) == 0
-    assert cli.init(tmp_path, upgrade=True) == 0
+    assert plane.init(tmp_path, platforms=["codex"]) == 0
+    assert plane.init(tmp_path, upgrade=True) == 0
     out = capsys.readouterr().out
     assert "agent platforms not installed: claude, copilot, gemini" in out
     assert "gov init --platforms claude,copilot,gemini" in out

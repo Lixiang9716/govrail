@@ -47,7 +47,7 @@ SKILLS_DIR = Path(".agents/skills")
 UNIVERSAL_FLAGS = {"-h", "--help", "-v", "--version"}
 
 # Flag registry for the skills-drift check (wish 11/D28). The command set
-# is cli._COMMANDS (single source); flags are declared here because the
+# is commands.COMMANDS (single source); flags are declared here because the
 # argparse parsers are built inside main() at run time. D28 rejected
 # deriving this table from argparse at run time — the deal was "static
 # table, pinned by tests". The pin is tests/test_flag_registry.py: for
@@ -110,13 +110,13 @@ FLAGS: dict[str, set[str]] = {
 
 def _known_commands() -> set[str] | None:
     try:
-        from . import cli
+        from . import commands
     except ImportError:
         return None
     # D57 Wave 1: absorbed commands still work via the deprecated
     # aliases — a note citing `gov verify-notes` describes a run that
     # can still happen, so aliases count as known (they are not dead).
-    return set(cli._COMMANDS) | set(cli._DEPRECATED_ALIASES)
+    return set(commands.COMMANDS) | set(commands.DEPRECATED_ALIASES)
 
 
 def _known_decisions() -> set[str] | None:
@@ -204,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
     if commands is None:
         print("audit_notes: needs package mode — run as `gov audit-notes`", file=sys.stderr)
         return 2
-    # Rule 5: a registry that lags cli._COMMANDS would silently skip flag
+    # Rule 5: a registry that lags commands.COMMANDS would silently skip flag
     # checks for the missing command (or flag-check a phantom one). That is
     # a defect in this tool, not a finding in the tree — name it and abort.
     missing = commands - set(FLAGS)
@@ -212,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
     if missing or phantom:
         for name in sorted(missing):
             print(f"audit_notes: flag registry is missing '{name}' "
-                  "(registry lagged cli._COMMANDS — file a govrail bug)", file=sys.stderr)
+                  "(registry lagged commands.COMMANDS — file a govrail bug)", file=sys.stderr)
         for name in sorted(phantom):
             print(f"audit_notes: flag registry knows '{name}' but the CLI does not",
                   file=sys.stderr)

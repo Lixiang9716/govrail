@@ -18,7 +18,7 @@ import pytest
 import sys
 from pathlib import Path
 
-from gov import cli
+from gov import cli, plane
 from gov.version import __version__
 
 PASS = [sys.executable, "-c", "pass"]
@@ -65,7 +65,7 @@ def _invoke(argv: list[str], cwd: Path, *,
 
 def _setup(tmp_path: Path, *, old_pin: bool = True) -> None:
     _repo(tmp_path)
-    assert cli.init(tmp_path, ci=True) == 0  # --ci generates the pinned workflow
+    assert plane.init(tmp_path, ci=True) == 0  # --ci generates the pinned workflow
     if old_pin:
         wf = tmp_path / ".github" / "workflows" / "gov.yml"
         text = wf.read_text(encoding="utf-8")

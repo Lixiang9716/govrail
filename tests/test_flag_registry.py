@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from gov import audit_notes, cli
+from gov import audit_notes, cli, commands
 
 REPO = Path(__file__).resolve().parent.parent
 # Option-entry lines: exactly two spaces of indent, then the flag. Help-text
@@ -80,7 +80,7 @@ def _listed_flags(cmd: str) -> tuple[set[str], str]:
     return listed - audit_notes.UNIVERSAL_FLAGS, "\n".join(outs)
 
 
-@pytest.mark.parametrize("cmd", sorted(cli._COMMANDS))
+@pytest.mark.parametrize("cmd", sorted(commands.COMMANDS))
 def test_registry_matches_help_options(cmd):
     """`gov <cmd> --help` options == audit_notes.FLAGS[cmd].
 
@@ -97,7 +97,7 @@ def test_registry_matches_help_options(cmd):
     )
 
 
-@pytest.mark.parametrize("cmd, flags", sorted(cli.COMMAND_FLAGS.items()))
+@pytest.mark.parametrize("cmd, flags", sorted(commands.COMMAND_FLAGS.items()))
 def test_hand_parsed_help_lists_every_flag(cmd, flags):
     """The hand-parsed trio's help table must not lag its own parser:
     every flag the parser accepts appears in `gov <cmd> --help` output."""

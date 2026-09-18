@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from gov import cli, presets
+from gov import cli, plane, presets
 from gov import verify_plane as _vp
 
 REPO = Path(__file__).resolve().parent.parent
@@ -230,7 +230,7 @@ def test_loader_rejects_missing_skill_file_and_unknown_hint(tmp_path):
 # --- apply: the additive contracts ----------------------------------------
 
 def _init(tmp_path):
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     return tmp_path
 
 
@@ -489,7 +489,7 @@ def test_apply_unknown_preset_lists_available(tmp_path, capsys):
 # --- init --preset: one command for a typed start --------------------------
 
 def test_init_preset_on_fresh_project(tmp_path):
-    assert cli.init(tmp_path, preset=AGENT_HEAVY) == 0
+    assert plane.init(tmp_path, preset=AGENT_HEAVY) == 0
     cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
     assert "verify-decisions" in [g["id"] for g in cfg["gates"]]
     assert "verify-decisions" in cfg["modes"]["governance"]
@@ -501,13 +501,13 @@ def test_init_preset_on_fresh_project(tmp_path):
 
 def test_init_preset_retrofits_an_initialized_project(tmp_path):
     _init(tmp_path)
-    assert cli.init(tmp_path, preset=AGENT_HEAVY) == 0
+    assert plane.init(tmp_path, preset=AGENT_HEAVY) == 0
     cfg = json.loads((tmp_path / "gates.json").read_text(encoding="utf-8"))
     assert "verify-decisions" in [g["id"] for g in cfg["gates"]]
 
 
 def test_init_preset_rejects_unknown_name_before_any_mutation(tmp_path, capsys):
-    assert cli.init(tmp_path, preset="no-such") == 2
+    assert plane.init(tmp_path, preset="no-such") == 2
     err = capsys.readouterr().err
     assert "no-such" in err and AGENT_HEAVY in err
     assert not (tmp_path / ".gov").exists(), \
@@ -515,9 +515,9 @@ def test_init_preset_rejects_unknown_name_before_any_mutation(tmp_path, capsys):
 
 
 def test_init_preset_does_not_combine_with_upgrade_or_adopt(tmp_path, capsys):
-    assert cli.init(tmp_path, preset=AGENT_HEAVY, upgrade=True) == 2
+    assert plane.init(tmp_path, preset=AGENT_HEAVY, upgrade=True) == 2
     assert "--upgrade" in capsys.readouterr().err
-    assert cli.init(tmp_path, preset=AGENT_HEAVY, adopt=["all"]) == 2
+    assert plane.init(tmp_path, preset=AGENT_HEAVY, adopt=["all"]) == 2
     assert "--adopt" in capsys.readouterr().err
 
 

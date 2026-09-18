@@ -5,7 +5,7 @@
 stale exactly like the README's hand-copied help and the 0.12-era flag
 registry did — this module is the pin:
 
-- **leg 2, universal**: every command in ``cli._COMMANDS`` refuses an
+- **leg 2, universal**: every command in ``commands.COMMANDS`` refuses an
   unknown flag with exit 2 — the registry is the command table itself,
   so a new command is covered the moment it exists (the probe for this
   leg caught ``verify-notes`` swallowing an unknown flag and answering
@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-from gov import cli
+from gov import cli, plane, commands
 
 PASS = [sys.executable, "-c", "pass"]
 FAIL = [sys.executable, "-c", "raise SystemExit(1)"]
@@ -71,7 +71,7 @@ def _invoke(argv: list[str], cwd: Path, stdin: str | None = None) -> int:
 
 # --- leg 2: unknown flags are usage errors, everywhere -----------------
 
-@pytest.mark.parametrize("command", sorted(cli._COMMANDS))
+@pytest.mark.parametrize("command", sorted(commands.COMMANDS))
 def test_usage_error_is_two(command, tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     rc = _invoke([command, "--surely-not-a-flag-xyz"], tmp_path)
@@ -178,7 +178,7 @@ def _red_receipt(tmp_path):
 
 
 def _red_task(tmp_path):
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     from gov import task
     combined, _ = task.rules_hash(tmp_path)
     cards = tmp_path / ".gov" / "tasks"
@@ -191,7 +191,7 @@ def _red_task(tmp_path):
 
 
 def _red_uninstall(tmp_path):
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     rules = tmp_path / ".gov" / "rules.md"
     rules.write_text(
         rules.read_text(encoding="utf-8") + "\ncustom\n", encoding="utf-8")
@@ -205,7 +205,7 @@ def _red_doctor(tmp_path):
 
 
 def _red_verify_plane(tmp_path):
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     gates = tmp_path / "gates.json"
     gates.write_text(
         json.dumps({"modes": {}, "gates": []}), encoding="utf-8")
@@ -251,7 +251,7 @@ NEVER_ONE_HERE = {
 def test_every_command_declares_its_failure_leg():
     """The declaration IS the day-one enforcement: a new command missing
     from both registries turns this red until it states its contract."""
-    assert set(FAILURE_LEGS) | NEVER_ONE_HERE == set(cli._COMMANDS)
+    assert set(FAILURE_LEGS) | NEVER_ONE_HERE == set(commands.COMMANDS)
     assert not set(FAILURE_LEGS) & NEVER_ONE_HERE
 
 
@@ -286,7 +286,7 @@ def _run_proc(tmp_path, argv):
 
 def test_run_default_polarity_is_the_human_report(tmp_path, monkeypatch):
     _repo(tmp_path)
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     monkeypatch.chdir(tmp_path)
     proc = _run_proc(tmp_path, ["run"])
     assert proc.returncode == 0
@@ -296,7 +296,7 @@ def test_run_default_polarity_is_the_human_report(tmp_path, monkeypatch):
 
 def test_run_json_polarity_is_one_machine_value(tmp_path, monkeypatch):
     _repo(tmp_path)
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     monkeypatch.chdir(tmp_path)
     proc = _run_proc(tmp_path, ["run", "--json"])
     assert proc.returncode == 0

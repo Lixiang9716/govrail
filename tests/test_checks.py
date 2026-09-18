@@ -9,6 +9,7 @@ and be COUNTED; severity must gate the exit code. The project-rule
 surface is additive by contract, and a duplicate id is refused, not
 silently overridden (rule 5).
 """
+from gov import plane
 import json
 
 import pytest
@@ -307,7 +308,7 @@ def test_first_run_after_adoption_stays_green(tmp_path, monkeypatch):
     from gov import cli
     _git_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     assert cli.main(["run"]) == 0, "advisory-first broken"
 
     legacy = tmp_path / "src" / "legacy.py"

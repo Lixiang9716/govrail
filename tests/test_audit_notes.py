@@ -156,14 +156,14 @@ def test_registry_covers_exactly_the_command_set():
     missing entry would silently skip flag checks for it (rule 5). D57:
     the absorbed commands remain in the registry while their deprecated
     aliases work — the extras must be exactly those aliases."""
-    from gov import cli
-    assert set(cli._COMMANDS) <= set(audit_notes.FLAGS)
-    assert (set(audit_notes.FLAGS) - set(cli._COMMANDS)
-            == set(cli._DEPRECATED_ALIASES))
+    from gov import commands
+    assert set(commands.COMMANDS) <= set(audit_notes.FLAGS)
+    assert (set(audit_notes.FLAGS) - set(commands.COMMANDS)
+            == set(commands.DEPRECATED_ALIASES))
 
 
 def test_registry_mismatch_fails_loud(tmp_path, monkeypatch, capsys):
-    """A registry that lags cli._COMMANDS is a tool defect, not a tree
+    """A registry that lags commands.COMMANDS is a tool defect, not a tree
     finding — named on stderr, exit 2 (rule 5)."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delitem(audit_notes.FLAGS, "doctor")

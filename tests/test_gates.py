@@ -8,7 +8,7 @@ import pytest
 
 import shutil
 
-from gov import cli, gates
+from gov import cli, gates, plane
 
 # Portable gate commands (#168): the Unix coreutils true/false do not
 # exist on Windows — "a command that exits 0/1" must not depend on PATH.
@@ -711,7 +711,7 @@ def test_receipt_ledger_symlink_refuses_the_receipt(tmp_path, monkeypatch,
     sp.run(["git", "add", "-A"], cwd=tmp_path, check=True)
     sp.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "i"],
            cwd=tmp_path, check=True)
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     outside = tmp_path / "outside.txt"
     outside.write_text("mine\n", encoding="utf-8")
     ledger = tmp_path / ".gov" / "history" / "receipts.jsonl"
@@ -739,7 +739,7 @@ def test_history_directory_symlink_warns_and_writes_nothing(tmp_path,
     outside = tmp_path.parent / f"{tmp_path.name}-outside-h2"
     outside.mkdir()
     sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".gov" / "history").symlink_to(outside,
                                                target_is_directory=True)
@@ -824,7 +824,7 @@ def test_plane_refusal_is_version_aware(tmp_path, monkeypatch, capsys):
     refusal the day the mechanism moves — the refusal names both sides
     instead of assuming the running binary is the newest thing around."""
     _git_repo(tmp_path)
-    assert cli.init(tmp_path) == 0
+    assert plane.init(tmp_path) == 0
     manifest = tmp_path / ".gov" / "manifest.json"
     data = json.loads(manifest.read_text(encoding="utf-8"))
     data["version"] = "0.1.2"
