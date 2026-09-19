@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.47.2](https://github.com/Lixiang9716/govrail/compare/v0.47.1...v0.47.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* **task:** one green predicate for receipts; bricked done cards get exits ([#329](https://github.com/Lixiang9716/govrail/issues/329)) ([aaaee7a](https://github.com/Lixiang9716/govrail/commit/aaaee7a4fcb29030fbcd43544f7971ea8de7afb5))
+
 ## [0.47.1](https://github.com/Lixiang9716/govrail/compare/v0.47.0...v0.47.1) (2026-09-19)
 
 

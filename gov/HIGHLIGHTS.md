@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.47.2 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- **task:** one green predicate for receipts; bricked done cards get exits
+
 ## 0.47.1 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - **task:** card ids are addresses — high-water allocation, never recycled
