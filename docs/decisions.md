@@ -532,3 +532,11 @@
 - **状态**：已决
 - **决定**：(b)。十条已声明类型(plane-seal、rituals-ledger、surprises-ledger、task-card、run-receipt、manifest、pairing-config、pairing-record、note-file、gates-config)入册;类别语义:compatible 旧读取者继续工作,breaking 旧读取者必须响亮拒绝且 `gov update` 拥有迁移叙事;`.gov/history/` 是 runtime-deletable(N9),确认在案但永不迁移。验证的诚实边界写进 README:链在树内自洽且锚定已声明形状,代码符合 schema 靠评审与测试——与 DSH 对其验证器的声明一致。
 - **被否**：(a) 采用者数据被静默破坏正是 #259 一类事故的根源形态;(c) 运行时校验器要对每种格式造产物、拉校验依赖,成本远超首轮收益,且描述符以可读字段表承担同等沟通职责——留作后续独立决定;**摘要锚 git 历史而非记录链**——重写历史的威胁模型(第 17 行)已由结构保证,重复收费。
+
+## D64 — D64 — 提交边界自动化：staged 自动修复与派生重生成,证据纪律入 rubric
+
+- **问题**：agent 高频生成代码的效率瓶颈在反馈环长度——lint 违规和派生真值漂移都要到 push(DAG)甚至 CI 才红,#294 的 69 处 ruff 发现就是走了全程才被抓住;而 PR 描述里"测试过了/门会拒绝"式的主张没有任何 rubric 条目约束,自我报告与证据不分。对标 DSH 的 lefthook 三件套(--fix + stage_fixed、regenerate rather than reject、staged 域限定)与 committed-artifact-citations 证据纪律,补齐 commit 边界与评审边界。
+- **选项**：(a) 维持现状(push/CI 才红);(b) 两个 pre-commit stage 门:staged-lint(ruff --fix 暂存区文件并 restage,部分暂存文件按名跳过——worktree 修复回写会吞掉作者刻意留在提交外的改动,有发现仍按名点红)+ staged-derive(暂存输入命中派生真值→立即重生成→产物 restage,失败才红),配 D2 退出码、六腿拒绝案例、本仓库安装自吃钩子;(c) 把 --fix/重生成放进 lint/derive 既有门本体
+- **状态**：已决
+- **决定**：(b)。stage 门契约复用(hookcmd 对 stage 门自动追加 --staged、advisory/blocking 语义与 DAG 一致),新门走 dogfood-only + modes.all(DAG 内为具名 no-op,提交上下文才做工);部分暂存保护是超出 DSH 原型的一处加固。同轮:R10 入评审 rubric(en+zh)——承重主张必须引用可验证坐标(回执 id/具名测试数/产物位置/门输出),"相信我全绿"是反模式;gate candidate 标 partial(存在性与可解析性可查,充分性是判断)。本仓库首次安装自己的 pre-commit/pre-push 钩子(gov init --hooks --pre-commit)——治理平面开始吃自己的提交边界。
+- **被否**：(c) 会把 staged 语义塞进面向全仓的门命令,破坏"门是外部命令"的契约形状,且 adopter 侧无派生面;**不装自吃钩子**——写完 stage 门却不在自己仓库触发,是 rule 6 的活体反面(门永远不跑等于 vacuous);**部分暂存文件直接跳过不点红**——静默跳过会教人忽略它,点名+有发现仍红才是 fail loud。

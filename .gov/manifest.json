@@ -1,8 +1,16 @@
 {
-  "version": "0.38.2",
-  "created": [],
-  "gitHooks": [],
+  "version": "0.45.0",
+  "created": [
+    ".claude/settings.json"
+  ],
+  "gitHooks": [
+    "pre-push",
+    "pre-commit"
+  ],
   "templates": {
     ".gov/rules.md": "650ebb4a4b7f4cff41b0086cfa23856019123abd64adc78760a1af9ce56f6088"
-  }
+  },
+  "platforms": [
+    "claude"
+  ]
 }

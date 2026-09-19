@@ -73,6 +73,22 @@ def test_readme_command_block_matches_help():
         assert re.search(rf"^\s+{name}\b", block, re.M), f"missing row: {name}"
 
 
+def test_readme_carries_exactly_one_command_block():
+    """Exactly ONE gov:commands block. The marker text has evolved (it
+    names generator/regenerator/verifier) and the regenerator once
+    matched markers by exact text — a marker change orphaned the old
+    block and INSERTED a duplicate; the derive bot accumulated four on
+    master before the fix (recorded in the surprise ledger as
+    generated-marker-drift)."""
+    text = README.read_text(encoding="utf-8")
+    n = text.count(BEGIN)
+    assert n == 1, (
+        f"README carries {n} gov:commands blocks — duplicates grow when "
+        "the marker text changes and the old block is orphaned; collapse "
+        "them to one (scripts/update_readme_commands.py now does this "
+        "automatically)")
+
+
 def test_docs_cite_only_real_commands_flags_and_subcommands():
     """Every `gov ...` citation in the doc set resolves: command in the
     CLI table, subcommand in the parser, flags in the registry."""

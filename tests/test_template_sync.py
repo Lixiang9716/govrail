@@ -80,7 +80,8 @@ def test_demo_specimen_matches_the_plane():
                  "case-skill-coverage.sh", "case-postmortems.sh",
                  "case-surprises.sh",
                  "case-doc-budgets.sh",
-                 "case-persistence.sh"}
+                 "case-persistence.sh",
+                 "case-staged-lint.sh", "case-staged-derive.sh"}
     assert not (demo_cases & repo_only), (
         f"repo-only case(s) {sorted(demo_cases & repo_only)} leaked into the "
         "demo — run scripts/sync_demo_specimen.py (it prunes them)")

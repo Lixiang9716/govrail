@@ -11,17 +11,24 @@ block red in CI.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 README = REPO / "README.md"
-BEGIN = ("<!-- gov:commands BEGIN — generated from `gov --help` by "
-         "scripts/update_readme_commands.py (regenerate: python3 "
-         "scripts/derive_all.py); never edit by hand — drift is caught "
-         "by tests/test_docs_cli_consistency.py -->")
+# The marker TEXT may evolve (it names the generator/regenerator/verifier),
+# so matching is by the STABLE PREFIX, and every block found is collapsed
+# into one at the first position — a marker-text change must never orphan
+# an old block and grow a duplicate (the derive bot accumulated four on
+# master exactly this way before the fix; recorded in the surprise
+# ledger as generated-marker-drift).
+BEGIN_PREFIX = "<!-- gov:commands BEGIN"
 END = "<!-- gov:commands END -->"
+BLOCK_RX = re.compile(
+    re.escape(BEGIN_PREFIX) + r"(?:(?!" + re.escape(END) + r").)*"
+    + re.escape(END) + r"\n?", re.DOTALL)
 
 
 def render_help() -> str:
@@ -40,15 +47,26 @@ def render_help() -> str:
     return out[i:].strip()
 
 
+def render_marker() -> str:
+    return (f"{BEGIN_PREFIX} — generated from `gov --help` by "
+            "scripts/update_readme_commands.py (regenerate: python3 "
+            "scripts/derive_all.py); never edit by hand — drift is "
+            "caught by tests/test_docs_cli_consistency.py -->")
+
+
 def main() -> int:
     body = render_help()
-    block = f"{BEGIN}\n```text\n{body}\n```\n{END}"
+    block = (f"{render_marker()}\n```text\n{body}\n```\n{END}\n")
     text = README.read_text(encoding="utf-8")
-    if BEGIN in text:
-        i = text.index(BEGIN)
-        j = text.index(END) + len(END)
-        text = text[:i] + block + text[j:]
-        action = "regenerated"
+    found = BLOCK_RX.findall(text)
+    if found:
+        # Collapse EVERY existing block (any marker-era text) and put
+        # exactly one, current-marker block where the first one sat.
+        first = BLOCK_RX.search(text)
+        text = BLOCK_RX.sub("", text)
+        insert_at = first.start()
+        text = text[:insert_at] + block + text[insert_at:]
+        action = f"replaced {len(found)} block(s)"
     else:
         anchor = "`init` is non-invasive and idempotent"
         assert anchor in text, "README anchor for the block moved"
@@ -58,7 +76,7 @@ def main() -> int:
             f"{block}\n\n{anchor}", 1)
         action = "inserted"
     README.write_text(text, encoding="utf-8")
-    print(f"update-readme-commands: {action} the command block in README.md")
+    print(f"update-readme-commands: {action} in README.md")
     return 0
 
 

@@ -128,39 +128,6 @@ gov lease list                      # list current leases (diagnostic only)
 
 The full command surface, verbatim from `gov --help`:
 
-<!-- gov:commands BEGIN — generated from `gov --help`; run scripts/update_readme_commands.py, never edit by hand -->
-```text
-commands:
-  init             inject the plane into a project (--hooks/--ci add runners; --hooks --pre-commit adds the opt-in commit-stage gates; --adopt-new merges new shipped gates; --upgrade shows template drift; installs .claude/settings.json agent hooks unless one exists)
-  uninstall        reverse init
-  run              run the project's gate DAG (args forwarded to gates.py; --receipt records a tamper-evident run receipt, #124; --merge preflights the union of parallel branches in a scratch worktree before landing)
-  self-test        run governance rejection cases
-  receipt          verifiable run receipts (verify/show): verify a cited receipt against a commit (issue #124/D42)
-  agent-hooks      agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop — govrail's presence at every point of the agent's workflow)
-  verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
-  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
-  doctor           environment self-check (PATH, python, hooks, gates schema)
-  note             note scaffold, read side, and the notes gates (new/check/list/show/verify/presence/audit/archive/archive-verify; list --stale marks audit signals)
-  decision         decision-row tooling (next/add/verify: next free D-number; atomic validated add; table structure guard)
-  lease            lease locks for parallel agents (acquire/release/list; busy exits 3; --wait S polls, --ttl S bounds the lease)
-  verify           content gates without a family hub (pairing/rubric/conflict-markers/doc-sync)
-  check            syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)
-  parse            per-file structure facts from the parse layer (function spans, line counts, nesting depth) — facts, not verdicts; the primitive a size/complexity gate reads (#265)
-  review           assemble the review dossier for a diff (scope, notes, recall, rubric)
-  trend            gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)
-  stats            structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger
-  whatsnew         usage-oriented highlights since a version
-  recall           retrieve notes, decisions, and postmortems (all terms, ranked)
-  change-scope     report touched surfaces (e.g. --base <ref>)
-  surprise         the surprise ledger (record/list): expectation vs reality, counted per signature; rule 11 — the third occurrence of a signature escalates into a process improvement
-  task             task cards for subagent briefs (new/check/close/claim/release/list; rules@hash pin + checklist + green-run receipt; claim/release lease a card so two workers cannot take one)
-  preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
-  update           one deliberate migration step: adopt missing/moved templates, merge newly shipped gates, refresh the CI pin, re-seal the plane (dry run by default; --apply executes; the seal needs --confirm-unattended or a TTY)
-```
-<!-- gov:commands END -->
-
-The full command surface, verbatim from `gov --help`:
-
 <!-- gov:commands BEGIN — generated from `gov --help` by scripts/update_readme_commands.py (regenerate: python3 scripts/derive_all.py); never edit by hand — drift is caught by tests/test_docs_cli_consistency.py -->
 ```text
 commands:
@@ -194,69 +161,18 @@ commands:
 
 The full command surface, verbatim from `gov --help`:
 
-<!-- gov:commands BEGIN — generated from `gov --help` by scripts/update_readme_commands.py (regenerate: python3 scripts/derive_all.py); never edit by hand — drift is caught by tests/test_docs_cli_consistency.py -->
-```text
-commands:
-  init             inject the plane into a project (--hooks/--ci add runners; --hooks --pre-commit adds the opt-in commit-stage gates; --adopt-new merges new shipped gates; --upgrade shows template drift; installs .claude/settings.json agent hooks unless one exists)
-  uninstall        reverse init
-  run              run the project's gate DAG (args forwarded to gates.py; --receipt records a tamper-evident run receipt, #124; --merge preflights the union of parallel branches in a scratch worktree before landing)
-  self-test        run governance rejection cases
-  receipt          verifiable run receipts (verify/show): verify a cited receipt against a commit (issue #124/D42)
-  agent-hooks      agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop — govrail's presence at every point of the agent's workflow)
-  verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
-  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
-  doctor           environment self-check (PATH, python, hooks, gates schema)
-  note             note scaffold, read side, and the notes gates (new/check/list/show/verify/presence/audit/archive/archive-verify; list --stale marks audit signals)
-  decision         decision-row tooling (next/add/verify: next free D-number; atomic validated add; table structure guard)
-  lease            lease locks for parallel agents (acquire/release/list; busy exits 3; --wait S polls, --ttl S bounds the lease)
-  verify           content gates without a family hub (pairing/rubric/conflict-markers/doc-sync)
-  check            syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)
-  parse            per-file structure facts from the parse layer (function spans, line counts, nesting depth) — facts, not verdicts; the primitive a size/complexity gate reads (#265)
-  review           assemble the review dossier for a diff (scope, notes, recall, rubric)
-  trend            gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)
-  stats            structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger
-  whatsnew         usage-oriented highlights since a version
-  recall           retrieve notes, decisions, and postmortems (all terms, ranked)
-  change-scope     report touched surfaces (e.g. --base <ref>)
-  surprise         the surprise ledger (record/list): expectation vs reality, counted per signature; rule 11 — the third occurrence of a signature escalates into a process improvement
-  task             task cards for subagent briefs (new/check/close/claim/release/list; rules@hash pin + checklist + green-run receipt; claim/release lease a card so two workers cannot take one)
-  preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
-  update           one deliberate migration step: adopt missing/moved templates, merge newly shipped gates, refresh the CI pin, re-seal the plane (dry run by default; --apply executes; the seal needs --confirm-unattended or a TTY)
-```
-<!-- gov:commands END -->
 
 The full command surface, verbatim from `gov --help`:
 
-<!-- gov:commands BEGIN — generated from `gov --help` by scripts/update_readme_commands.py (regenerate: python3 scripts/derive_all.py); never edit by hand — drift is caught by tests/test_docs_cli_consistency.py -->
-```text
-commands:
-  init             inject the plane into a project (--hooks/--ci add runners; --hooks --pre-commit adds the opt-in commit-stage gates; --adopt-new merges new shipped gates; --upgrade shows template drift; installs .claude/settings.json agent hooks unless one exists)
-  uninstall        reverse init
-  run              run the project's gate DAG (args forwarded to gates.py; --receipt records a tamper-evident run receipt, #124; --merge preflights the union of parallel branches in a scratch worktree before landing)
-  self-test        run governance rejection cases
-  receipt          verifiable run receipts (verify/show): verify a cited receipt against a commit (issue #124/D42)
-  agent-hooks      agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop — govrail's presence at every point of the agent's workflow)
-  verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
-  hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
-  doctor           environment self-check (PATH, python, hooks, gates schema)
-  note             note scaffold, read side, and the notes gates (new/check/list/show/verify/presence/audit/archive/archive-verify; list --stale marks audit signals)
-  decision         decision-row tooling (next/add/verify: next free D-number; atomic validated add; table structure guard)
-  lease            lease locks for parallel agents (acquire/release/list; busy exits 3; --wait S polls, --ttl S bounds the lease)
-  verify           content gates without a family hub (pairing/rubric/conflict-markers/doc-sync)
-  check            syntax-class static checks over the parse layer (shipped + .gov/checks/ rules; suppressions counted; --strict makes warnings block)
-  parse            per-file structure facts from the parse layer (function spans, line counts, nesting depth) — facts, not verdicts; the primitive a size/complexity gate reads (#265)
-  review           assemble the review dossier for a diff (scope, notes, recall, rubric)
-  trend            gate duration trends from .gov/history/ (p50 per window; --by-tag splits per caller, --cost rolls up caller-reported cost)
-  stats            structural facts per language (lines, symbols, nesting depth) from the parse layer — facts, not verdicts; --record appends to the stats ledger
-  whatsnew         usage-oriented highlights since a version
-  recall           retrieve notes, decisions, and postmortems (all terms, ranked)
-  change-scope     report touched surfaces (e.g. --base <ref>)
-  surprise         the surprise ledger (record/list): expectation vs reality, counted per signature; rule 11 — the third occurrence of a signature escalates into a process improvement
-  task             task cards for subagent briefs (new/check/close/claim/release/list; rules@hash pin + checklist + green-run receipt; claim/release lease a card so two workers cannot take one)
-  preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
-  update           one deliberate migration step: adopt missing/moved templates, merge newly shipped gates, refresh the CI pin, re-seal the plane (dry run by default; --apply executes; the seal needs --confirm-unattended or a TTY)
-```
-<!-- gov:commands END -->
+
+The full command surface, verbatim from `gov --help`:
+
+
+The full command surface, verbatim from `gov --help`:
+
+
+The full command surface, verbatim from `gov --help`:
+
 
 `init` is non-invasive and idempotent: it creates `.gov/rules.md`, adds
 `gates.json`, the notes README, and the agent skills (recall-first,
