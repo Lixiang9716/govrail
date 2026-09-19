@@ -1,0 +1,31 @@
+#!/bin/sh
+# govrail: pre-commit hook installed by `gov init --hooks --pre-commit`;
+# `gov uninstall` removes it. The body delegates to `gov hooks
+# pre-commit`, which runs the gates configured with
+# "stages": ["pre-commit"] in gates.json — against the index, under
+# each gate's own allowFailure contract. Hand-wiring gates here (the
+# old form) ignored that contract and made an advisory gate block every
+# commit. Bypass for one commit: `git commit --no-verify`.
+
+# Resolve gov robustly (D29): explicit override, then PATH, then module.
+# $GOV_BIN is an argv STRING and is word-split by design — it may carry
+# interpreter arguments ("python -m gov"); a path containing spaces is
+# not a supported form.
+run_gov() {
+    if [ -n "$GOV_BIN" ]; then
+        $GOV_BIN "$@"
+    elif command -v gov >/dev/null 2>&1; then
+        GOV_BIN="gov"          # propagate the resolution: gate commands
+        export GOV_BIN         # that name `gov` inherit it (#250)
+        gov "$@"
+    else
+        GOV_BIN="python3 -m gov"
+        export GOV_BIN
+        python3 -m gov "$@"
+    fi
+}
+
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH \
+      GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+
+run_gov hooks pre-commit

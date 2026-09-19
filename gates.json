@@ -20,7 +20,9 @@
       "postmortems",
       "surprises",
       "doc-budgets",
-      "persistence"
+      "persistence",
+      "staged-lint",
+      "staged-derive"
     ],
     "quick": [
       "notes",
@@ -255,6 +257,30 @@
         "scripts/check_persistence.py"
       ],
       "description": "every schema descriptor in docs/persistence/schemas chains through the records in docs/persistence/changes to a live-digest anchor — touching a format the plane writes without acknowledging the compatibility impact is red; catalog.json (generated) must be fresh"
+    },
+    {
+      "id": "staged-lint",
+      "label": "commit-stage lint: ruff --fix on the staged files, fixes restaged",
+      "command": [
+        "python3",
+        "scripts/staged_lint.py"
+      ],
+      "stages": [
+        "pre-commit"
+      ],
+      "description": "the commit boundary owns what the push boundary proves: staged *.py files are autofixed and restaged (partially-staged files skipped by name so unstaged work is never swallowed); red only on findings autofix cannot clear"
+    },
+    {
+      "id": "staged-derive",
+      "label": "commit-stage derivation: derived truths regenerate, never reject",
+      "command": [
+        "python3",
+        "scripts/staged_derive.py"
+      ],
+      "stages": [
+        "pre-commit"
+      ],
+      "description": "when a staged file is an input to a derived truth (CLI surface, templates, skills, rules, rejection cases, the derivation tooling), the truths regenerate now and the outputs restage — a forgotten regeneration costs nothing instead of a red push"
     }
   ]
 }

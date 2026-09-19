@@ -60,6 +60,12 @@
     ".gov/rejections/case-skill-coverage.sh": {
       "sha256": "01329fd79c688c61511ef4e8d5fc58a788dbab9a914f9804e536c03acdd6c8bc"
     },
+    ".gov/rejections/case-staged-derive.sh": {
+      "sha256": "8d86367cfd87c05cebf3af36c78a5b7fe85a505ef3d41486bf1affd14501f6ca"
+    },
+    ".gov/rejections/case-staged-lint.sh": {
+      "sha256": "40d8fc731d6a29cfd0ad725785a6639152033e376d154264ef8457f788d3deae"
+    },
     ".gov/rejections/case-surprises.sh": {
       "sha256": "0203b1e4c17ffd6112ca56076e64f66a7b37024525d28b1e35b8d969e41d4e53"
     },
@@ -70,11 +76,11 @@
       "sha256": "e6c4833f3dbb1cdd7cd0a324d67e663eb191d7a7fe39834c3b4f1380906a4131"
     },
     "gates.json": {
-      "sha256": "41ae8822a78ceb8a9c9e0be60d44042f747a3c415946b0a7d3bf6a9fcb26dc9d"
+      "sha256": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-19T07:24:29+00:00",
+    "ts": "2026-09-19T07:45:51+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }
