@@ -548,3 +548,35 @@
 - **状态**：已决
 - **决定**：(a)。14 个 issue 同根因，分批落会造成中间态的"半诚实"（门禁说 A、README 说 B）；新命令 gate 走规则 10 全套发现面（FLAGS、skill 阶段表、退出码契约）。维护者裁决：**不写 MCP，我们不是做 MCP 的**——#318 采用 issue 自带备选路径，只写平台覆盖边界（4 方言封顶，其余宿主与 MCP out of scope）。
 - **被否**：(c) MCP——维护者明确出局，四个原生方言 + git hooks 是本项目的集成面；(b) 逐个小 PR——#308/#317/#310 同属"判决不可信"，分开落会让 DAG 长期带着自相矛盾的证据标准；拆 rules.md 为模板层+自托管层——与 test_template_sync 的字节一致约束冲突，改为措辞通用化；note-presence require 全局默认收紧——违反 P0-3（新装第一天不红），改为 python-lib preset 携带；gate add 顺手自动重基线封印——重封印是记录在案的仪式，顺手代做会重开 #311 的洞。
+
+## D66 — 发布节奏降频：批量累积、手动裁切（D66）
+
+## 问题
+
+两天内发布十余个版本（CHANGELOG 累计 91 个版本段）：release-please 链
+在每次 release 级合并后自动武装 auto-merge，CI 一绿立即打 tag 发 PyPI。
+每次发布都是一次 adopter CI pin 的漂移源、一次 PyPI 索引刷新、一份
+release notes；节奏快到发布失去显著性，红门禁保护的是"每一次都发"而不是
+"发布值得发"。维护者裁决：放缓节奏。
+
+## 选项
+
+(a) 保留 release-please 的累积-起草机制（PR 开启、HIGHLIGHTS amend、
+取消被取代 run、RELEASE_PAT 用户身份推送保证 CI 即时启动），仅移除
+auto-merge 武装步骤——release PR 持续累积，人工 squash 合并即裁切，
+一次合并 = 一个 tag + 一次 PyPI；(b) 固定周节奏：另加定时工作流每周
+自动武装 auto-merge；(c) 标签通道：默认手动，release PR 打
+release:ship 标签即自动放行。
+
+## 状态
+
+已决
+
+## 决定
+
+(a)。节奏完全由维护者控制：想发就合并 release PR（紧急发版与常规发版
+是同一个动作），机制改动最小；累积期间 PR 头保持完整且 CI 可判
+（起草/amend/取消机制原样保留）。(b) 引入新的定时工作流与 PAT 权限面，
+且固定节奏仍可能在无变更时空转；(c) 多一条需要记住的旁路，与"显式、
+有记录"的文化相比收益为负。触发集不变（feat/fix/perf/revert 才开
+release PR，chore/docs 本就不触发）。

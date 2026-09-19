@@ -85,15 +85,19 @@ tests/test_docs_cli_consistency.py 保障。
    小节条目改写成面向用法的内容（HIGHLIGHTS 的真正载荷），在此之前
    标题会明确标注 "draft"。
 
-### 发布链路端到端自动
+### 发布按批累积；合并 release PR 即是裁切
 
-配置 `RELEASE_PAT` secret（见下方一次性设置）后，一次 release 级合并到
-master 的整条链路无人值守：release-please 以用户身份开 PR（其 CI 立即
+发版不随合并逐次发布。release PR 会**累积**每一次 release 级变更并保持
+开启；裁切一个版本是唯一的人类动作（D66）：squash 合并该 PR
+（`gh pr merge <n> --squash --delete-branch`），合并推送触发 release
+job——打 tag + GitHub Release + 发 PyPI，每次裁切无人值守。红 PR 仍然
+永不合并——链路在证据面前停下，而不是在希望面前。
+
+配置 `RELEASE_PAT` secret（见下方一次性设置）后，累积中的 PR 无需人工
+照看即保持 CI 可判：release-please 以用户身份开/更新 PR（其 CI 立即
 运行——不再有 action_required 挂起），起草 job 把 HIGHLIGHTS 草稿
-amend 进 release 提交、取消被取代的 run、武装 auto-merge；必需检查
-全绿后 GitHub 自动 squash 合并，合并推送触发 release job（打 tag +
-GitHub Release + 发 PyPI）。红 PR 永不自动合并——链路在证据面前停下，
-而不是在希望面前。
+amend 进 release 提交、取消被取代的 run——唯一可批准的 run 就是完整
+的那一个。人类决定的是**何时**（合并本身），而不是证据在不在。
 
 **一次性设置**（仓库 owner）：创建 fine-grained PAT，范围仅本仓库，权限
 Contents: read/write 与 Pull requests: read/write，存为 `RELEASE_PAT`

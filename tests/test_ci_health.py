@@ -167,13 +167,17 @@ def test_release_pr_carries_the_highlights_draft_in_its_commit():
         "cancelling workflow runs needs actions: write")
 
 
-def test_release_automation_is_end_to_end():
-    """The 0.31.0 postmortem, structural half: the release chain must be
-    closable without a human in the loop. RELEASE_PAT (falling back to
-    the default token so nothing breaks while the secret is unset)
-    pushes as a user identity — its CI run starts instead of sitting in
-    action_required; the arming step lets GitHub squash-merge the PR the
-    moment the required checks pass."""
+def test_release_pr_accumulates_until_a_deliberate_merge():
+    """Cadence policy (D66, supersedes the end-to-end unattended chain
+    from the 0.31.0 postmortem): release-please still opens and amends
+    the release PR on every push, but NOTHING auto-merges it — the PR
+    accumulates user-facing changes and a human squash-merge IS the
+    release cut (one deliberate merge = one tag + one PyPI publish).
+    The 0.31.0 mechanism this preserves: RELEASE_PAT (falling back to
+    the default token while the secret is unset) so bot pushes start
+    CI immediately instead of sitting in action_required — while the
+    PR accumulates, every push to it must produce a live, approvable
+    run; only the merge itself waits for a human."""
     rp = _load("release-please.yml")
     jobs = rp["jobs"]
     release_steps = jobs["release"]["steps"]
@@ -185,11 +189,17 @@ def test_release_automation_is_end_to_end():
         "the release action must run under RELEASE_PAT with a fallback "
         "token — the fallback alone re-introduces the action_required "
         "human gate")
-    hl_text = " ".join(s.get("name", "") for s in
-                       jobs["highlights"].get("steps", []))
-    assert "auto-merge" in hl_text.lower(), (
-        "the release PR must be armed for auto-merge — CI green should "
-        "merge, tag, and publish without a human")
+    every_run = " ".join(
+        s.get("run", "") for job in jobs.values()
+        for s in job.get("steps", []))
+    assert "--auto" not in every_run, (
+        "the workflow must not arm auto-merge anywhere — CI green merges "
+        "the release PR without a human, which is the per-change release "
+        "storm D66 retired")
+    assert "no auto-merge" in " ".join(
+        s.get("name", "") for s in jobs["highlights"].get("steps", "")), (
+        "the highlights job must state the accumulation policy in its "
+        "step names so the strategy is visible in run logs")
 
 
 def test_pytest_runs_are_parallelized():

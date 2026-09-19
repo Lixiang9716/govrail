@@ -41,9 +41,10 @@ surfaces, decisions). Task-oriented recipes: [docs/cookbook.md](docs/cookbook.md
 ![Shipping pipeline: path-aware PR CI, then the unattended release chain to PyPI](docs/images/pipeline.svg)
 
 Rule 1 in motion: the smallest sufficient set runs per diff (a prose
-edit never pays the platform matrix), CI owns the full matrix, and a
-release-worthy merge publishes end to end — draft amended into the
-release commit, auto-merge armed, tag and PyPI unattended. A red PR
+edit never pays the platform matrix), CI owns the full matrix, and
+releases are batched — the release PR accumulates release-worthy
+changes, and squash-merging it cuts the release: draft amended into the
+release commit, tag and PyPI unattended per cut (D66). A red PR
 never merges; the chain halts on evidence, not on hope.
 
 ## Install

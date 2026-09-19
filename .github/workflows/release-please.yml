@@ -154,27 +154,24 @@ jobs:
             fi
           done
 
-      - name: Arm auto-merge on the release PR
-        # CI green -> GitHub squash-merges automatically -> the merge push
-        # runs the release job (tag + GitHub Release + PyPI). With
-        # RELEASE_PAT the chain is end-to-end unattended; with the
-        # fallback token the run waits in action_required and approval is
-        # the only human act left. A red PR never auto-merges — arming is
-        # safe unconditionally.
+      - name: Report the accumulating release PR (no auto-merge, D66)
+        # Cadence policy (D66, supersedes the end-to-end unattended chain):
+        # the release PR ACCUMULATES every release-worthy merge to master
+        # and stays open — a human squash-merging it IS the release cut.
+        # One deliberate merge = one tag + one PyPI publish; until then
+        # nothing ships, no matter how green CI is. The drafting/amend
+        # machinery above keeps the PR head complete and CI-valid while
+        # it accumulates, so merging stays a single safe click.
         env:
-          # The PAT again: auto-merge executes as the enabling identity.
-          # A bot-enabled merge pushes under the token, and on:push
-          # workflows (the publishing release job) do not fire for
-          # token-attributed pushes — the chain would die silently at
-          # the merge.
           GH_TOKEN: ${{ secrets.RELEASE_PAT || github.token }}
           BRANCH: release-please--branches--master
         run: |
           pr=$(gh pr list --head "$BRANCH" --state open \
                 --json number --jq '.[0].number' 2>/dev/null || true)
           if [ -z "$pr" ]; then
-            echo "no open release PR — nothing to arm"
+            echo "no open release PR — nothing accumulating"
             exit 0
           fi
-          gh pr merge "$pr" --auto --squash --delete-branch \
-            && echo "auto-merge armed on #$pr"
+          echo "release PR #$pr is open and accumulating user-facing"
+          echo "changes; merging it (squash) cuts the next release:"
+          echo "  gh pr merge $pr --squash --delete-branch"

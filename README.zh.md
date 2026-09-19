@@ -32,9 +32,10 @@
 ![发布流水线：路径感知的 PR CI，之后直达 PyPI 的无人值守发布链](docs/images/pipeline.svg)
 
 规则 1 的运行形态：按 diff 跑最小充分集（散文编辑不付平台矩阵的钱），
-CI 拥有全矩阵；release 级合并端到端自动发布——草稿 amend 进 release
-提交、武装 auto-merge、打 tag 发 PyPI 全程无人。红 PR 永不合并；
-链路在证据面前停下，而不是在希望面前。
+CI 拥有全矩阵；发布按批累积——release PR 持续收集 release 级变更，
+squash 合并它即裁切版本：草稿 amend 进 release 提交，每次裁切的打 tag
+与 PyPI 发布无人值守（D66）。红 PR 永不合并；链路在证据面前停下，
+而不是在希望面前。
 
 ## 安装
 
