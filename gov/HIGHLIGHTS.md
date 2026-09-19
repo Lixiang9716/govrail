@@ -3,6 +3,12 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.46.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- **gates:** doc-budgets — standing prose gets character ceilings; generated-truth header completes its triple
+- **hooks:** commit-boundary automation — staged autofix, staged derivation, evidence rubric R10 (D64)
+- **persistence:** declared format inventory + acknowledgment chain (D63)
+
 ## 0.45.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - **surprise:** the surprise ledger — expectation vs reality, counted; the third strike escalates (rule 11)
