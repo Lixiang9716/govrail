@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.46.0](https://github.com/Lixiang9716/govrail/compare/v0.45.0...v0.46.0) (2026-09-19)
+
+
+### Features
+
+* **gates:** doc-budgets — standing prose gets character ceilings; generated-truth header completes its triple ([#304](https://github.com/Lixiang9716/govrail/issues/304)) ([4bba8cb](https://github.com/Lixiang9716/govrail/commit/4bba8cbfa468eb4ebfff829b3873dc4e946575e9))
+* **hooks:** commit-boundary automation — staged autofix, staged derivation, evidence rubric R10 (D64) ([#307](https://github.com/Lixiang9716/govrail/issues/307)) ([cb02bbc](https://github.com/Lixiang9716/govrail/commit/cb02bbc789ccaa5b81b7c26e219d5cb425379b16))
+* **persistence:** declared format inventory + acknowledgment chain (D63) ([#306](https://github.com/Lixiang9716/govrail/issues/306)) ([23100f9](https://github.com/Lixiang9716/govrail/commit/23100f9c5e1807b26bdc0c9d34f9bc61a6f06052))
+
 ## [0.45.0](https://github.com/Lixiang9716/govrail/compare/v0.44.0...v0.45.0) (2026-09-19)
 
 
