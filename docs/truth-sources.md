@@ -15,7 +15,7 @@ extends it to code constants, ledgers, and seals.
 | # | Truth source | Governs | Copies | Pinned by |
 |---|---|---|---|---|
 | 1 | `gov/version.py` `__version__` | the package version | pyproject reads it dynamically; the release tag is checked against it | release workflow's tag check |
-| 2 | `gov/cli.py` `_COMMANDS` | the command surface and its one-line descriptions | README's generated command block (`gov:commands` markers) | `tests/test_docs_cli_consistency.py` |
+| 2 | `gov/commands.py` `COMMANDS` | the command surface and its one-line descriptions | README's generated command block (`gov:commands` markers); the govrail skill's stage-table lines | `tests/test_docs_cli_consistency.py`; the skill-coverage gate (`scripts/check_skill_coverage.py`) |
 | 3 | `gov/audit_notes.py` `FLAGS` | every command's flag surface | `gov <cmd> --help` outputs | `tests/test_flag_registry.py` |
 | 4 | `gov/verify_translation_pairing.py` `DEFAULT_CONFIG` | pairing defaults (include, counterparts, exclude) | the example JSON in `docs/i18n/README.md` | `tests/test_truth_sources.py` |
 | 5 | `gov/note.py` `CLASSES` + `gov/verify_notes.py` `LIFECYCLES` | the note taxonomy (closed sets) | the enumerations in the notes README | `tests/test_truth_sources.py` |

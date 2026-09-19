@@ -15,7 +15,8 @@
       "task",
       "doc-sync",
       "plane",
-      "lint"
+      "lint",
+      "skill-coverage"
     ],
     "quick": [
       "notes",
@@ -115,7 +116,7 @@
         "python3",
         "scripts/check_size_limits.py"
       ],
-      "description": "every gov/ and scripts/ module stays within its declared line budget (scripts/size-limits.json) \u2014 growth lands as a reviewed diff, not as a monolith (#265)",
+      "description": "every gov/ and scripts/ module stays within its declared line budget (scripts/size-limits.json) — growth lands as a reviewed diff, not as a monolith (#265)",
       "allowFailure": true
     },
     {
@@ -171,7 +172,7 @@
     },
     {
       "id": "doc-sync",
-      "label": "CHANGELOG \u2194 HIGHLIGHTS pairing",
+      "label": "CHANGELOG ↔ HIGHLIGHTS pairing",
       "command": [
         "gov",
         "verify",
@@ -205,6 +206,15 @@
         "."
       ],
       "description": "the CI lint job, gate-ized: the same ruff the lint cell runs now rides the DAG, so pre-push catches what CI used to catch first (config: [tool.ruff] in pyproject.toml)"
+    },
+    {
+      "id": "skill-coverage",
+      "label": "router skill names every shipped command (rule 9's third home)",
+      "command": [
+        "python3",
+        "scripts/check_skill_coverage.py"
+      ],
+      "description": "every COMMANDS entry in gov/commands.py appears as 'gov <cmd>' in the govrail skill's stage table, or carries a reasoned exclusion in scripts/skill-coverage.json — a new command cannot ship invisible to the surface agents enumerate"
     }
   ]
 }
