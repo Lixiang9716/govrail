@@ -3,6 +3,15 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.47.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- **plane:** adoption-surface hardening — resolve all 14 open issues ([#308](https://github.com/Lixiang9716/govrail/issues/308)-[#319](https://github.com/Lixiang9716/govrail/issues/319), [#273](https://github.com/Lixiang9716/govrail/issues/273), [#274](https://github.com/Lixiang9716/govrail/issues/274))
+- **ci:** every automated unattended re-baseline names its --reason
+- **packaging:** ship preset bundle files in the wheel — presets/*/* package-data
+- **plane:** --confirm-unattended is authoritative over the tty probe (D66 follow-through)
+- **plane:** update choreography completes, task cards get a recorded exit ([#320](https://github.com/Lixiang9716/govrail/issues/320)-[#325](https://github.com/Lixiang9716/govrail/issues/325))
+- **tests:** tomli under 3.10 for the packaging pin — tomllib is 3.11+ (support floor is 3.10)
+
 ## 0.46.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - **gates:** doc-budgets — standing prose gets character ceilings; generated-truth header completes its triple

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.47.0](https://github.com/Lixiang9716/govrail/compare/v0.46.0...v0.47.0) (2026-09-19)
+
+
+### Features
+
+* **plane:** adoption-surface hardening — resolve all 14 open issues ([#308](https://github.com/Lixiang9716/govrail/issues/308)-[#319](https://github.com/Lixiang9716/govrail/issues/319), [#273](https://github.com/Lixiang9716/govrail/issues/273), [#274](https://github.com/Lixiang9716/govrail/issues/274)) ([05d6ead](https://github.com/Lixiang9716/govrail/commit/05d6ead31724f4363c2a06cf1fd82cabb28fdd39))
+
+
+### Bug Fixes
+
+* **ci:** every automated unattended re-baseline names its --reason ([42d5de5](https://github.com/Lixiang9716/govrail/commit/42d5de58c0e9ce4f3e6f3b0383dab689fcfdfa52))
+* **packaging:** ship preset bundle files in the wheel — presets/*/* package-data ([06661f0](https://github.com/Lixiang9716/govrail/commit/06661f0b9d7bb889fd1ab9c8c76cd50a171a717e))
+* **plane:** --confirm-unattended is authoritative over the tty probe (D66 follow-through) ([6087c0e](https://github.com/Lixiang9716/govrail/commit/6087c0e123412be0d295c6f34648cf3e69ad4f49))
+* **plane:** update choreography completes, task cards get a recorded exit ([#320](https://github.com/Lixiang9716/govrail/issues/320)-[#325](https://github.com/Lixiang9716/govrail/issues/325)) ([ac6ec83](https://github.com/Lixiang9716/govrail/commit/ac6ec8355f2cc874fd010dedcc5423ee25f3d747))
+* **tests:** tomli under 3.10 for the packaging pin — tomllib is 3.11+ (support floor is 3.10) ([f50f8e9](https://github.com/Lixiang9716/govrail/commit/f50f8e968af1e9a7391c653c5a32c7cea2a22d4f))
+
 ## [0.46.0](https://github.com/Lixiang9716/govrail/compare/v0.45.0...v0.46.0) (2026-09-19)
 
 

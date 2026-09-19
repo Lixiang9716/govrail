@@ -1,3 +1,3 @@
 """Single source of truth for the govrail package version."""
 
-__version__ = "0.46.0"
+__version__ = "0.47.0"
