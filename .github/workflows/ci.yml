@@ -230,9 +230,11 @@ jobs:
           echo '{"modes": {"all": ["ok"]}, "gates": [{"id":"ok","command":["true"]}]}' > gates.json
           # the overwrite is a recorded constitution change: re-baseline
           # the seal or the out-of-band precheck refuses the close
-          # (--confirm-unattended: recorded as machine consent, caller =
-          # the CI bot identity)
-          gov verify-plane --write --confirm-unattended
+          # (--confirm-unattended + --reason: recorded as machine
+          # consent with its authority — the shadow scenario itself,
+          # caller = the CI bot identity)
+          gov verify-plane --write --confirm-unattended \
+            --reason "backport-shadow scenario: reviewed gates overwrite"
           git add gates.json
           git -c user.email=t@t -c user.name=t commit -qm init
           gov task new "Close me"

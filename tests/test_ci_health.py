@@ -202,6 +202,29 @@ def test_release_pr_accumulates_until_a_deliberate_merge():
         "step names so the strategy is visible in run logs")
 
 
+def test_unattended_rebaselines_carry_reason_in_automation():
+    """#311's --reason contract, pinned at every AUTOMATION call site:
+    an invocation of `verify-plane --write --confirm-unattended` without
+    --reason is refused (exit 2), so one bare call in CI or the docker
+    e2e suite reds the whole job — and it did, twice (the rejection
+    cases, then the docker cells). This scan keeps the sweep honest:
+    every --confirm-unattended occurrence in the automated surfaces
+    must be accompanied by --reason. (The .gov/rejections refusal-proof
+    cases are deliberately bare and are not scanned here.)"""
+    targets = [Path("tests/docker_e2e/inner_e2e.py")]
+    targets += sorted(Path(".github/workflows").glob("*.yml"))
+    for path in targets:
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            if "--confirm-unattended" not in line:
+                continue
+            window = " ".join(lines[i:i + 4])
+            assert "--reason" in window, (
+                f"{path}:{i + 1}: an unattended re-baseline without "
+                "--reason is refused (exit 2) — the automation call site "
+                "must name its authority")
+
+
 def test_pytest_runs_are_parallelized():
     """The suite is subprocess-heavy (gov invocations, scratch repos):
     xdist workers overlap the waits instead of paying them serially.
