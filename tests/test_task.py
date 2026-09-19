@@ -155,7 +155,7 @@ def test_bare_task_fails_loud_naming_choices(tmp_path, monkeypatch, capsys):
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert ("a subcommand is required "
-            "(new|check|close|claim|release|list)") in err
+            "(new|check|close|claim|release|list|void)") in err
 
 
 # --- claim semantics: leases on cards (D52 applied; card JSON untouched) ------
@@ -450,3 +450,66 @@ def test_open_card_with_unchecked_items_exits_one(tmp_path, monkeypatch, capsys)
     assert task.main(["check", "--strict"]) == 1  # unchecked: blocking
     out = capsys.readouterr().out
     assert "unchecked" in out
+
+
+def test_close_ignores_non_run_outcomes(tmp_path, monkeypatch):
+    """#323: NOT_SELECTED records are bookkeeping, not verdicts — a mode
+    that does not cover every enabled gate must still be able to close
+    a card (before this, no valid mode remained in such a repo)."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["noop"], "gov": ["extra"]},
+        "gates": [{"id": "noop", "command": PASS},
+                  {"id": "extra", "command": PASS}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "One mode short"]) == 0
+    rc = task.main(["close", "T-0001", "--mode", "all", "--timeout", "60"])
+    assert rc == 0, "NOT_SELECTED on the uncovered gate must not refuse close"
+    card = json.loads(
+        next((proj / ".gov/tasks").glob("T-0001-*.json")).read_text(encoding="utf-8"))
+    assert card["status"] == "done"
+
+
+def test_void_retires_a_card_recorded_and_tolerated(tmp_path, monkeypatch):
+    """#322: rule 9 promises 'close or explicitly defer it' — void is
+    that exit: recorded (reason/actor/ts on the card, file kept), and
+    the strict check tolerates it instead of failing forever."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "Going stale"]) == 0
+    # the governance task lands the adoption → the pin goes stale
+    (proj / ".gov/rules.md").write_text("# Rules v2\n", encoding="utf-8")
+    assert task.main(["check"]) == 1          # STALE
+    assert task.main(["close", "T-0001"]) == 1  # close refuses a stale pin
+    with pytest.raises(SystemExit):  # void requires --reason (exit 2)
+        task.main(["void", "T-0001"])
+    assert task.main(["void", "T-0001",
+                      "--reason", "superseded by the re-brief"]) == 0
+    card = json.loads(
+        next((proj / ".gov/tasks").glob("T-0001-*.json")).read_text(encoding="utf-8"))
+    assert card["status"] == "voided"
+    assert card["void"]["reason"] == "superseded by the re-brief"
+    assert card["void"]["by"]
+    assert task.main(["check"]) == 0          # tolerated, named, no problem
+    assert task.main(["close", "T-0001"]) == 2  # terminal — not closable
+
+
+def test_new_warns_when_diff_touches_rules_bearing_files(tmp_path,
+                                                         monkeypatch,
+                                                         capsys):
+    """#322: briefing during an in-flight governance change pins a hash
+    that dies the moment the task lands — say so at creation time."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    subprocess.run(["git", "init", "-q", "."], cwd=proj, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=proj, check=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "i"],
+                   cwd=proj, check=True)
+    (proj / ".gov/rules.md").write_text(
+        proj.joinpath(".gov/rules.md").read_text(encoding="utf-8")
+        + "\n# in-flight edit\n", encoding="utf-8")
+    assert task.main(["new", "Lands the adoption"]) == 0
+    assert "goes stale" in capsys.readouterr().err

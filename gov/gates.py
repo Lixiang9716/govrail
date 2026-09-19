@@ -62,6 +62,11 @@ except ImportError:  # direct-script execution (python gov/gates.py)
 
 BLOCKING_OUTCOMES = ("FAIL", "TIMEOUT", "MISSING")
 OUTCOME_ORDER = ("FAIL", "TIMEOUT", "MISSING", "SKIP", "PASS")
+# Recorded for enabled gates a run did NOT execute: bookkeeping, not
+# verdicts (#119; consumed by trend's NON_RUN and task close's green
+# judgment, #323). SKIP is deliberately absent — a dependency failed,
+# so evidence is genuinely missing.
+NON_RUN_OUTCOMES = ("SCOPED_OUT", "NOT_SELECTED", "NOT_RUN", "DISABLED")
 
 def _glob_regex(pattern: str) -> re.Pattern[str]:
     """Compile a path glob under the plane's one grammar (pathmatch).

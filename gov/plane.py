@@ -331,6 +331,12 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
               file=sys.stderr)
         return 2
     gitignore = project / ".gitignore"
+    # Runtime artifacts the plane itself creates inside tracked areas:
+    # the run history (D-gitignore) and the task allocator's flock
+    # anchor (#325 — dsh-mobile tracked a zero-byte .new.lock with a
+    # habitual git add -A; locks are content-free, tracking them is
+    # pure noise).
+    ignore_lines = (".gov/history/", ".gov/tasks/.new.lock")
     ignore_line = ".gov/history/"
     if gitignore.is_symlink():
         # N13/N10: a user-managed .gitignore link (stow, dotfiles) must
@@ -427,17 +433,21 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         # endings, a BOM, and any non-UTF-8 content exactly as they were
         # (and lands atomically, like every other init write).
         raw = gitignore.read_bytes()
-        if ignore_line not in raw.decode("utf-8-sig",
-                                         errors="replace").splitlines():
+        have = raw.decode("utf-8-sig", errors="replace").splitlines()
+        missing = [ln for ln in ignore_lines if ln not in have]
+        if missing:
             sep = b"" if (not raw or raw.endswith(b"\n")) else b"\n"
             _atomic_write(gitignore,
-                          raw + sep + ignore_line.encode("utf-8") + b"\n")
+                          raw + sep
+                          + b"\n".join(ln.encode("utf-8") for ln in missing)
+                          + b"\n")
     else:
         # N12: same atomicity as every other init write — a torn
         # .gitignore would be frozen as project-owned by re-init's
         # guards, the exact adoption trap H-3 closed for _copy.
-        atomicio.write_bytes(gitignore,
-                             (ignore_line + "\n").encode("utf-8"))
+        atomicio.write_bytes(
+            gitignore,
+            b"".join((ln + "\n").encode("utf-8") for ln in ignore_lines))
         created.append(".gitignore")
 
     # D60: agent platforms compose with a fresh init like --hooks/--ci —

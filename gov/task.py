@@ -152,6 +152,16 @@ def cmd_new(args: argparse.Namespace) -> int:
               "pin was taken; re-read them before briefing",
               file=sys.stderr)
         return 2
+    proc = subprocess.run(
+        ["git", "status", "--porcelain", "--", ".gov/rules.md", "gates.json"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc.returncode == 0 and proc.stdout.strip():
+        print("task new: WARNING — the working diff already touches "
+              ".gov/rules.md or gates.json; this card pins the CURRENT "
+              "rules hash and goes stale the moment this task lands the "
+              "adoption. Re-brief (gov task new) and close in the same "
+              "change, or void the card when it retires (gov task void).",
+              file=sys.stderr)
     TASKS_DIR.mkdir(parents=True, exist_ok=True)
     card = {
         "title": title,
@@ -216,6 +226,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         if status == "done":
             problems.extend(_check_receipt(cid, card))
             print(f"done  {cid} {title}")
+        elif status == "voided":
+            reason = card.get("void", {}).get("reason", "")
+            print(f"voided {cid} {title}"
+                  + (f" — {reason}" if reason else ""))
         elif status == "open":
             unchecked = ([item for item in card.get("checklist", [])]
                          if getattr(args, "strict", False) else [])
@@ -239,6 +253,42 @@ def cmd_check(args: argparse.Namespace) -> int:
         for p in problems:
             print(f"task: {p}", file=sys.stderr)
         return 1
+    return 0
+
+
+def cmd_void(args: argparse.Namespace) -> int:
+    """Retire a card without the gate receipt (#322): the exit rule 9
+    promises ("or explicitly defer it") and the tool never had.
+
+    A void is a RECORDED act — reason, caller, timestamp ride the card
+    and the file stays in .gov/tasks/ (nothing is hand-deleted). The
+    strict check tolerates a voided card: it is no longer in-flight
+    work, and its history remains auditable. Close refuses a voided
+    card like any non-open one — a void is terminal."""
+    cards = _load_cards()
+    path, card = _resolve(cards, args.id)
+    if card.get("status") == "done":
+        print(f"task: {card['id']} is done (green receipt on file) — "
+              "nothing to void", file=sys.stderr)
+        return 2
+    if card.get("status") == "voided":
+        reason = card.get("void", {}).get("reason", "no reason recorded")
+        print(f"task: {card['id']} is already voided ({reason})",
+              file=sys.stderr)
+        return 2
+    card["status"] = "voided"
+    card["void"] = {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "by": locks._holder_id(getattr(args, "agent", None)),
+        "reason": args.reason,
+    }
+    atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
+    _clear_task_lease(card["id"],
+                      holder=locks._holder_id(getattr(args, "agent", None)),
+                      force=True)
+    print(f"task: voided {card['id']} — {args.reason}")
+    print(f"  recorded by {card['void']['by']} at {card['void']['ts']} "
+          "(the card file stays; its history is auditable)")
     return 0
 
 
@@ -271,6 +321,10 @@ def cmd_close(args: argparse.Namespace) -> int:
               "steal it knowingly, or have the holder release first",
               file=sys.stderr)
         return 2
+    try:
+        from . import gates as gates_mod
+    except ImportError:  # direct-script execution
+        import gates as gates_mod
     argv = [sys.executable, "-m", "gov", "run", "--json",
             "--mode", args.mode]
     try:
@@ -287,7 +341,18 @@ def cmd_close(args: argparse.Namespace) -> int:
         print("task: gate run produced no JSON report\n"
               f"{proc.stdout}\n{proc.stderr}", file=sys.stderr)
         return 1
-    failed = [r.get("gate", "?") for r in records if r.get("outcome") != "PASS"]
+    # #323: a mode that does not cover every enabled gate yields
+    # NOT_SELECTED (and scoped runs yield SCOPED_OUT) records for gates
+    # that never RAN — counting them as failures made close impossible
+    # in any repo whose enabled set outgrew the mode, with no valid mode
+    # left. Non-run is bookkeeping, not a verdict (trend's NON_RUN
+    # contract, receipt semantics); SKIP stays a refusal: a dependency
+    # failed, so evidence is genuinely missing.
+    non_run = getattr(gates_mod, "NON_RUN_OUTCOMES",
+                      {"SCOPED_OUT", "NOT_SELECTED", "NOT_RUN", "DISABLED"})
+    ok_outcomes = {"PASS", *non_run}
+    failed = [r.get("gate", "?") for r in records
+              if r.get("outcome") not in ok_outcomes]
     if failed:
         # A card closes only on an all-green run; a red run changes nothing
         # (the run itself is already in .gov/history/gates.jsonl).
@@ -536,10 +601,22 @@ def main(argv: list[str] | None = None) -> int:
                                 "then the OS user)")
     p_release.set_defaults(func=cmd_task_release)
 
+    p_void = sub.add_parser("void", help="retire a card without a gate "
+                            "receipt — recorded, terminal (rule 9's "
+                            "'explicitly defer it' exit, #322)")
+    p_void.add_argument("id", help="card id or unique prefix (T-0001)")
+    p_void.add_argument("--reason", required=True, metavar="TEXT",
+                        help="why this card is being retired (required; "
+                             "recorded on the card)")
+    p_void.add_argument("--agent", metavar="ID",
+                        help="actor identity (default: $GOV_CALLER, then "
+                             "the OS user)")
+    p_void.set_defaults(func=cmd_void)
+
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
         parser.error("a subcommand is required "
-                     "(new|check|close|claim|release|list)")
+                     "(new|check|close|claim|release|list|void)")
     return args.func(args)
 
 

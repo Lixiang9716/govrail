@@ -87,6 +87,75 @@ def _gitignore_history(root: Path) -> bool:
     return True
 
 
+def _update_left_pristine_drift(root: Path, adoptable: set[str]) -> bool:
+    """#321: did an interrupted `gov update --apply` leave this drift?
+
+    True when the manifest already names the RUNNING version and every
+    drifted file is byte-identical to the shipped template it was
+    adopted from (gov.yml compared as-written, with the version pin
+    substituted). Only that exact shape may resume; anything else stays
+    a launder refusal."""
+    try:
+        manifest = json.loads(
+            (root / ".gov" / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if manifest.get("version") != __version__:
+        return False
+    from . import plane as plane_mod
+    created = set(manifest.get("created", [])) | adoptable
+    for rel in sorted(created):
+        tpl = plane_mod._template_for(rel)
+        if tpl is None:
+            continue
+        p = root / rel
+        if not p.is_file():
+            continue
+        if p.name == "gov.yml":
+            rendered = tpl.read_text(encoding="utf-8").replace(
+                "__GOV_VERSION__", __version__).encode("utf-8")
+            if p.read_bytes() != rendered:
+                return False
+        elif p.read_bytes() != tpl.read_bytes():
+            return False
+    return True
+
+
+def _hook_drift_notes(root: Path) -> list[str]:
+    """#324: installed gov hooks from an EARLIER plane keep invoking
+    retired spellings — after the D57 renames, an unrefreshed pre-commit
+    emitted a deprecation warning per commit on the canonical gates.
+    Named here so the upgrade report says the one command that fixes it."""
+    notes: list[str] = []
+    from importlib.resources import files as _res_files
+    resolved = gitutil.hooks_dir()
+    if resolved is None:
+        return notes
+    hooks_dir = Path(resolved)
+    for name in ("pre-push", "pre-commit"):
+        installed = hooks_dir / name
+        if not installed.is_file():
+            continue
+        try:
+            body = installed.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "# govrail:" not in body:
+            continue  # a foreign hook — none of our business
+        tpl = _res_files("gov.templates").joinpath(name)
+        try:
+            current = tpl.read_text(encoding="utf-8")
+        except (OSError, FileNotFoundError):
+            continue
+        if body != current:
+            notes.append(
+                f"hook drift: your installed {name} differs from this "
+                "version's template — an older hook keeps calling retired "
+                "command spellings; refresh with `gov init --hooks"
+                + (" --pre-commit" if name == "pre-commit" else "") + "`")
+    return notes
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="gov update",
@@ -146,9 +215,14 @@ def main(argv: list[str] | None = None) -> int:
             from .gates import merge_gates_by_id, DriftRefused
             local = json.loads((root / "gates.json").read_text(
                 encoding="utf-8"))
+            # #320: the shipped template lives in the INSTALLED package,
+            # not in <repo>/gov/templates — a repo-root-relative read
+            # made the plan print WOULD REFUSE [Errno 2] in every
+            # adopter checkout (only govrail's own repo has the path).
+            from importlib.resources import files as _res_files
             tpl = json.loads(
-                (root / "gov" / "templates" / "gates.json").read_text(
-                    encoding="utf-8"))
+                _res_files("gov.templates").joinpath("gates.json")
+                .read_text(encoding="utf-8"))
             _merged, added, _note = merge_gates_by_id(
                 local, tpl, what="the template", on_drift="refuse")
             gates_plan = (f"merge {len(added)} new shipped gate(s): "
@@ -172,6 +246,8 @@ def main(argv: list[str] | None = None) -> int:
     print("  seal: re-baseline over the migrated files (ritual, recorded "
           "in .gov/rituals.jsonl)")
     print(f"  manifest: version {old_version} → {__version__}")
+    for note in _hook_drift_notes(root):
+        print(f"  {note}")
     if not args.apply:
         print("gov update: dry run — pass --apply to execute")
         return 0
@@ -186,6 +262,17 @@ def main(argv: list[str] | None = None) -> int:
                    for v in verify_plane.violations() if ":" in v}
         planned = set(adoptable) | {"gates.json", ".gov/manifest.json"}
         unexpected = sorted(drifted - planned)
+        if unexpected and _update_left_pristine_drift(root, set(adoptable)):
+            # #321: a previous apply that died between adoption and
+            # re-seal left exactly this shape — adopted files are
+            # byte-identical to their shipped templates and the manifest
+            # already names this version. That is update's own incomplete
+            # run, not tampering: resuming is the remedy, refusing
+            # bricked the choreography forever.
+            print("gov update: note — the drift matches an interrupted "
+                  "run of this same update (pristine templates, manifest "
+                  "already at this version); resuming", file=sys.stderr)
+            unexpected = []
         if unexpected:
             print("gov update: REFUSED — pre-existing drift would be "
                   "laundered by the re-baseline: "
@@ -241,8 +328,12 @@ def main(argv: list[str] | None = None) -> int:
     unattended = args.confirm_unattended or not sys.stdin.isatty()
     from . import locks as locks_mod
     from . import rituals
+    # #325: the guard flock belongs in the git COMMON dir (like every
+    # lease); passing the worktree root created a gov-locks/ directory
+    # of content-free guard files inside the tracked tree.
+    common = Path(gitutil.common_dir() or root)
     try:
-        rc = locks_mod._guarded(root, "plane/update", _migrate)
+        rc = locks_mod._guarded(common, "plane/update", _migrate)
     except (OSError, RuntimeError) as e:
         print(f"gov update: FAILED after {steps_done}/6 step(s) — the "
               "plane may be half-migrated with a stale seal. Recover: "

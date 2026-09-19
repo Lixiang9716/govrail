@@ -80,8 +80,11 @@ def _split_by_base(runs: list[dict], base: str) -> tuple[list[dict], list[dict]]
 
 # #119: records may carry non-run outcomes (SCOPED_OUT, NOT_SELECTED,
 # NOT_RUN, DISABLED) — a gate the diff did not touch must not drag a
-# 0ms p50 down.
-NON_RUN = {"SCOPED_OUT", "NOT_SELECTED", "NOT_RUN", "DISABLED"}
+# 0ms p50 down. One home in gates.py (task close shares it, #323).
+try:  # package context (`gov ...`)
+    from .gates import NON_RUN_OUTCOMES as NON_RUN
+except ImportError:  # direct-script execution
+    from gates import NON_RUN_OUTCOMES as NON_RUN
 
 
 def _report(early_runs: list[dict], late_runs: list[dict], indent: str, args) -> None:
