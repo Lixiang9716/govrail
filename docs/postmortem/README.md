@@ -13,4 +13,9 @@ A postmortem is written when a failure was subtle, systemic, and costly to redis
 
 ## Rules
 
-Write it in the same PR as the fix's guardrails, or not at all — a postmortem without a linked guardrail is a story. Never name individuals; the process failed, not a person.
+Write it in the same PR as the fix's guardrails, or in the first PR that
+lands after they do — or not at all; a postmortem without a linked
+guardrail is a story. Structure is gate-enforced (`postmortems` gate,
+`scripts/check_postmortems.py`): the four sections must be present in one
+heading vocabulary, and every pointer in Guardrails added must resolve.
+Never name individuals; the process failed, not a person.

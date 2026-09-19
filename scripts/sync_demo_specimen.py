@@ -49,7 +49,8 @@ DEMO_EXTRA_GATES = {"rubric", "decisions", "source-limits"}
 # scripts/ checkers and need ruff) — the demo has neither, so these
 # cases never ship to the specimen and a leaked copy is pruned.
 REPO_ONLY_CASES = {"case-import-layers.sh", "case-size-limits.sh",
-                   "case-lint.sh", "case-skill-coverage.sh"}
+                   "case-lint.sh", "case-skill-coverage.sh",
+                   "case-postmortems.sh"}
 
 
 def sync_copies() -> int:

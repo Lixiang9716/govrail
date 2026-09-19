@@ -16,7 +16,8 @@
       "doc-sync",
       "plane",
       "lint",
-      "skill-coverage"
+      "skill-coverage",
+      "postmortems"
     ],
     "quick": [
       "notes",
@@ -215,6 +216,15 @@
         "scripts/check_skill_coverage.py"
       ],
       "description": "every COMMANDS entry in gov/commands.py appears as 'gov <cmd>' in the govrail skill's stage table, or carries a reasoned exclusion in scripts/skill-coverage.json — a new command cannot ship invisible to the surface agents enumerate"
+    },
+    {
+      "id": "postmortems",
+      "label": "postmortem entries carry their README contract (sections, pointed guardrails)",
+      "command": [
+        "python3",
+        "scripts/check_postmortems.py"
+      ],
+      "description": "every docs/postmortem entry has the four README sections in one heading vocabulary, each non-empty, and a Guardrails section that names at least one pointer with every path resolving — a postmortem without a linked guardrail is a story"
     }
   ]
 }
