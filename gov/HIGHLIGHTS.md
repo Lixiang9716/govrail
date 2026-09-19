@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.47.1 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- **task:** card ids are addresses — high-water allocation, never recycled
+
 ## 0.47.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - **plane:** adoption-surface hardening — resolve all 14 open issues ([#308](https://github.com/Lixiang9716/govrail/issues/308)-[#319](https://github.com/Lixiang9716/govrail/issues/319), [#273](https://github.com/Lixiang9716/govrail/issues/273), [#274](https://github.com/Lixiang9716/govrail/issues/274))
