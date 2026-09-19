@@ -15,8 +15,12 @@ shipped).
 from __future__ import annotations
 
 import glob
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # python 3.10: the dev extra ships tomli
+    import tomli as tomllib
 
 import pytest
 

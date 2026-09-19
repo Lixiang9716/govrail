@@ -36,3 +36,9 @@ tree when missing — rejected: papering over a broken install with a
 checkout dependency; the wheel is the distribution. Packaging checks in
 the docker e2e only — rejected: the structural pin runs in seconds on
 every push; the docker cells remain the runtime double-check.
+
+## Addendum (same session)
+
+The pin itself broke the 3.10 matrix cell: `tomllib` is stdlib from
+3.11, and the support floor is 3.10 (D54). It now imports `tomli` under
+3.10, declared as a version-gated dev dependency.
