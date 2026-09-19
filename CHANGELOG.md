@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.47.1](https://github.com/Lixiang9716/govrail/compare/v0.47.0...v0.47.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **task:** card ids are addresses — high-water allocation, never recycled ([#327](https://github.com/Lixiang9716/govrail/issues/327)) ([261dd04](https://github.com/Lixiang9716/govrail/commit/261dd046c587bfc6c87d1c1e280879dfb825b7e6))
+
 ## [0.47.0](https://github.com/Lixiang9716/govrail/compare/v0.46.0...v0.47.0) (2026-09-19)
 
 
