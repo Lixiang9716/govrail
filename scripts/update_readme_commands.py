@@ -17,7 +17,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 README = REPO / "README.md"
-BEGIN = "<!-- gov:commands BEGIN — generated from `gov --help`; run scripts/update_readme_commands.py, never edit by hand -->"
+BEGIN = ("<!-- gov:commands BEGIN — generated from `gov --help` by "
+         "scripts/update_readme_commands.py (regenerate: python3 "
+         "scripts/derive_all.py); never edit by hand — drift is caught "
+         "by tests/test_docs_cli_consistency.py -->")
 END = "<!-- gov:commands END -->"
 
 
