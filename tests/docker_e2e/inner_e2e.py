@@ -3248,12 +3248,14 @@ def agent_lifecycle_receipt(base):
     assert "re-brief" in r.stderr, r.stderr
     # the dead brief is dismissed the only way a card file can be —
     # removed by hand (no abandon verb: dismissing a brief is a
-    # deliberate, git-visible file act)
+    # deliberate, git-visible file act). The freed number is NOT
+    # reused (#327): ids are addresses, so the re-brief lands on
+    # T-0003 and T-0002 stays retired in git history.
     next((p / ".gov" / "tasks").glob("T-0002-*.json")).unlink()
-    # re-brief against the adopted rules: the new card reclaims the
-    # freed number and closes green
+    # re-brief against the adopted rules: the new card takes the next
+    # number and closes green
     gov("task", "new", "Ship it again", cwd=p)
-    gov("task", "close", "T-0002", cwd=p)
+    gov("task", "close", "T-0003", cwd=p)
     commit_all(p, "cards closed")
     gov("run", "--receipt", cwd=p)
 
