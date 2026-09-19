@@ -245,6 +245,7 @@ FAILURE_LEGS = {
 NEVER_ONE_HERE = {
     "init", "self-test", "hooks", "agent-hooks", "lease", "trend", "stats",
     "whatsnew", "change-scope", "preset", "parse", "update",
+    "surprise",
 }
 
 

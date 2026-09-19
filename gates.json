@@ -17,7 +17,8 @@
       "plane",
       "lint",
       "skill-coverage",
-      "postmortems"
+      "postmortems",
+      "surprises"
     ],
     "quick": [
       "notes",
@@ -225,6 +226,15 @@
         "scripts/check_postmortems.py"
       ],
       "description": "every docs/postmortem entry has the four README sections in one heading vocabulary, each non-empty, and a Guardrails section that names at least one pointer with every path resolving — a postmortem without a linked guardrail is a story"
+    },
+    {
+      "id": "surprises",
+      "label": "recurring surprises escalated into process improvements (rule 11)",
+      "command": [
+        "python3",
+        "scripts/check_surprises.py"
+      ],
+      "description": "the surprise ledger (.gov/surprises.jsonl) is loadable and one-sided-entry free, and every signature at three or more recorded surprises has a process note citing surprise:<sig> — a recurring surprise is a process defect, not bad luck"
     }
   ]
 }

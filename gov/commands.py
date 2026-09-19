@@ -92,6 +92,7 @@ COMMANDS = {
     "whatsnew": "usage-oriented highlights since a version",
     "recall": "retrieve notes, decisions, and postmortems (all terms, ranked)",
     "change-scope": "report touched surfaces (e.g. --base <ref>)",
+    "surprise": "the surprise ledger (record/list): expectation vs reality, counted per signature; rule 11 — the third occurrence of a signature escalates into a process improvement",
     "task": "task cards for subagent briefs (new/check/close/claim/release/"
             "list; rules@hash pin + checklist + green-run receipt; claim/"
             "release lease a card so two workers cannot take one)",

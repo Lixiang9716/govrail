@@ -152,6 +152,7 @@ commands:
   whatsnew         usage-oriented highlights since a version
   recall           retrieve notes, decisions, and postmortems (all terms, ranked)
   change-scope     report touched surfaces (e.g. --base <ref>)
+  surprise         the surprise ledger (record/list): expectation vs reality, counted per signature; rule 11 — the third occurrence of a signature escalates into a process improvement
   task             task cards for subagent briefs (new/check/close/claim/release/list; rules@hash pin + checklist + green-run receipt; claim/release lease a card so two workers cannot take one)
   preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
   update           one deliberate migration step: adopt missing/moved templates, merge newly shipped gates, refresh the CI pin, re-seal the plane (dry run by default; --apply executes; the seal needs --confirm-unattended or a TTY)

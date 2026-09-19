@@ -54,18 +54,21 @@
     ".gov/rejections/case-skill-coverage.sh": {
       "sha256": "01329fd79c688c61511ef4e8d5fc58a788dbab9a914f9804e536c03acdd6c8bc"
     },
+    ".gov/rejections/case-surprises.sh": {
+      "sha256": "0203b1e4c17ffd6112ca56076e64f66a7b37024525d28b1e35b8d969e41d4e53"
+    },
     ".gov/rejections/case-task.sh": {
       "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
     },
     ".gov/rules.md": {
-      "sha256": "650ebb4a4b7f4cff41b0086cfa23856019123abd64adc78760a1af9ce56f6088"
+      "sha256": "e6c4833f3dbb1cdd7cd0a324d67e663eb191d7a7fe39834c3b4f1380906a4131"
     },
     "gates.json": {
-      "sha256": "a30e569b7c586200e7cbf1614335427fdffcdc946483088737d9a56535ade00d"
+      "sha256": "1a19ff17df7a932e5cacef9e9380a90c6c1d9386502be94a2db4642e0e0f2e16"
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-19T05:14:10+00:00",
+    "ts": "2026-09-19T06:02:26+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }
