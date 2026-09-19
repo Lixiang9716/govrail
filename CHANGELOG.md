@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.43.1](https://github.com/Lixiang9716/govrail/compare/v0.43.0...v0.43.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **ci:** the gates summary now verdicts EVERY job — auto-merge only on full green ([#296](https://github.com/Lixiang9716/govrail/issues/296)) ([5266655](https://github.com/Lixiang9716/govrail/commit/5266655478014668affd5f31cf7b5cd856697908))
+
 ## [0.43.0](https://github.com/Lixiang9716/govrail/compare/v0.42.0...v0.43.0) (2026-09-18)
 
 

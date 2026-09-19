@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.43.1 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- **ci:** the gates summary now verdicts EVERY job — auto-merge only on full green
+
 ## 0.43.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - --write announces a one-sided re-confirm — rule 7's consent moment
