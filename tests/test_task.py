@@ -505,6 +505,9 @@ def test_new_warns_when_diff_touches_rules_bearing_files(tmp_path,
     proj = _project(tmp_path)
     monkeypatch.chdir(proj)
     subprocess.run(["git", "init", "-q", "."], cwd=proj, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=proj,
+                   check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=proj, check=True)
     subprocess.run(["git", "add", "-A"], cwd=proj, check=True)
     subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm", "i"],
                    cwd=proj, check=True)

@@ -328,7 +328,12 @@ def _run(argv: list[str] | None = None) -> int:
 
     seal = root / SEAL_PATH
     if args.write:
-        interactive = sys.stdin.isatty()
+        # --confirm-unattended is authoritative machine consent: the
+        # per-file prompt never fires with it. isatty() alone lies on
+        # Windows CI runners (the pwsh pseudo-console reports a tty),
+        # where the prompt would read EOF and abort an otherwise valid
+        # unattended re-baseline.
+        interactive = not args.confirm_unattended and sys.stdin.isatty()
         if not interactive and not args.confirm_unattended:
             print(
                 f"{PROG}: REFUSED — accepting a new constitution is a "
