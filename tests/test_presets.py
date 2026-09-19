@@ -561,9 +561,13 @@ def test_presets_are_reachable_as_package_data():
 
 def test_package_data_declares_the_presets_glob():
     """The packaging entry itself is pinned: drop the presets glob and the
-    wheel builds clean but `gov preset list` goes empty in installs."""
+    wheel builds clean but `gov preset list` goes empty in installs.
+    #310 follow-through: the bundle-file glob is `presets/*/*` — every
+    file directly in a preset dir ships (preset.json, README.md, AND
+    the strict-attribution config), so a new bundle file cannot silently
+    miss the wheel again; tests/test_packaging_data.py judges coverage."""
     text = (REPO / "pyproject.toml").read_text(encoding="utf-8")
-    assert "presets/*/preset.json" in text
+    assert "presets/*/*" in text
     assert "presets/*/skills/*/SKILL.md" in text
 
 
