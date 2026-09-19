@@ -1,0 +1,19 @@
+{
+  "type": "rituals-ledger",
+  "artifact": ".gov/rituals.jsonl",
+  "kind": "jsonl-lines",
+  "writer": "gov/rituals.py (append-only)",
+  "readers": [
+    "tests/test_rituals.py",
+    "review"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "caller": "string user@host",
+    "files": "array of paths touched by the ritual",
+    "ritual": "string ritual id (e.g. seal-rebaseline)",
+    "ts": "utc-iso-8601",
+    "unattended": "boolean --confirm-unattended consent flag"
+  },
+  "notes": "Append-only by contract; entries are never edited or removed."
+}

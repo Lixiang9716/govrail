@@ -1,0 +1,23 @@
+{
+  "type": "run-receipt",
+  "artifact": ".gov/history/receipts.jsonl",
+  "kind": "jsonl-lines",
+  "writer": "gov run --receipt (hash-chained)",
+  "readers": [
+    "gov receipt verify/show"
+  ],
+  "runtime": "runtime-deletable",
+  "fields": {
+    "v": "integer format version",
+    "id": "string r-<hash>",
+    "ts": "utc-iso-8601",
+    "commit": "string sha",
+    "tree": "string tree sha",
+    "dirty": "boolean",
+    "tag": "string",
+    "selection": "object",
+    "config": "string",
+    "gates": "array of {gate, outcome, blocking}"
+  },
+  "notes": "Line v pins the chain semantics; .gov/history/ is deletable runtime (N9), so breaking changes need no migration — readers must still fail loud."
+}

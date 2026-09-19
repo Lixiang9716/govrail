@@ -1,0 +1,21 @@
+{
+  "type": "task-card",
+  "artifact": ".gov/tasks/T-*.json",
+  "kind": "json-object",
+  "writer": "gov/task.py new/close",
+  "readers": [
+    "gov task check/close/list",
+    "task gate"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "id": "string T-NNNN",
+    "title": "string",
+    "created": "utc-iso-8601",
+    "rules": "object {hash: string rules@pin, files: object path -> sha256}",
+    "checklist": "array of strings",
+    "status": "string (open|done|deferred)",
+    "receipt": "object (green-run receipt on done cards)"
+  },
+  "notes": "The rules pin binds the card to the constitution state it was briefed under."
+}

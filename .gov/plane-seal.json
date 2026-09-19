@@ -36,6 +36,9 @@
     ".gov/rejections/case-notes.sh": {
       "sha256": "a64bb95128d7028f06426911ee3136dbc8e7c6e57cb449affb4c0d9d79ab61a6"
     },
+    ".gov/rejections/case-persistence.sh": {
+      "sha256": "86c5201e07b069397cdad97a13c842e2171101875e23ee34c1e2fb3f30a7a0ee"
+    },
     ".gov/rejections/case-plane.sh": {
       "sha256": "7f597aa9c7bccfbcd5de969e5c623be0b94f8522151ec05d100bc612cf20e08c"
     },
@@ -67,11 +70,11 @@
       "sha256": "e6c4833f3dbb1cdd7cd0a324d67e663eb191d7a7fe39834c3b4f1380906a4131"
     },
     "gates.json": {
-      "sha256": "987ac20966d122b8c42602951474f9d388b912427354339d4cf851d910ab37d3"
+      "sha256": "41ae8822a78ceb8a9c9e0be60d44042f747a3c415946b0a7d3bf6a9fcb26dc9d"
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-19T07:00:05+00:00",
+    "ts": "2026-09-19T07:24:29+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }

@@ -1,0 +1,15 @@
+{
+  "type": "pairing-config",
+  "artifact": ".gov/pairing.json",
+  "kind": "json-object",
+  "writer": "gov init (template)",
+  "readers": [
+    "gov verify-pairing"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "include": "array of globs",
+    "exclude": "array of globs"
+  },
+  "notes": "Declares which docs are bilingual pairs."
+}

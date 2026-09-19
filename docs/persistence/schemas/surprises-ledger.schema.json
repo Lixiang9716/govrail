@@ -1,0 +1,19 @@
+{
+  "type": "surprises-ledger",
+  "artifact": ".gov/surprises.jsonl",
+  "kind": "jsonl-lines",
+  "writer": "gov/surprise.py record",
+  "readers": [
+    "gov surprise list",
+    "surprises gate"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "ts": "utc-iso-8601",
+    "sig": "string signature slug",
+    "expectation": "string",
+    "reality": "string",
+    "surface": "string or null"
+  },
+  "notes": "D62; append-only; escalation threshold counts per sig."
+}

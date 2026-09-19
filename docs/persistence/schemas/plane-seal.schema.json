@@ -1,0 +1,15 @@
+{
+  "type": "plane-seal",
+  "artifact": ".gov/plane-seal.json",
+  "kind": "json-object",
+  "writer": "gov/verify_plane.py (baseline)",
+  "readers": [
+    "gov verify-plane",
+    "plane gate"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "files": "object mapping sealed path -> {sha256: string}"
+  },
+  "notes": "Tamper-evidence over the plane's own config. sha256 of file bytes; the sealed path set is the seal's own authority list."
+}

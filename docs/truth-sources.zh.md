@@ -38,6 +38,7 @@
 
 | # | 真相源 | 管辖 | 钉住方式 |
 |---|---|---|---|
+| 18 | `docs/persistence/schemas/` + `catalog.json` | 平面写盘的每种格式的已声明形状 | `docs/persistence/changes/` 的确认记录(摘要链) | persistence 门（`scripts/check_persistence.py`） |
 | 17 | git 历史 | 采纳记录：历史中存在过的封印永远无法静默变成"从未采用"（N7）；仪式台账与配对的过往状态在历史中存续 | 结构性——改写历史超出任何工作区工具的威胁模型 |
 
 ## 明确不是真相源

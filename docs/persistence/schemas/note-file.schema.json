@@ -1,0 +1,17 @@
+{
+  "type": "note-file",
+  "artifact": ".agents/notes/<lifecycle>/<class>/<date>-<topic>.md",
+  "kind": "markdown-contract",
+  "writer": "gov note new",
+  "readers": [
+    "gov note verify/audit",
+    "recall"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "h1": "# Agent Note: <title>",
+    "status_line": "Status: <lifecycle>",
+    "sections": "array [Problem, Decision, 'Alternatives considered'] (## level)"
+  },
+  "notes": "Three required sections (rule 3); archived notes are frozen (rule 4)."
+}
