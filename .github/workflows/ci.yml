@@ -170,13 +170,30 @@ jobs:
         run: gov run --mode all
 
   gates:
-    # The REQUIRED check's stable name (branch protection points here):
-    # green iff lint, every version cell, and governance are green.
-    needs: [lint, gates-cell, governance, derive]
+    # The REQUIRED check's stable name (branch protection points here).
+    # #290's lesson: a summary that only covers SOME jobs lets auto-merge
+    # land a red lint (the lint job failed while `gates` stayed green).
+    # So this is now the verdict over EVERY job in the workflow, not a
+    # subset: green iff nothing failed and nothing was cancelled.
+    # `if: always()` is load-bearing twice — a failed dependency must
+    # still let this job render the red verdict, and nightly (schedule-
+    # only) plus the docs_only-conditional jobs SKIP legitimately on
+    # most runs, so skipped is tolerated; failure and cancelled are not.
+    needs: [changes, lint, gates-cell, governance, derive,
+            backport-shadow, windows, macos, gbk-locale, e2e-docker,
+            nightly]
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: echo "lint + all version cells + governance + derive green"
+      - run: |
+          echo "job results: ${{ toJson(needs.*.result) }}"
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]] || \
+             [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "at least one CI job failed or was cancelled — not green"
+            exit 1
+          fi
+          echo "every CI job green (skipped = conditionally not applicable)"
 
   backport-shadow:
     needs: changes
