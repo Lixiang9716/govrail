@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.45.0](https://github.com/Lixiang9716/govrail/compare/v0.44.0...v0.45.0) (2026-09-19)
+
+
+### Features
+
+* **surprise:** the surprise ledger — expectation vs reality, counted; the third strike escalates (rule 11) ([#302](https://github.com/Lixiang9716/govrail/issues/302)) ([9c87db3](https://github.com/Lixiang9716/govrail/commit/9c87db30b7f63da5a0410fc65bf59e7347f302cb))
+
 ## [0.44.0](https://github.com/Lixiang9716/govrail/compare/v0.43.1...v0.44.0) (2026-09-19)
 
 
