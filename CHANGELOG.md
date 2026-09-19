@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.0](https://github.com/Lixiang9716/govrail/compare/v0.43.1...v0.44.0) (2026-09-19)
+
+
+### Features
+
+* **gates:** skill-coverage — the router skill must route every shipped command ([#298](https://github.com/Lixiang9716/govrail/issues/298)) ([18c2e59](https://github.com/Lixiang9716/govrail/commit/18c2e59e18c5f86e7da553b426fe70060f0bf3f3))
+
 ## [0.43.1](https://github.com/Lixiang9716/govrail/compare/v0.43.0...v0.43.1) (2026-09-19)
 
 

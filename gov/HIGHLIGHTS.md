@@ -3,6 +3,10 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.44.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- **gates:** skill-coverage — the router skill must route every shipped command
+
 ## 0.43.1 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - **ci:** the gates summary now verdicts EVERY job — auto-merge only on full green
