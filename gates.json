@@ -18,7 +18,8 @@
       "lint",
       "skill-coverage",
       "postmortems",
-      "surprises"
+      "surprises",
+      "doc-budgets"
     ],
     "quick": [
       "notes",
@@ -235,6 +236,15 @@
         "scripts/check_surprises.py"
       ],
       "description": "the surprise ledger (.gov/surprises.jsonl) is loadable and one-sided-entry free, and every signature at three or more recorded surprises has a process note citing surprise:<sig> — a recurring surprise is a process defect, not bad luck"
+    },
+    {
+      "id": "doc-budgets",
+      "label": "standing docs stay within declared character ceilings",
+      "command": [
+        "python3",
+        "scripts/check_doc_budgets.py"
+      ],
+      "description": "every standing doc in scripts/doc-budgets.json stays within its character ceiling — prose grows one paragraph at a time until the reading cost is paid forever; ledgers (decisions, CHANGELOG) are deliberately unjudged"
     }
   ]
 }
