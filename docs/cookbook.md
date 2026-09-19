@@ -21,6 +21,31 @@ gov verify pairing --write      # baseline every pair (partial: records
                                 # what it can, reports the rest)
 ```
 
+## Five minutes to your first red→green gate
+
+The shipped gates guard the governance plane; your own test command is
+what makes the plane yours. From `pip install` to a first red→green:
+
+```sh
+gov init --project . --hooks    # the plane, plus the pre-push runner
+gov gate add tests --paths 'tests/**' -- pytest -q
+                                # validated, merged, then ONE verification
+                                # `gov run --gate tests` — expect PASS or a
+                                # named failure, never silence
+echo 'def test_broken(): assert False' > tests/test_broken.py
+gov run --gate tests            # RED: FAIL tests (1 file(s) in scope), the
+                                # failure output is inlined once
+rm tests/test_broken.py
+gov run --gate tests            # GREEN again — this flip is the product
+gov note new --class feature --ref D0 "Wired the tests gate"
+                                # record the wiring decision (rule 2)
+```
+
+A gate with no rules for your language says so instead of passing
+quietly: `gov check` prints `SKIP(nolang: …)` for source files nothing
+can judge (#308). Monolingual project? Leave the pairing gate advisory —
+`gov init` says exactly that at install time (#315).
+
 ## I want to start a project by its type
 
 `gov init` injects the generic floor (D28: typed content stays out of

@@ -53,9 +53,15 @@ push (the pre-push hook re-runs the scoped DAG automatically).
 - `gov agent-hooks <event> [--dialect <platform>]` — the plane's
   presence at the agent's lifecycle events across platforms: claude
   (default), codex, copilot, gemini — same five events, each platform's
-  own deny/context contract. Framework-invoked, not a human verb; the
-  `--dialect` in a hook command must match the config file it is wired
-  from (`gov init --platforms` writes the matching spelling). If init
+  own deny/context contract. pre-tool-use judges from a deny-rules
+  table (built-ins for forced-recursive `rm` and `git reset --hard`;
+  `.gov/hook-deny.json` adds rules and allow-exemptions); `stop`
+  surfaces an advisory (open cards, dirty tree). A presence, not a
+  fence — `gov run` and the pre-push gate remain the enforcement.
+  Coverage ends at these four dialects; other hosts and MCP are out of
+  scope. Framework-invoked, not a human verb; the `--dialect` in a
+  hook command must match the config file it is wired from
+  (`gov init --platforms` writes the matching spelling). If init
   reports a platform's config already exists, merge the five events in
   by hand — and on codex, trust the project hooks via `/hooks`
   (untrusted hooks are silently skipped). The pre-tool-use deny is a
@@ -71,6 +77,12 @@ push (the pre-push hook re-runs the scoped DAG automatically).
 - `gov run` — the scoped DAG (auto base: dirty worktree → working
   tree; clean → unpushed commits; else last commit). The default is
   almost always right.
+- `gov gate add <id> [options] -- <command...>` — wire a product gate
+  into gates.json (validated against the runner's schema, merged
+  atomically, then one verification `gov run --gate <id>`). Use for
+  every test/lint/build wiring; hand-edited gates.json is the
+  exception, not the path. In a governed repo the seal speaks after
+  the edit — accept it with `gov verify-plane --write`.
 - `gov run --every-gate` — the full matrix. CI owns this; use it when
   several push ranges make one base ref insufficient (the hook does
   this automatically).
@@ -88,7 +100,8 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   6). Run it whenever touching gates.json, a checker, or a rejection
   case; a gate whose rejection proof is red is vacuous, not green.
 - `gov receipt verify/show` — cited receipts: verify one against its
-  commit before trusting a claim that cites it; show renders one.
+  commit before trusting a claim that cites it; show renders one
+  (`show --markdown` renders a paste-ready PR/job-summary block).
 - NEVER `git push --no-verify` to skip a red gate, and NEVER park a
   gate (`enabled: false`) to get green once. Fix the code, fix the
   gate, or take the explicit ritual (below).

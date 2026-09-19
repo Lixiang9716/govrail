@@ -47,6 +47,22 @@ DEPRECATED_ALIASES = {
     "locks": ["lease", "list"],
 }
 
+def deprecated_in(command: list[str]) -> tuple[str, list[str]] | None:
+    """The deprecated alias a gate command uses, or None (#274).
+
+    Scans for a ``gov`` token (command[0] in the common shape, but a
+    ``python -m gov …`` wrapper is equally governed) and names the alias
+    that follows it, together with its replacement — the migration-assist
+    surfaces (``gov init --upgrade``, ``gov doctor``) read this so a
+    renamed command can never silently strand an adopter's gates.json.
+    """
+    for i, tok in enumerate(command[:3]):
+        if tok == "gov" and i + 1 < len(command) \
+                and command[i + 1] in DEPRECATED_ALIASES:
+            return command[i + 1], list(DEPRECATED_ALIASES[command[i + 1]])
+    return None
+
+
 COMMANDS = {
     "init": "inject the plane into a project (--hooks/--ci add runners; --hooks "
             "--pre-commit adds the opt-in commit-stage gates; --adopt-new "
@@ -57,12 +73,17 @@ COMMANDS = {
            "--receipt records a tamper-evident run receipt, #124; "
            "--merge preflights the union of parallel branches in a "
            "scratch worktree before landing)",
+    "gate": "gate-set surgery (add): wire a product gate into gates.json "
+            "with schema validation and a verification run — no "
+            "hand-edited JSON (#309)",
     "self-test": "run governance rejection cases",
     "receipt": "verifiable run receipts (verify/show): verify a cited "
                "receipt against a commit (issue #124/D42)",
     "agent-hooks": "agent lifecycle hooks (session-start/pre-tool-use/"
-                   "post-tool-use/user-prompt-submit/stop — govrail's "
-                   "presence at every point of the agent's workflow)",
+                   "post-tool-use/user-prompt-submit/stop — context "
+                   "injection, a configurable deny set, an advisory on "
+                   "stop; a presence, not the enforcement; claude/codex/"
+                   "copilot/gemini dialects)",
     "verify-plane": "tamper-evidence for the plane's own config "
                     "(rules.md, gates.json, pairing/decisions/surfaces, "
                     ".gov/rejections/**; --write re-baselines — interactive "

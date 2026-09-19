@@ -153,6 +153,7 @@ def _check_version_drift(checks: list[dict]) -> None:
 
 def _check_gates(checks: list[dict]) -> None:
     import os
+    from . import commands as commands_mod
     if not os.path.exists("gates.json"):
         checks.append({"name": "gates.json", "state": "note",
                        "detail": "no gates.json — gov init creates one when missing"})
@@ -171,6 +172,18 @@ def _check_gates(checks: list[dict]) -> None:
             elif g.command:
                 checks.append({"name": f"gate:{g.id}", "state": "ok",
                                "detail": f"gate '{g.id}' command resolves ({g.command[0]})"})
+            # #274: a renamed command still works through its alias, but
+            # every run announces the deprecation — doctor names the
+            # migration so the fix is a copyedit, not an archaeology dig.
+            dep = commands_mod.deprecated_in(g.command)
+            if dep:
+                alias, repl = dep
+                checks.append({
+                    "name": f"gate-deprecation:{g.id}", "state": "note",
+                    "detail": f"gate '{g.id}' uses deprecated command "
+                              f"'gov {alias}' — current spelling: "
+                              f"'gov {' '.join(repl)}' (the alias still "
+                              "works; update gates.json when convenient)"})
     except gates_mod.ConfigError as e:
         checks.append({"name": "gates.json", "state": "problem",
                         "detail": f"gates.json: {e}"})
@@ -253,6 +266,53 @@ def _check_gate_adoption(checks: list[dict]) -> None:
                    "detail": "; ".join(parts)})
 
 
+def _check_language_coverage(checks: list[dict]) -> None:
+    """#308: name the project whose languages the check gate cannot judge.
+
+    The check gate is the default template's only product-code gate, and
+    its coverage is the shipped grammars'. A project living entirely in
+    unruled languages reads PASS because nothing was checked — the
+    vacuous-gate trap rule 6 forbids. Doctor cannot fix the grammar gap,
+    but it must say it out loud (note, never problem: a fresh install
+    still does not go red on day one, P0-3)."""
+    import os
+    try:
+        from .checks import NOLANG_BY_EXT, _covered_exts
+    except ImportError:  # direct-script execution
+        from checks import NOLANG_BY_EXT, _covered_exts
+    try:
+        covered_exts = _covered_exts()
+    except Exception:  # noqa: BLE001 — the parse layer's own check reports this
+        return
+    covered: dict[str, int] = {}
+    nolang: dict[str, int] = {}
+    for dirpath, dirnames, filenames in os.walk("."):
+        dirnames[:] = [d for d in dirnames
+                       if d not in {".git", ".hg", ".svn", ".tox",
+                                    ".mypy_cache", ".pytest_cache",
+                                    ".venv", "venv", "__pycache__",
+                                    "build", "dist", "target",
+                                    "node_modules", ".gov", ".agents"}]
+        for fn in filenames:
+            ext = os.path.splitext(fn)[1].lower()
+            if ext in NOLANG_BY_EXT:
+                lang = NOLANG_BY_EXT[ext]
+                nolang[lang] = nolang.get(lang, 0) + 1
+            elif ext in covered_exts:
+                covered[ext] = covered.get(ext, 0) + 1
+    if not nolang or covered:
+        return  # full or partial coverage — the gate judges something here
+    listing = ", ".join(f"{lang} ({n})" for lang, n in sorted(nolang.items()))
+    checks.append({
+        "name": "check-language-coverage", "state": "note",
+        "detail": f"this project's source is all {listing}, and the check "
+                  "gate has no rules for any of them — it passes "
+                  "vacuously (nothing was checked). Add "
+                  ".gov/checks/<lang>.json rules, or wire your own test "
+                  "gate: gov gate add",
+    })
+
+
 def _check_decisions(checks: list[dict]) -> None:
     import contextlib
     import io
@@ -308,6 +368,33 @@ def _check_parse_layer(checks: list[dict]) -> None:
                                  "pip install --force-reinstall govrail"})
 
 
+def _check_seal_rebaseline(checks: list[dict]) -> None:
+    """#311: a recent seal re-baseline is announced where the environment
+    is judged — a reset nobody sees does not raise its cost."""
+    import os
+    if not os.path.isdir(".gov"):
+        return
+    try:
+        from . import verify_plane as vp
+        recent = vp.recent_rebaselines()
+    except Exception:  # noqa: BLE001 — visibility must never fail doctor
+        return
+    if not recent:
+        return
+    latest = recent[-1]
+    who = latest.get("caller", "?")
+    how = "UNATTENDED" if latest.get("unattended") else "interactive"
+    checks.append({
+        "name": "seal-rebaseline", "state": "note",
+        "detail": f"the constitution was re-baselined {len(recent)} "
+                  f"time(s) in the last {vp.REBASELINE_WINDOW_DAYS} "
+                  f"day(s); latest by {who} ({how})"
+                  + (f" — reason: {latest['reason']}" if latest.get("reason")
+                     else " — no reason recorded")
+                  + " (.gov/rituals.jsonl is the audit trail)",
+    })
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         from .root import force_utf8_stdio
@@ -338,6 +425,8 @@ def main(argv: list[str] | None = None) -> int:
     _check_hook(checks)
     _check_gates(checks)
     _check_gate_adoption(checks)
+    _check_language_coverage(checks)
+    _check_seal_rebaseline(checks)
     _check_decisions(checks)
     _check_parse_layer(checks)
     problems = [c for c in checks if c["state"] == "problem"]

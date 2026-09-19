@@ -802,23 +802,34 @@ def run_gates(
                 settle(g.id)
 
     failed = [gid for gid in outcomes if blocking.get(gid, False)]
+    # A failing gate's evidence prints ONCE, in the body, under an
+    # outcome-specific header (#317: the old summary reprinted the tail a
+    # second time — long output read double). The summary keeps only the
+    # one-line pointer with the rerun command.
+    outcome_marks = {"FAIL": "failed", "TIMEOUT": "timed out",
+                     "MISSING": "command missing"}
     for gid, outcome in outcomes.items():
         if outcome not in BLOCKING_OUTCOMES or not details[gid]:
             continue
         if blocking.get(gid, False):
-            emit(f"--- output of {gid} ---")
+            emit(f"--- output of {gid} ({outcome_marks[outcome]}) ---")
         else:
             # allowFailure: report loudly, block never (advisory, D2/D13).
-            emit(f"--- output of {gid} (advisory; allowFailure) ---")
+            emit(f"--- output of {gid} ({outcome_marks[outcome]}; "
+                 "advisory; allowFailure) ---")
         emit(details[gid])
 
     # A pass that said something (a warning, an advisory) stays visible:
-    # last 3 lines, exit code and PASS outcome unchanged (D20).
+    # head 2 + tail 3 lines, exit code and PASS outcome unchanged (D20;
+    # #317: the head is kept because gates like note-presence print their
+    # base= judgment as the FIRST line — a tail-only cap hid the verdict's
+    # evidence while announcing it was hidden).
     for gid, outcome in outcomes.items():
         if outcome != "PASS" or not details[gid]:
             continue
         lines = details[gid].splitlines()
-        shown = lines[-3:]
+        shown = lines[:2] + lines[-3:] if len(lines) > 5 else lines
+        shown = list(dict.fromkeys(shown)) if len(lines) > 5 else shown
         omitted = len(lines) - len(shown)
         emit(f"--- output of {gid} (passed with output) ---")
         emit("\n".join(shown))
@@ -830,20 +841,11 @@ def run_gates(
         for gid in failed:
             first = details[gid].strip().splitlines()[0] if details[gid].strip() else ""
             # #109: the failure line itself names the rerun command — the
-            # reader should not have to remember the flag exists.
+            # reader should not have to remember the flag exists. The
+            # gate's own output printed once in the body above (#317);
+            # the summary stays a pointer, not a reprint.
             line = f"{gid}: {first}" if first else f"{gid}:"
             emit(f"{line} (rerun: gov run --gate {gid})")
-            # #201: the failing gate's own output IS the diagnosis. The
-            # passed gates' outputs were already shown above; a failure
-            # that hides its output trains blind re-runs.
-            lines = details[gid].splitlines()
-            shown = lines[-10:]
-            omitted = len(lines) - len(shown)
-            if shown:
-                emit(f"--- output of {gid} (failed) ---")
-                emit("\n".join(shown))
-                if omitted > 0:
-                    emit(f"... ({omitted} earlier line(s) not shown)")
 
     counts = {o: sum(1 for v in outcomes.values() if v == o) for o in OUTCOME_ORDER}
     parts = [f"{n} {o.lower()}" for o, n in counts.items() if n]
@@ -1002,9 +1004,11 @@ def _outcome_line(gate: Gate, outcome: str, in_scope: int | None = None) -> str:
     if gate.allow_failure and outcome in BLOCKING_OUTCOMES:
         parts.append("(advisory; allowFailure)")
     if in_scope is not None:
-        # #21/D32: a scan over zero matched files must not read like a scan.
-        parts.append(f"{in_scope} in change scope" if in_scope
-                     else "0 in change scope — nothing changed matches")
+        # #21/D32: a scan over zero matched files must not read like a
+        # scan. #317: the count is self-explaining — these are the diff's
+        # files the gate's `paths` matched, not an abstract "scope".
+        parts.append(f"({in_scope} file(s) in scope)" if in_scope
+                     else "(0 files in scope — nothing changed matches)")
     if outcome != "PASS" and gate.description:
         # #257: say WHAT the gate demands, right where the rejection lands
         parts.insert(0, f"— {gate.description}")
@@ -1043,8 +1047,7 @@ def _plane_precheck(tool: str = "gov run", config_rel: str | None = None,
         for d in drift:
             print(f"  {d}", file=sys.stderr)
         print("  restore the files (git checkout) or accept the new state "
-              "explicitly: gov verify-plane --write", file=sys.stderr)
-        # #259: the refusal must be self-explaining across versions — a
+              "explicitly: gov verify-plane --write", file=sys.stderr)        # #259: the refusal must be self-explaining across versions — a
         # checkout initialized with an older plane (whose CI pin also
         # names that older version) hits this the day the mechanism
         # itself moves. Say which side is which instead of assuming the
@@ -1063,6 +1066,24 @@ def _plane_precheck(tool: str = "gov run", config_rel: str | None = None,
                 "--upgrade` shows what changed",
                 file=sys.stderr)
         raise SystemExit(1)
+    # #311: a recent re-baseline must be SEEN — the reset itself is a
+    # recorded ritual, but a ritual nobody hears about does not raise the
+    # cost of a rogue re-seal. Announced in the run header, advisory.
+    try:
+        rebaselines = verify_plane.recent_rebaselines()
+    except Exception:  # noqa: BLE001 — visibility must never block a run
+        rebaselines = []
+    if rebaselines:
+        latest = rebaselines[-1]
+        who = latest.get("caller", "?")
+        how = "UNATTENDED" if latest.get("unattended") else "interactive"
+        print(f"{tool}: NOTE — the constitution was re-baselined "
+              f"{len(rebaselines)} time(s) in the last "
+              f"{verify_plane.REBASELINE_WINDOW_DAYS} day(s); latest by "
+              f"{who} ({how})"
+              + (f" — reason: {latest['reason']}" if latest.get("reason")
+                 else " — no reason recorded"),
+              file=sys.stderr)
     # N6: --config pointing outside the sealed set opts out of everything
     # the seal just verified. In a governed repository that is a
     # recorded-decision-level change, not a flag.

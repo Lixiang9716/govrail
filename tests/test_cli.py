@@ -174,11 +174,36 @@ def test_init_next_steps_match_reality(tmp_path, capsys):
 
 
 def test_init_next_steps_with_docs(tmp_path, capsys):
+    """A monolingual project (docs, no counterparts) gets the #315 branch:
+    the pairing baseline is NOT recommended — it would fail on day one."""
     (tmp_path / "README.md").write_text("# x\n", encoding="utf-8")
     assert plane.init(tmp_path) == 0
     out = capsys.readouterr().out
-    assert "verify-pairing --write" in out
+    assert "single-language project" in out
+    assert "verify pairing --write" in out  # canonical spelling (#316)
+    assert "verify-pairing" not in out      # never the deprecated alias
     assert "no paired docs detected" not in out
+
+
+def test_init_next_steps_with_paired_docs(tmp_path, capsys):
+    """A project with actual counterparts gets the baseline advice."""
+    (tmp_path / "README.md").write_text("# x\n", encoding="utf-8")
+    (tmp_path / "README.zh.md").write_text("# x\n", encoding="utf-8")
+    assert plane.init(tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "gov verify pairing --write" in out
+    assert "single-language project" not in out
+
+
+def test_init_next_steps_leads_with_gate_add(tmp_path, capsys):
+    """#309: wiring the first product gate is step 1, and it names the
+    scaffolding command — the shipped gates guard governance, not code."""
+    (tmp_path / "README.md").write_text("# x\n", encoding="utf-8")
+    assert plane.init(tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "gov gate add" in out
+    first_step = out.split("next steps:")[1].strip().splitlines()[0]
+    assert "gate" in first_step
 
 
 def test_hooks_retrofit_on_initialized_project(tmp_path):

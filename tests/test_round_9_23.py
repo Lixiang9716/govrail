@@ -128,11 +128,11 @@ def test_21_scope_annotation(tmp_path, monkeypatch, capsys):
     from gov import gates
     assert gates.main([]) == 0
     out = capsys.readouterr().out
-    assert "0 in change scope — nothing changed matches" in out  # clean tree
+    assert "(0 files in scope — nothing changed matches)" in out  # clean tree
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "x.py").write_text("x = 1\n", encoding="utf-8")
     assert gates.main([]) == 0
-    assert "1 in change scope" in capsys.readouterr().out
+    assert "(1 file(s) in scope)" in capsys.readouterr().out
 
 
 def test_23_history_lands_in_main_checkout(tmp_path, monkeypatch):

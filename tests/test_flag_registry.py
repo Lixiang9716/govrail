@@ -57,6 +57,7 @@ HELP_ARGV: dict[str, list[list[str]]] = {
     "preset": [["preset", "apply", "--help"]],     # --project is apply's
     "surprise": [["surprise", "record", "--help"],  # --reality/--sig/--surface
                  ["surprise", "list", "--help"]],   # --sig/--json
+    "gate": [["gate", "add", "--help"]],  # all flags live on `add` (#309)
 }
 
 

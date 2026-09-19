@@ -58,6 +58,7 @@ import argparse
 import getpass
 import json
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -388,6 +389,19 @@ def acquire(resource: str, holder: str, ttl: float,
             wait: float | None, tool: str = "gov acquire") -> int:
     common = _common_dir(tool)
     _announce_root("acquire", common)
+    # #313: leases live in THIS checkout's git common dir — two clones of
+    # the same repository never see each other's leases. When that shape
+    # is likely (linked worktrees, or a shared-object checkout), say the
+    # boundary out loud at the moment it matters instead of in a README.
+    wt = subprocess.run(
+        ["git", "worktree", "list"], capture_output=True, text=True,
+        encoding="utf-8", errors="replace", env=_scrubbed_env(),
+    )
+    if wt.returncode == 0 and len(wt.stdout.splitlines()) > 1:
+        print("acquire: note — a lease coordinates THIS checkout only "
+              "(the lock lives in this clone's git dir); another clone of "
+              "the same repository acquires the same resource independently",
+              file=sys.stderr)
     _sweep_strays(common, ttl)
     path = _lease_path(common, resource)
     path.parent.mkdir(parents=True, exist_ok=True)

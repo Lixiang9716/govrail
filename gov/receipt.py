@@ -390,6 +390,11 @@ def main(argv: list[str] | None = None) -> int:
         "show", help="print receipt records (JSON lines), newest last")
     p_show.add_argument("--commit", default=None,
                         help="only receipts bound to this commit")
+    p_show.add_argument("--markdown", action="store_true",
+                        help="render the receipt(s) as a Markdown summary "
+                             "table (#313) — paste-ready for a PR comment "
+                             "or $GITHUB_STEP_SUMMARY; stdout stays exactly "
+                             "the rendered block")
 
     args = parser.parse_args(argv)
     if args.cmd is None:
@@ -419,10 +424,34 @@ def main(argv: list[str] | None = None) -> int:
         for r in records:
             if args.commit and not _commit_matches(r, args.commit):
                 continue
-            print(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
+            if args.markdown:
+                # #313: the evidence channel for humans — a receipt
+                # rendered into a PR comment / job summary instead of
+                # JSON pasted by hand. Only green, clean receipts claim
+                # a verdict; a dirty-tree receipt says so out loud.
+                gates = r.get("gates", [])
+                ok = all(g.get("outcome") == "PASS" for g in gates) \
+                    if gates else False
+                state = "PASS" if ok and not r.get("dirty") else (
+                    "DIRTY" if ok else "NOT GREEN")
+                print(f"### govrail receipt `{r.get('id', '?')}` — {state}")
+                print(f"- commit: `{r.get('commit', '?')}`"
+                      f"{' (dirty tree)' if r.get('dirty') else ''}")
+                print(f"- ran: {r.get('ts', '?')} · "
+                      f"caller: `{r.get('tag') or 'anonymous'}` · "
+                      f"{len(gates)} gate(s)")
+                print(f"- verify: `gov receipt verify {r.get('commit', '?')} "
+                      f"--record '<the receipt json line>'`")
+                print()
+            else:
+                print(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
             shown += 1
         if args.commit and not shown:
             print(f"receipt show: no receipts for {args.commit}", file=sys.stderr)
+            return 1
+        if args.markdown and not shown:
+            print("receipt show: no receipts recorded in this checkout — "
+                  "run `gov run --receipt` first", file=sys.stderr)
             return 1
         return 0
 

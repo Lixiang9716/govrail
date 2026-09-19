@@ -9,7 +9,7 @@
 
 <p align="center"><img src="docs/images/totem.svg" width="150" alt="govrail 图腾——鲸尾悬于双轨与封印环之上：力量行驶在受治的轨道，每次通过只有一个判决"></p>
 
-一个语言无关的、面向 agent 驱动开发的治理平面：让 coding agent 快速并行工作，同时由机器——而非人的警惕——守住质量线。运行时是 Python 3（>= 3.10）加上为代码统计层提供解析的 tree-sitter——全部由 `pip install govrail` 安装，无需其他工具。
+一个面向 agent 驱动开发的治理平面：让 coding agent 快速并行工作，同时由机器——而非人的警惕——守住质量线。治理机制（门禁、笔记、回执、配对）与语言无关；代码事实层跑在今天随包分发的 8 种 tree-sitter grammar 上（c、cpp、go、java、javascript、python、rust、typescript——更多语言用同样方式加 `.gov/checks/<lang>.json` 规则）。运行时是 Python 3（>= 3.10）——全部由 `pip install govrail` 安装，无需其他工具。
 
 平面提供两个机制：**门禁**（任何能被命令检查的承诺都变成机械检查）和**笔记**（每个非平凡改动记录决策、被打败的方案与后果）。双语配对让对外展示文档保持同步。
 
@@ -63,7 +63,9 @@ gov doctor                     # 环境自检（PATH、python、解析层、钩�
 gov doctor --json             # 机器可读：{status, checks, problems}
 gov note new --class process --ref D6 "标题"  # 笔记脚手架（预校验）
 gov init --project <path> --hooks --ci  # 同时安装 pre-push 钩子与 CI
-gov agent-hooks <event>                  # 代理生命周期钩子（session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop）——plane 在 agent 工作流每一步的存在；init 装配 .claude/settings.json
+gov agent-hooks <event>                  # 代理生命周期钩子（session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop）：上下文注入 +
+                               #  一个可配置的小型拦截规则表（.gov/hook-deny.json）+ stop 时的收尾提醒；
+                               #  已接线方言：claude/codex/copilot/gemini——其他宿主与 MCP 不在范围内
 gov uninstall --project <path> # 精确反转
 gov run                        # 跑默认模式（defaultMode）的门禁 DAG
 gov run --base HEAD~1          # 只跑 paths 命中本次 diff 的门
@@ -93,8 +95,11 @@ gov parse <files>              # 逐文件函数 span、行数、嵌套深度（
                                # 分发 tree-sitter 栈 —— 门禁可直接 import，勿单独钉版本。
                                # 自带语法：c, cpp, go, java, javascript,
                                # python, rust, typescript
-gov check                      # 解析层上的语法类检查；抑制会被计数，绝不隐形
+gov check                      # 解析层上的语法类检查；抑制会被计数，绝不隐形；
+                               #  SKIP(nolang) 会点名无规则可查的源码文件（#308）
 gov receipt verify <commit>    # 这棵树上录过完整全绿运行吗？（#124）
+gov receipt show --markdown    # 把回执渲染成 PR 评论 / CI job summary 可粘贴的块（#313）
+gov gate add tests --paths 'tests/**' -- pytest -q  # 把产品门禁接进门禁集，带校验与验证运行（#309）
 gov recall <terms>             # 检索笔记、决策、postmortem（--any 放宽 AND）
 gov note audit                # implemented 笔记的新鲜度信号
 gov note audit --json          # 机器可读：{findings: [{file, signal}], ...}

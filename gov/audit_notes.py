@@ -64,7 +64,7 @@ FLAGS: dict[str, set[str]] = {
             "--merge", "--tag", "--no-record", "--receipt", "--json",
             "--fail-fast", "--verbose", "--cost"},
     "self-test": {"--scope", "--case"},
-    "receipt": {"--record", "--commit"},
+    "receipt": {"--record", "--commit", "--markdown"},
     "verify-notes": set(),
     "verify-pairing": {"--write", "--staged", "--explain"},
     "verify-note-presence": {"--base", "--strict", "--staged"},
@@ -91,7 +91,7 @@ FLAGS: dict[str, set[str]] = {
     "parse": {"--json", "--lang"},
     "doctor": {"--json"},
     "whatsnew": {"--since"},
-    "recall": {"--any", "--snippet"},
+    "recall": {"--any", "--snippet", "--fuzzy"},
     "audit-notes": {"--json"},
     "change-scope": {"--base"},
     "surprise": {"--reality", "--sig", "--surface", "--json"},
@@ -105,7 +105,9 @@ FLAGS: dict[str, set[str]] = {
     "release": {"--agent"},
     "locks": set(),
     "hooks": set(),  # the pre-commit subcommand is flagless
-    "verify-plane": {"--write", "--confirm-unattended"},
+    "verify-plane": {"--write", "--confirm-unattended", "--reason"},
+    "gate": {"--paths", "--stage", "--description", "--mode",
+             "--allow-failure", "--timeout"},  # #309: on the `add` subcommand
 }
 
 
@@ -185,6 +187,32 @@ def _flags_note(text: str, commands: set[str] | None,
     return found
 
 
+def _boilerplate_signals(texts: dict) -> list[tuple]:
+    """Pairs of near-identical notes (#310): the rational shortcut against
+    an advisory note-presence warning is generating a template note, and
+    the format gate cannot tell it from substance. A note that is
+    ~identical to another is named as a pair — evidence for the audit
+    reader, never a verdict."""
+    import difflib
+    paths = sorted(texts)
+    normalized = {p: " ".join(texts[p].split()).lower() for p in paths}
+    out: list[tuple] = []
+    for i, p in enumerate(paths):
+        a = normalized[p]
+        if len(a) < 200:
+            continue  # short notes collide trivially; drift signals cover them
+        for q in paths[i + 1:]:
+            sm = difflib.SequenceMatcher(None, a, normalized[q])
+            if sm.real_quick_ratio() < 0.85 or sm.quick_ratio() < 0.85:
+                continue
+            ratio = sm.ratio()
+            if ratio >= 0.85:
+                out.append((p, f"boilerplate-suspect: {ratio:.0%} similar "
+                               f"to {q} — one of the two is likely a "
+                               "template copy"))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("audit_notes")
     parser = argparse.ArgumentParser(
@@ -225,12 +253,20 @@ def main(argv: list[str] | None = None) -> int:
 
     findings: list[dict] = []
     notes = 0
+    note_texts: dict = {}
     for p in sorted(IMPLEMENTED.rglob("*.md")):
         notes += 1
         text = p.read_text(encoding="utf-8-sig")
+        note_texts[str(p)] = text
         for flag in _flags_note(text, commands, decisions):
             emit(f"{p}: {flag}")
             findings.append({"file": str(p), "signal": flag})
+
+    # #310: template-note laundering signal — pairwise similarity over
+    # the implemented corpus.
+    for p, signal in _boilerplate_signals(note_texts):
+        emit(f"{p}: {signal}")
+        findings.append({"file": str(p), "signal": signal})
 
     # Wish 11/D28: skills are the manual agents read most literally —
     # a renamed command or flag silently expires them.

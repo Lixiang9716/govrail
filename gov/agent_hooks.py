@@ -34,6 +34,8 @@ every PreToolUse call for a framework that doesn't speak JSON.
 from __future__ import annotations
 
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -55,6 +57,34 @@ GEMINI_EVENT_NAMES = {
     "user-prompt-submit": "BeforeAgent",
     "stop": "AfterAgent",
 }
+
+# The built-in deny rules (#312): regex with a reason and an optional
+# allow list, replacing the two string literals this handler used to
+# match (`rm -rf /` and `git reset --hard` — `rm -fr /`, `sudo rm -rf /`
+# and friends sailed past them). Still a presence, not a fence (D59):
+# deterministic commands only, and `.gov/hook-deny.json` extends (or,
+# with "replace_builtin", replaces) this table.
+BUILTIN_DENY_RULES = [
+    {
+        "pattern": (r"\brm\b(?=.*\s-{1,2}[a-z]*r[a-z]*(\s|$))"
+                    r"(?=.*\s-{1,2}[a-z]*f[a-z]*(\s|$))"),
+        "reason": "destructive command blocked by the governance plane — "
+                  "a recursive, forced `rm` bypasses the plane's audit "
+                  "trail. Scope the deletion to your scratch paths, or "
+                  "record an exemption in .gov/hook-deny.json.",
+        "allow": [],
+    },
+    {
+        "pattern": r"\bgit\s+(?:\S+\s+){0,3}reset\s+--hard\b",
+        "reason": "destructive command blocked by the governance plane — "
+                  "`git reset --hard` discards work outside the plane's "
+                  "audit trail. Use `git revert` for undos, or record an "
+                  "exemption in .gov/hook-deny.json for scratch worktrees.",
+        "allow": [],
+    },
+]
+
+HOOK_DENY_CONFIG = Path(".gov/hook-deny.json")
 
 
 def _read_stdin_json() -> tuple[dict, str | None]:
@@ -160,6 +190,70 @@ def _command_of(payload: dict) -> str:
     return ""
 
 
+def _load_deny_rules(root: Path) -> tuple[list[dict], str | None]:
+    """``(rules, warning)`` — the effective deny table (#312).
+
+    ``.gov/hook-deny.json`` adds rules to (or, with ``"replace_builtin":
+    true``, replaces) the built-in table; each rule carries a ``pattern``
+    regex, a ``reason``, and optional ``allow`` exemption regexes. A
+    malformed config is named on stderr and the built-ins run alone —
+    loud fail-open, the same contract as a malformed hook payload: an
+    exit 2 here would block every tool call for a platform that cannot
+    fix the config from inside the hook."""
+    rules = [dict(r) for r in BUILTIN_DENY_RULES]
+    path = root / HOOK_DENY_CONFIG
+    if not path.is_file():
+        return rules, None
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError, UnicodeDecodeError) as e:
+        return rules, f"{HOOK_DENY_CONFIG} is unreadable ({e}) — built-in " \
+                      "deny rules only"
+    if not isinstance(doc, dict):
+        return rules, f"{HOOK_DENY_CONFIG} must be a JSON object — " \
+                      "built-in deny rules only"
+    unknown = sorted(set(doc) - {"deny", "replace_builtin"})
+    if unknown:
+        return rules, f"{HOOK_DENY_CONFIG}: unknown key(s) " \
+                      f"{', '.join(unknown)} (known: deny, replace_builtin) " \
+                      "— built-in deny rules only"
+    extra = doc.get("deny", [])
+    if not isinstance(extra, list) or any(not isinstance(r, dict) for r in extra):
+        return rules, f"{HOOK_DENY_CONFIG}: 'deny' must be an array of " \
+                      "rule objects — built-in deny rules only"
+    parsed: list[dict] = []
+    for i, r in enumerate(extra):
+        pattern = r.get("pattern")
+        if not isinstance(pattern, str) or not pattern:
+            return rules, f"{HOOK_DENY_CONFIG}: deny[{i}] needs a " \
+                          "'pattern' regex — built-in deny rules only"
+        try:
+            re.compile(pattern)
+        except re.error as e:
+            return rules, f"{HOOK_DENY_CONFIG}: deny[{i}] pattern does " \
+                          f"not compile ({e}) — built-in deny rules only"
+        allow = r.get("allow", [])
+        if not isinstance(allow, list) or \
+                any(not isinstance(a, str) for a in allow):
+            return rules, f"{HOOK_DENY_CONFIG}: deny[{i}] 'allow' must be " \
+                          "an array of regex strings — built-in deny rules only"
+        for a in allow:
+            try:
+                re.compile(a)
+            except re.error as e:
+                return rules, f"{HOOK_DENY_CONFIG}: deny[{i}] allow regex " \
+                              f"does not compile ({e}) — built-in deny rules only"
+        parsed.append({"pattern": pattern,
+                       "reason": r.get("reason") or
+                                 "blocked by the governance plane's "
+                                 "hook-deny rules",
+                       "allow": allow})
+    if doc.get("replace_builtin"):
+        rules = []
+    rules.extend(parsed)
+    return rules, None
+
+
 def handle_session_start(payload: dict, event: str,
                          dialect: str = "claude") -> int:
     """Session begins in a govrail-governed repo: check the plane."""
@@ -179,22 +273,34 @@ def handle_session_start(payload: dict, event: str,
 
 def handle_pre_tool_use(payload: dict, event: str,
                         dialect: str = "claude") -> int:
-    """The core gate: decide whether the agent's tool call is allowed."""
+    """The core gate: decide whether the agent's tool call is allowed.
+
+    #312: judgment comes from a deny-rules table — built-ins shipped in
+    code, extended (or replaced) by ``.gov/hook-deny.json``. Each rule is
+    a regex with a reason; an ``allow`` regex on a rule exempts a command
+    (e.g. `git reset --hard` inside a scratch worktree).
+    """
     root = _governed(payload)
     if root is None:
         return 0
     command = _command_of(payload)
+    if not command:
+        return 0
 
     # git push → the pre-push git hook handles governance; no double-gate
     if "git push" in command:
         return 0
 
-    # destructive commands that bypass the plane
-    if "rm -rf /" in command or "git reset --hard" in command:
-        return _deny(f"destructive command blocked by the governance "
-                     f"plane — '{command.strip()}' would bypass the plane's "
-                     "audit trail. Use `gov update --apply` for migrations or "
-                     "`git revert` for undos.", dialect)
+    rules, warning = _load_deny_rules(root)
+    if warning:
+        print(f"govrail: {warning}", file=sys.stderr)
+    for rule in rules:
+        if not re.search(rule["pattern"], command):
+            continue
+        if any(re.search(a, command) for a in rule.get("allow", [])):
+            continue
+        return _deny(f"{rule['reason']} Offending command: "
+                     f"'{command.strip()}'.", dialect)
     return 0
 
 
@@ -215,8 +321,51 @@ def handle_user_prompt_submit(payload: dict, event: str,
     return 0
 
 
+def _git(root: Path, *args: str) -> str:
+    try:
+        proc = subprocess.run(
+            ["git", "-c", "core.quotepath=off", *args], cwd=str(root),
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return proc.stdout if proc.returncode == 0 else ""
+
+
 def handle_stop(payload: dict, event: str, dialect: str = "claude") -> int:
-    """The agent is finishing. Final checks."""
+    """The agent is finishing (#312): the plane's closing advisory.
+
+    Cheap, read-only checks over the state the plane itself owns — an
+    open task card, a dirty worktree — surfaced as context, never as a
+    block (the enforcement remains `gov run` and the pre-push gate)."""
+    root = _governed(payload)
+    if root is None:
+        return 0
+    reminders: list[str] = []
+    tasks = root / ".gov" / "tasks"
+    if tasks.is_dir():
+        open_cards: list[str] = []
+        for p in sorted(tasks.glob("*.json")):
+            try:
+                card = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if card.get("status") in ("open", "claimed"):
+                open_cards.append(str(card.get("id") or p.stem))
+        if open_cards:
+            reminders.append(
+                "open task card(s): " + ", ".join(open_cards[:5])
+                + " — close them (`gov task close`) or defer before push")
+    status = _git(root, "status", "--porcelain")
+    if status.strip():
+        lines = [ln for ln in status.splitlines() if ln.strip()]
+        reminders.append(
+            f"worktree has {len(lines)} uncommitted file(s) — run "
+            "`gov run` before pushing (rule 2: a non-trivial change "
+            "carries a note)")
+    if reminders:
+        _context(event, f"govrail {__version__} (stop): " + "; ".join(reminders),
+                 dialect)
     return 0
 
 

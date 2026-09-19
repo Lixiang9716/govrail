@@ -32,6 +32,7 @@ error.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,6 +46,71 @@ NOTES = Path(".agents/notes")
 POSTMORTEM = Path("docs/postmortem")
 
 WHERE = {3: "title", 2: "headings", 1: "body"}
+
+# --fuzzy (#319): word-level edit-distance tolerance for Latin-script
+# terms, CJK bigram overlap for Chinese terms. The literal AND stays the
+# default (D18: grep with structure is the honest tool); --fuzzy is the
+# opt-in widening for when the corpus vocabulary and the query disagree.
+CJK_RX = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]+")
+WORD_RX = re.compile(r"[a-z0-9]+")
+
+
+def _is_cjk(term: str) -> bool:
+    return bool(CJK_RX.search(term))
+
+
+def _bigrams(text: str) -> set[str]:
+    out: set[str] = set()
+    for run in CJK_RX.findall(text.lower()):
+        if len(run) == 1:
+            out.add(run)
+            continue
+        for i in range(len(run) - 1):
+            out.add(run[i:i + 2])
+    return out
+
+
+def _edit_distance_at_most(a: str, b: str, limit: int) -> bool:
+    """True when levenshtein(a, b) <= limit (banded DP, small inputs)."""
+    if abs(len(a) - len(b)) > limit:
+        return False
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        best = i
+        for j, cb in enumerate(b, 1):
+            v = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb))
+            cur.append(v)
+            best = min(best, v)
+        if best > limit:
+            return False
+        prev = cur
+    return prev[-1] <= limit
+
+
+def _fuzzy_hits_text(term: str, text: str) -> bool:
+    """Does ``text`` contain something close enough to ``term``?"""
+    lowered = text.lower()
+    if term in lowered:
+        return True
+    if _is_cjk(term):
+        # CJK: no word boundaries for substring AND to bite on — the
+        # bigram overlap ratio is the honest cheap proxy.
+        term_bigrams = _bigrams(term)
+        if not term_bigrams:
+            return False
+        text_bigrams = _bigrams(lowered)
+        overlap = sum(1 for bg in term_bigrams if bg in text_bigrams)
+        return overlap / len(term_bigrams) >= 0.7
+    # Latin script: word-level edit distance ≤ 2 (words shorter than 4
+    # characters stay literal — short-word fuzzing is pure noise).
+    if len(term) < 4:
+        return False
+    for word in WORD_RX.findall(lowered):
+        if len(word) >= len(term) - 2 and _edit_distance_at_most(
+                term, word, 2):
+            return True
+    return False
 
 
 @dataclass
@@ -135,8 +201,22 @@ def _entries() -> list[Entry]:
     return _corpus().entries
 
 
-def _score(entry: Entry, terms: list[str]) -> tuple[int, str] | None:
-    """(rank, where) when every term appears; None when it does not."""
+def _score(entry: Entry, terms: list[str],
+           fuzzy: bool = False) -> tuple[int, str] | None:
+    """(rank, where) when every term appears; None when it does not.
+
+    ``fuzzy`` widens "appears" to --fuzzy's tolerance (#319): the AND
+    still requires every term in the SAME field — only the term match
+    loosens."""
+    if fuzzy:
+        if all(_fuzzy_hits_text(t, entry.title) for t in terms):
+            return 3, "title"
+        for h in entry.headings:
+            if all(_fuzzy_hits_text(t, h) for t in terms):
+                return 2, f"section '{h}'"
+        if all(_fuzzy_hits_text(t, entry.body) for t in terms):
+            return 1, "body"
+        return None
     lowered = [t.lower() for t in terms]
     if all(t in entry.title.lower() for t in lowered):
         return 3, "title"
@@ -148,8 +228,16 @@ def _score(entry: Entry, terms: list[str]) -> tuple[int, str] | None:
     return None
 
 
-def _presence(entry: Entry, term: str) -> int:
+def _presence(entry: Entry, term: str, fuzzy: bool = False) -> int:
     """Where one term appears: 3 title, 2 a heading, 1 body, 0 nowhere."""
+    if fuzzy:
+        if _fuzzy_hits_text(term, entry.title):
+            return 3
+        if any(_fuzzy_hits_text(term, h) for h in entry.headings):
+            return 2
+        if _fuzzy_hits_text(term, entry.body):
+            return 1
+        return 0
     t = term.lower()
     if t in entry.title.lower():
         return 3
@@ -172,13 +260,16 @@ def _snippet(e: Entry, terms: list[str]) -> str:
     return ""
 
 
-def _per_term(entries: list[Entry], terms: list[str]) -> list[int]:
+def _per_term(entries: list[Entry], terms: list[str],
+              fuzzy: bool = False) -> list[int]:
     """Entries containing each term anywhere — the miss diagnostics (#148)."""
-    return [sum(1 for e in entries if _presence(e, t)) for t in terms]
+    return [sum(1 for e in entries if _presence(e, t, fuzzy))
+            for t in terms]
 
 
-def _print_miss(entries: list[Entry], terms: list[str]) -> int:
-    counts = _per_term(entries, terms)
+def _print_miss(entries: list[Entry], terms: list[str],
+                fuzzy: bool = False) -> int:
+    counts = _per_term(entries, terms, fuzzy)
     per_term = " / ".join(f"{t}: {c}" for t, c in zip(terms, counts))
     print(f"recall: no match for {' '.join(terms)!r}")
     print(f"  per-term hits: {per_term}")
@@ -199,6 +290,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="rank partial matches (entries containing some "
                              "terms, by terms matched) instead of requiring "
                              "every term; the strict AND stays the default")
+    parser.add_argument("--fuzzy", action="store_true",
+                        help="widen term matching (#319): word-level edit "
+                             "distance <= 2 for Latin terms, CJK bigram "
+                             "overlap of 70 percent for Chinese terms; "
+                             "the AND semantics (and --any) still apply")
     parser.add_argument("--snippet", action="store_true",
                         help="print the first matched line under each hit — "
                              "the evidence inline, not just the address")
@@ -224,13 +320,14 @@ def main(argv: list[str] | None = None) -> int:
         scored: list[tuple[int, int, str, str, Entry]] = []
         for e in entries:
             matched = [(t, p) for t, p in
-                       ((t, _presence(e, t)) for t in args.query) if p]
+                       ((t, _presence(e, t, args.fuzzy))
+                        for t in args.query) if p]
             if matched:
                 where = ", ".join(f"{t} in {WHERE[p]}" for t, p in matched)
                 scored.append((len(matched), max(p for _, p in matched),
                                e.source, where, e))
         if not scored:
-            return _print_miss(entries, args.query)
+            return _print_miss(entries, args.query, args.fuzzy)
         # Full AND matches first, then more terms beat fewer; ties: where
         # they hit, then current authority over frozen evidence, then path
         # (F4).
@@ -239,7 +336,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{source} — matched {k}/{len(args.query)} terms ({where})")
             if args.snippet:
                 line = _snippet(e, [t for t, _p in
-                                    ((t, _presence(e, t)) for t in args.query)
+                                    ((t, _presence(e, t, args.fuzzy))
+                                     for t in args.query)
                                     if _p])
                 if line:
                     print(f"    {line}")
@@ -249,12 +347,12 @@ def main(argv: list[str] | None = None) -> int:
 
     hits: list[tuple[int, str, str]] = []
     for e in entries:
-        scored = _score(e, args.query)
+        scored = _score(e, args.query, args.fuzzy)
         if scored:
             rank, where = scored
             hits.append((rank, e.source, where))
     if not hits:
-        return _print_miss(entries, args.query)
+        return _print_miss(entries, args.query, args.fuzzy)
 
     # Equal ranks: current authority (implemented/) outranks frozen
     # evidence (archived/), then path order (F4).

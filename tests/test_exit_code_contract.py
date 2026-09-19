@@ -216,6 +216,16 @@ def _red_recall(tmp_path):
     return ["recall", "anything"]
 
 
+def _red_gate(tmp_path):
+    """`gov gate add` proves the wiring, then reports the verification
+    run's red verdict as its own exit 1 (#309's prove-it-can-run)."""
+    (tmp_path / "gates.json").write_text(json.dumps(
+        {"gates": [], "modes": {"all": []}, "defaultMode": "all"}),
+        encoding="utf-8")
+    return ["gate", "add", "doomed", "--",
+            *FAIL]
+
+
 def _red_note(tmp_path):
     d = tmp_path / ".agents" / "notes" / "implemented" / "bug-fix"
     d.mkdir(parents=True)
@@ -236,6 +246,7 @@ FAILURE_LEGS = {
     "doctor": _red_doctor,
     "verify-plane": _red_verify_plane,
     "recall": _red_recall,
+    "gate": _red_gate,
 }
 
 # Their red paths are pinned in the self-test's rejection cases and

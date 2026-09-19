@@ -302,7 +302,8 @@ def test_failed_gate_output_is_failure_first_uncapped(capsys):
         # earlier-stream passing gate with output → stays capped
         gates.Gate(id="chatty-ok", command=[
             sys.executable, "-c",
-            "print('w1'); print('w2'); print('w3'); print('w4'); print('tail')"
+            "print('w1'); print('w2'); print('w3'); print('w4'); "
+            "print('w5'); print('w6'); print('w7'); print('tail')"
         ]),
         # late-stream failing gate with output far beyond any tail budget
         gates.Gate(id="late-boom", command=[
@@ -319,9 +320,11 @@ def test_failed_gate_output_is_failure_first_uncapped(capsys):
     assert "evidence line 0" in out
     assert "evidence line 299" in out
     assert "truncated" not in out
-    # passing gate still subject to the normal budget
+    # passing gate still subject to the budget, which now keeps the
+    # head lines too (#317: the base= judgment lives there)
     assert "earlier line(s) not shown" in out
-    assert "w1" not in out
+    assert "w1" in out
+    assert "w3" not in out
     assert "tail" in out
 
 
@@ -338,14 +341,15 @@ def test_pass_with_output_stays_visible(capsys):
     """A passing gate that printed a warning must not be silenced (P1-2)."""
     gs = [gates.Gate(id="warny", command=[sys.executable, "-c",
                                           "print('line1'); print('line2'); print('line3'); "
-                                          "print('heads up'); print('last warning')"])]
+                                          "print('line4'); print('heads up'); "
+                                          "print('last warning')"])]
     assert gates.run_gates(gs, None, 1, False) == 0
     out = capsys.readouterr().out
     assert "PASS warny" in out
     assert "passed with output" in out
     assert "last warning" in out
-    assert "earlier line(s) not shown" in out  # the cap dropped earlier lines
-    assert "line1" not in out
+    assert "earlier line(s) not shown" in out  # middle lines are dropped
+    assert "line1" in out  # the head stays (#317: base= lines live there)
     # the omission note reads after the shown content, not before it
     assert out.index("last warning") < out.index("earlier line(s) not shown")
 
@@ -683,13 +687,16 @@ def test_history_ledger_symlink_warns_and_writes_nothing(tmp_path, capsys,
     outside = tmp_path / "outside.txt"
     outside.write_text("mine\n", encoding="utf-8")
     sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    # chdir FIRST: the warm-up must not depend on the LIVE repo's seal
+    # state — a mid-flight constitution change would otherwise break this
+    # test from inside the govrail checkout itself.
+    monkeypatch.chdir(tmp_path)
     assert gates.main([]) == 0 or True  # warm the anchor; may refuse non-repo
     capsys.readouterr()
     hist = tmp_path / ".gov" / "history"
     hist.mkdir(parents=True)
     record = hist / "gates.jsonl"
     record.symlink_to(outside)
-    monkeypatch.chdir(tmp_path)
     (tmp_path / "gates.json").write_text(json.dumps(
         {"gates": [{"id": "a", "command": PASS}]}), encoding="utf-8")
     assert gates.main([]) == 0

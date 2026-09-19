@@ -14,6 +14,9 @@ concurrency:
   group: gov-ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # Branch protection (#273): the required status check name is this
+  # job's id ("gates"), NOT the workflow name ("gov") — configure the
+  # context accordingly, or a green run still reads as "expected".
   gates:
     runs-on: ubuntu-latest
     # A hung gate dies in minutes, not in GitHub's 6-hour default.

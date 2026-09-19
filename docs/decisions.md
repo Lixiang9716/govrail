@@ -540,3 +540,11 @@
 - **状态**：已决
 - **决定**：(b)。stage 门契约复用(hookcmd 对 stage 门自动追加 --staged、advisory/blocking 语义与 DAG 一致),新门走 dogfood-only + modes.all(DAG 内为具名 no-op,提交上下文才做工);部分暂存保护是超出 DSH 原型的一处加固。同轮:R10 入评审 rubric(en+zh)——承重主张必须引用可验证坐标(回执 id/具名测试数/产物位置/门输出),"相信我全绿"是反模式;gate candidate 标 partial(存在性与可解析性可查,充分性是判断)。本仓库首次安装自己的 pre-commit/pre-push 钩子(gov init --hooks --pre-commit)——治理平面开始吃自己的提交边界。
 - **被否**：(c) 会把 staged 语义塞进面向全仓的门命令,破坏"门是外部命令"的契约形状,且 adopter 侧无派生面;**不装自吃钩子**——写完 stage 门却不在自己仓库触发,是 rule 6 的活体反面(门永远不跑等于 vacuous);**部分暂存文件直接跳过不点红**——静默跳过会教人忽略它,点名+有发现仍红才是 fail loud。
+
+## D65 — 采用面硬化：14 个 issue 批次——执法诚实高于口号，MCP 明确出局
+
+- **问题**：审计（#308–#319、#273、#274）暴露同一类根因：宣传句强于机制。check 门对无规则语言空转判绿（违反自家规则 6）；run 输出重复且截断藏证据；笔记执法可被模板内容满足；verify-plane --write --confirm-unattended 让被治理 agent 零摩擦重封印；agent-hooks 的两条字面拦截被宣传成"每一步的存在"；init 第一天就推荐会失败的 pairing 基线与已过废弃窗口的别名；CHANGELOG 同一 commit 重列多个版本段。
+- **选项**：(a) 全批一次收口：诚实判决（check SKIP(nolang)+doctor 覆盖点名、run 失败输出单印+截断保头、verify-notes 薄内容 advisory、note audit 模板相似对）+ gov gate add 脚手架 + 重封印摩擦（无人值守强制 --reason 入封印与台账、交互逐文件确认、run/doctor 播报近 7 天重封）+ hooks 规则表化（.gov/hook-deny.json）与 stop 收尾提醒 + recall --fuzzy（词级编辑距离≤2、CJK bigram≥70%）+ receipt show --markdown + lease 单克隆边界点名 + 文案真实化（rules 通用化、单语分支、废弃文案、CHANGELOG 去重）；(b) 拆成多个小 PR 按优先级逐个落；(c) 同时内置 MCP server 一并解决平台覆盖。
+- **状态**：已决
+- **决定**：(a)。14 个 issue 同根因，分批落会造成中间态的"半诚实"（门禁说 A、README 说 B）；新命令 gate 走规则 10 全套发现面（FLAGS、skill 阶段表、退出码契约）。维护者裁决：**不写 MCP，我们不是做 MCP 的**——#318 采用 issue 自带备选路径，只写平台覆盖边界（4 方言封顶，其余宿主与 MCP out of scope）。
+- **被否**：(c) MCP——维护者明确出局，四个原生方言 + git hooks 是本项目的集成面；(b) 逐个小 PR——#308/#317/#310 同属"判决不可信"，分开落会让 DAG 长期带着自相矛盾的证据标准；拆 rules.md 为模板层+自托管层——与 test_template_sync 的字节一致约束冲突，改为措辞通用化；note-presence require 全局默认收紧——违反 P0-3（新装第一天不红），改为 python-lib preset 携带；gate add 顺手自动重基线封印——重封印是记录在案的仪式，顺手代做会重开 #311 的洞。

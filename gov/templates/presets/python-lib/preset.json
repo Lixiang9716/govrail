@@ -1,22 +1,45 @@
 {
   "name": "python-lib",
-  "description": "Python package projects: pytest and build gates wired into the DAG.",
+  "description": "Python package projects: pytest and build gates wired into the DAG, plus strict note attribution.",
   "gates": [
     {
       "id": "pytest",
       "label": "python tests",
-      "command": ["python3", "-m", "pytest", "-q"],
-      "paths": ["**/*.py", "pyproject.toml"]
+      "command": [
+        "python3",
+        "-m",
+        "pytest",
+        "-q"
+      ],
+      "paths": [
+        "**/*.py",
+        "pyproject.toml"
+      ]
     },
     {
       "id": "build",
       "label": "sdist+wheel build",
-      "command": ["python3", "-m", "build"],
-      "paths": ["**/*.py", "pyproject.toml"]
+      "command": [
+        "python3",
+        "-m",
+        "build"
+      ],
+      "paths": [
+        "**/*.py",
+        "pyproject.toml"
+      ]
     }
   ],
   "modes": {
-    "all": ["pytest", "build"],
-    "quick": ["pytest"]
+    "all": [
+      "pytest",
+      "build"
+    ],
+    "quick": [
+      "pytest"
+    ]
+  },
+  "files": {
+    ".gov/note-presence.json": "note-presence.json"
   }
 }

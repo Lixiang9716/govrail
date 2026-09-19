@@ -227,11 +227,15 @@ def main(argv: list[str] | None = None) -> int:
         # unrecorded constitution change. A symlinked/unwritable ledger
         # refuses the whole migration here, before any mutation.
         files = verify_plane._sealed_files(root)
+        # #311: the migration's re-baseline names its authority too —
+        # the update flow itself, with the versions it moved between.
+        reason = (f"gov update --apply migration "
+                  f"({old_version} -> {__version__})")
         rituals.append(root, ritual="seal-rebaseline",
                        unattended=unattended,
-                       files=sorted(files))
+                       files=sorted(files), reason=reason)
         steps_done += 1
-        verify_plane.baseline(root, unattended=unattended)
+        verify_plane.baseline(root, unattended=unattended, reason=reason)
         return 0
 
     unattended = args.confirm_unattended or not sys.stdin.isatty()

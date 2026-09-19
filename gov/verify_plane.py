@@ -95,7 +95,7 @@ def _identity() -> str:
 
 
 def baseline(root: Path | None = None, *, caller: str | None = None,
-             unattended: bool = False) -> None:
+             unattended: bool = False, reason: str | None = None) -> None:
     """Write the seal for the current plane state (init's first stamp).
 
     Programmatic callers (init, preset apply) land through here too —
@@ -105,17 +105,61 @@ def baseline(root: Path | None = None, *, caller: str | None = None,
     files = _sealed_files(root)
     if not files:
         return
+    rebaseline: dict = {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "caller": caller or _identity(),
+        "unattended": bool(unattended),
+    }
+    if reason:
+        # #311: an unattended re-baseline must name its authority — the
+        # reason rides inside the seal itself, not only in the ledger.
+        rebaseline["reason"] = reason
     payload = {
         "files": {rel: {"sha256": _sha256(p)}
                   for rel, p in sorted(files.items())},
-        "last_rebaseline": {
-            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "caller": caller or _identity(),
-            "unattended": bool(unattended),
-        },
+        "last_rebaseline": rebaseline,
     }
     atomicio.write_text(root / SEAL_PATH,
                         json.dumps(payload, indent=2) + "\n", root=root)
+
+
+REBASELINE_WINDOW_DAYS = 7
+
+
+def recent_rebaselines(root: Path | None = None,
+                       days: int = REBASELINE_WINDOW_DAYS) -> list[dict]:
+    """Re-baseline rituals recorded in the tracked ledger within ``days``
+    (#311): a seal reset that no runner mentions is a reset nobody sees.
+    Read-only; an unreadable ledger yields [] — the seal check itself is
+    the enforcement, this is the visibility channel."""
+    root = root or Path.cwd()
+    from .rituals import LEDGER
+    ledger = root / LEDGER
+    if not ledger.is_file():
+        return []
+    cutoff = datetime.now(timezone.utc).timestamp() - days * 86400
+    out: list[dict] = []
+    try:
+        for line in ledger.read_text(encoding="utf-8-sig").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            if rec.get("ritual") != "seal-rebaseline":
+                continue
+            try:
+                ts = datetime.fromisoformat(
+                    str(rec.get("ts", ""))).timestamp()
+            except ValueError:
+                continue
+            if ts >= cutoff:
+                out.append(rec)
+    except OSError:
+        return []
+    return out
 
 
 def _seal_in_history(root: Path) -> bool:
@@ -257,9 +301,16 @@ def _run(argv: list[str] | None = None) -> int:
                         help="allow --write without a terminal (agents, CI) — "
                              "recorded as UNATTENDED machine consent under the "
                              "caller identity; never a silent one-flag act")
+    parser.add_argument("--reason", default=None, metavar="TEXT",
+                        help="#311: the authority for this re-baseline "
+                             "(decision/note/issue naming who reviewed it). "
+                             "REQUIRED with --confirm-unattended; recorded "
+                             "into the seal and the ritual ledger")
     args = parser.parse_args(argv)
     if args.confirm_unattended and not args.write:
         parser.error("--confirm-unattended is only meaningful with --write")
+    if args.reason and not args.write:
+        parser.error("--reason is only meaningful with --write")
     root = Path.cwd()
     files = _sealed_files(root)
 
@@ -285,6 +336,18 @@ def _run(argv: list[str] | None = None) -> int:
                 "it. Re-run from an interactive terminal, or pass "
                 "--confirm-unattended to record it as UNATTENDED machine "
                 "consent under your caller identity.", file=sys.stderr)
+            return 2
+        if args.confirm_unattended and not (args.reason or "").strip():
+            # #311: an unattended re-baseline is the one move this plane
+            # cannot forgive, so it must at least say WHO authorized it.
+            # A machine consent without a named authority is exactly the
+            # "reset is neither costly nor visible" gap this closes.
+            print(
+                f"{PROG}: REFUSED — UNATTENDED machine consent needs "
+                "--reason naming the authority for this re-baseline "
+                "(the decision, note, or issue that reviewed the new "
+                "constitution). The reason is recorded into the seal "
+                "and the ritual ledger.", file=sys.stderr)
             return 2
         previous: dict[str, str] = {}
         if seal.is_file():
@@ -314,24 +377,54 @@ def _run(argv: list[str] | None = None) -> int:
                 print(f"{PROG}: WARNING — the previous seal {seal} is "
                       f"unreadable ({unreadable}); re-baselining over it "
                       "anyway", file=sys.stderr)
-        baseline(root, unattended=not interactive)
+        # #311: the transition is computed BEFORE anything is written, so
+        # the consent question is about facts, and a decline leaves the
+        # old seal byte-identical on disk.
+        transitions = []
+        for rel in sorted(set(files) | set(previous)):
+            old_h = previous.get(rel, "(absent)")
+            p = files.get(rel)
+            new_h = _sha256(p) if p else "(gone)"
+            transitions.append((rel, old_h, new_h))
+        if interactive:
+            print(f"{PROG}: accepting a new constitution is a recorded "
+                  "decision — confirm each change:")
+            for rel, old_h, new_h in transitions:
+                mark = " " if old_h == new_h else "+"
+                print(f"{mark} {rel}: {old_h[:12]} -> {new_h[:12]}")
+            changed = [rel for rel, old_h, new_h in transitions
+                       if old_h != new_h]
+            if not changed:
+                print(f"{PROG}: no sealed file differs from the seal — "
+                      "nothing to accept")
+            for rel in changed:
+                try:
+                    answer = input(f"{PROG}: accept the new state of "
+                                   f"{rel}? [y/N] ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    answer = ""
+                if answer not in ("y", "yes"):
+                    print(f"{PROG}: ABORTED — '{rel}' not accepted; "
+                          "nothing was written, the seal is unchanged")
+                    return 1
+        baseline(root, unattended=not interactive,
+                 reason=(args.reason or "").strip() or None)
         try:
             from . import rituals
         except ImportError:  # direct-script execution
             import rituals
+        ritual_details: dict = {"unattended": not interactive,
+                                "files": sorted(files)}
+        if (args.reason or "").strip():
+            ritual_details["reason"] = args.reason.strip()
         try:
-            rituals.append(root, ritual="seal-rebaseline",
-                           unattended=not interactive,
-                           files=sorted(files))
+            rituals.append(root, ritual="seal-rebaseline", **ritual_details)
         except OSError as e:
             print(f"{PROG}: WARNING — the re-baseline could not be "
                   f"recorded in the tracked ledger: {e}; the seal itself "
                   "is updated, but the audit trail needs a manual entry",
                   file=sys.stderr)
-        for rel in sorted(set(files) | set(previous)):
-            old_h = previous.get(rel, "(absent)")
-            p = files.get(rel)
-            new_h = _sha256(p) if p else "(gone)"
+        for rel, old_h, new_h in transitions:
             mark = " " if old_h == new_h else "+"
             print(f"{mark} {rel}: {old_h[:12]} -> {new_h[:12]}")
         caller = _identity()

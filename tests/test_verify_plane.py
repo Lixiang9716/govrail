@@ -143,7 +143,7 @@ def test_write_refused_without_terminal_and_recorded_with_consent(
 
     # --confirm-unattended: recorded as machine consent under the caller
     capsys.readouterr()
-    vp.main(["--write", "--confirm-unattended"])
+    vp.main(["--write", "--confirm-unattended", "--reason", "test: reviewed re-baseline"])
     out = capsys.readouterr().out
     assert "+ .gov/pairing.json:" in out
     assert "UNATTENDED machine consent" in out and "agent-7" in out
@@ -210,7 +210,7 @@ def test_write_warns_when_previous_seal_unreadable(tmp_path, monkeypatch, capsys
     monkeypatch.setattr("sys.stdin", _io.StringIO())  # not a tty
     monkeypatch.setenv("GOV_CALLER", "agent-8")
     (tmp_path / ".gov" / "plane-seal.json").write_text("[]", encoding="utf-8")
-    assert verify_plane.main(["--write", "--confirm-unattended"]) == 0
+    assert verify_plane.main(["--write", "--confirm-unattended", "--reason", "test: reviewed re-baseline"]) == 0
     assert "WARNING" in capsys.readouterr().err
     seal = json.loads((tmp_path / ".gov" / "plane-seal.json")
                       .read_text(encoding="utf-8"))
@@ -229,7 +229,7 @@ def test_rebaseline_names_the_consent_ledger(tmp_path, monkeypatch, capsys):
     # anchor_to_git_root climbs from cwd: without this chdir the in-process
     # --write re-baselines the LIVE plane mid-suite (real ledger lines).
     monkeypatch.chdir(tmp_path)
-    rc = vp.main(["--write", "--confirm-unattended"])
+    rc = vp.main(["--write", "--confirm-unattended", "--reason", "test: reviewed re-baseline"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "consent recorded in" in out and "rituals.jsonl" in out

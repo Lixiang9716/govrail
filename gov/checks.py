@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -57,6 +58,57 @@ SEVERITIES = ("error", "warning")
 RULE_KEYS = {"id", "kind", "severity", "message", "query", "absent_query",
              "node"}
 LEDGER_VERSION = 1
+
+# Well-known source extensions this installation has NO rules for (#308).
+# The check gate is the default template's only product-code gate; a PHP
+# or Ruby project's first run reads `clean` because NOTHING WAS CHECKED —
+# rule 6's vacuous-gate trap. These extensions are named so the skip is
+# loud: `SKIP(nolang: php (2))` instead of a green that implies coverage.
+NOLANG_BY_EXT = {
+    ".php": "php", ".rb": "ruby", ".cs": "csharp", ".kt": "kotlin",
+    ".kts": "kotlin", ".swift": "swift", ".scala": "scala",
+    ".ex": "elixir", ".exs": "elixir", ".lua": "lua", ".dart": "dart",
+    ".pl": "perl", ".pm": "perl", ".hs": "haskell", ".ml": "ocaml",
+    ".mli": "ocaml", ".zig": "zig", ".groovy": "groovy",
+    ".m": "objective-c", ".mm": "objective-c",
+}
+_WALK_EXCLUDE = {".git", ".hg", ".svn", ".tox", ".mypy_cache",
+                 ".pytest_cache", ".venv", "venv", "__pycache__",
+                 "build", "dist", "target", "node_modules",
+                 ".gov", ".agents"}
+
+
+def _covered_exts() -> set[str]:
+    """Extensions the shipped parse packs claim (``*.py`` → ``.py``)."""
+    from . import parse
+    exts: set[str] = set()
+    for name in parse.available():
+        pack = parse.load_pack(name)
+        for g in pack.globs:
+            if g.startswith("*."):
+                exts.add(g[1:].lower())
+    return exts
+
+
+def _nolang_counts(root: Path, files: set[str] | None) -> dict[str, int]:
+    """Nolang source files per language: the judged set when scoped
+    (``files``), else a whole-tree walk (``--all`` / outside a repo)."""
+    counts: dict[str, int] = {}
+    if files is not None:
+        candidates = files
+    else:
+        candidates = []
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in _WALK_EXCLUDE]
+            for fn in filenames:
+                p = Path(dirpath, fn)
+                candidates.append(
+                    p.relative_to(root).as_posix().replace("\\", "/"))
+    for rel in candidates:
+        lang = NOLANG_BY_EXT.get(Path(rel).suffix.lower())
+        if lang:
+            counts[lang] = counts.get(lang, 0) + 1
+    return counts
 
 
 class CheckError(Exception):
@@ -471,6 +523,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"gov check: {e}", file=sys.stderr)
             return 2
 
+    # #308: source files whose language has no rules are NOT checked —
+    # say so instead of letting a green verdict imply coverage. The judged
+    # scope is the same one the rules ran over.
+    nolang = _nolang_counts(root, scoped)
+
     active = [f for r in reports for f in r.findings if not f.suppressed]
     suppressed_n = sum(1 for r in reports for f in r.findings if f.suppressed)
     blocking = [f for f in active if f.severity == "error"]
@@ -493,6 +550,12 @@ def main(argv: list[str] | None = None) -> int:
     if scoped is not None:
         emit(f"gov check: base={base}" + (f" ({why})" if why else "")
              + f" — {len(scoped)} changed file(s) in scope")
+    if nolang:
+        listing = ", ".join(f"{lang} ({n})" for lang, n in sorted(nolang.items()))
+        emit(f"gov check: SKIP(nolang: {listing}) — no rules for these "
+             "language(s); those file(s) pass UNCHECKED by this gate "
+             "(add .gov/checks/<lang>.json, or wire your own test gate: "
+             "gov gate add)")
 
     if args.json:
         print(json.dumps({
@@ -500,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
             "languages": [l for l, _ in all_rules],
             "base": base,
             "scope": None if scoped is None else len(scoped),
+            "skipped_nolang": nolang,
             "files": [
                 {"path": r.path,
                  "findings": [{"rule": f.rule_id, "severity": f.severity,
@@ -517,7 +581,7 @@ def main(argv: list[str] | None = None) -> int:
         path = _record(reports)
         print(f"gov check: recorded to {path}", file=sys.stderr)
 
-    if blocking or (args.strict and active):
+    if blocking or (args.strict and active) or (args.strict and nolang):
         return 1
     return 0
 

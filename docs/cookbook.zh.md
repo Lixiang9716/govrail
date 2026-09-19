@@ -20,6 +20,29 @@ gov verify pairing --write      # 全部配对建立基线（部分成功：能�
                                 # 不能记的报）
 ```
 
+## 五分钟见到你的第一次红→绿
+
+随包门禁守的是治理平面本身；你自己的测试命令才让平面成为「你的」。
+从 `pip install` 到第一次红→绿：
+
+```sh
+gov init --project . --hooks    # 落地平面，外加 pre-push 运行器
+gov gate add tests --paths 'tests/**' -- pytest -q
+                                # 校验、合并，随后跑一次验证 `gov run --gate tests`
+                                # ——要么 PASS，要么具名失败，绝不无声
+echo 'def test_broken(): assert False' > tests/test_broken.py
+gov run --gate tests            # 红：FAIL tests（1 个文件在范围内），失败输出
+                                # 只内联打印一次
+rm tests/test_broken.py
+gov run --gate tests            # 又绿了——这一红一绿就是产品本身
+gov note new --class feature --ref D0 "接入 tests 门禁"
+                                # 记录接线决策（规则 2）
+```
+
+你的语言没有规则时，门禁会说出来而不是悄悄通过：`gov check` 对无规则
+可查的源码打印 `SKIP(nolang: …)`（#308）。单语项目？pairing 门保持
+advisory 即可——`gov init` 会在安装时把这一点说明白（#315）。
+
 ## 我想按项目类型起步
 
 `gov init` 注入的是通用地板（D28：类型化内容不进默认模板）。**preset** 负责补上类型化的一套——某类项目需要的门、技能与 manifest 提示。先看再装：

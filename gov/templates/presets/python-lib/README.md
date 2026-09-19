@@ -22,5 +22,11 @@ gov preset apply python-lib        # into an initialized project
 gov init --preset python-lib       # one command for a new project
 ```
 
+Applying also lands `.gov/note-presence.json` with
+`require: ["**/*.py"]` (#310): the note-presence gate switches from
+"any note in the diff" to strict attribution — every changed Python
+file must be named by an implemented note. Delete the file to go back
+to the advisory default; an existing file is never overwritten.
+
 Apply is idempotent: on an already-adopted repository every item reports
 "already adopted" and nothing is written.

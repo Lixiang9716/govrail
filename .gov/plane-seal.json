@@ -40,13 +40,13 @@
       "sha256": "86c5201e07b069397cdad97a13c842e2171101875e23ee34c1e2fb3f30a7a0ee"
     },
     ".gov/rejections/case-plane.sh": {
-      "sha256": "7f597aa9c7bccfbcd5de969e5c623be0b94f8522151ec05d100bc612cf20e08c"
+      "sha256": "878ae2275c439a37c335b58c6b0efa8634bd194714aa1b742f04c8fd1fe976f0"
     },
     ".gov/rejections/case-postmortems.sh": {
       "sha256": "0cb20b6e50c54fed3fd5ae66e3edf8aaa5fccca9034f12a8f9cce133b1ee24bd"
     },
     ".gov/rejections/case-pre-commit-hook.sh": {
-      "sha256": "b8f68966fe3ff6f800c968b74f05a564f6cdf42c9ff33982198e6975be5cc9f7"
+      "sha256": "aed79cb0b3921b3c1c4898ed125aad60302c45f3b32a9ae46e34cbd06e971aed"
     },
     ".gov/rejections/case-rubric.sh": {
       "sha256": "24cee132f28c3f92aee6660e2c9286c24579ee18a9b92e656015ecc96c3966e3"
@@ -73,15 +73,16 @@
       "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
     },
     ".gov/rules.md": {
-      "sha256": "e6c4833f3dbb1cdd7cd0a324d67e663eb191d7a7fe39834c3b4f1380906a4131"
+      "sha256": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976"
     },
     "gates.json": {
       "sha256": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-19T08:13:47+00:00",
+    "ts": "2026-09-19T09:29:08+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
-    "unattended": true
+    "unattended": true,
+    "reason": "D65/notes 2026-09-19 batch: constitution rules 10/11 genericized + dedupe line, rejection cases upgraded to the new unattended-reason contract \u2014 reviewed in this session"
   }
 }

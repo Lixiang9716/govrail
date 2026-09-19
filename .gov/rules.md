@@ -18,7 +18,6 @@ contract (interface / schema / format), process or tooling, or a decision a
 maintainer may reasonably revisit. Test: would a maintainer a month later ask
 "why was this done?" If yes, write a note. Purely mechanical or local edits
 (typo, format, local rename, comment sync) are exempt.
-The presence gate is advisory until you flip it blocking (P0-3: a fresh install never goes red on day one).
 The presence gate is advisory until you flip it blocking (P0-3: a fresh
 install never goes red on day one).
 
@@ -57,7 +56,6 @@ fails the pairing gate (advisory until baselined — flip it blocking by
 removing `allowFailure` after your first green run); a PR never lands
 one language of a pair alone.
 
-
 ## 8. Wait on conditions, not on clocks
 
 Never `sleep` hoping a state has arrived — poll the condition with a
@@ -82,20 +80,18 @@ and the plane.
 
 ## 10. A new command ships its discovery surface in the same PR
 
-Adding a user-facing `gov` command (or renaming one) must update, in
-the same PR, the three homes that make it discoverable — each catches
-a different drift, so missing any one is a regression:
+Adding a user-facing command (or renaming one) must update, in the
+same PR, the homes that make it discoverable — each catches a
+different drift, so missing any one is a regression:
 
-- `--help` and the flag registry (`audit_notes.FLAGS`): the registry
-  test enforces both directions — a listed-but-unregistered flag gives
-  false `unknown flag` signals on working invocations, a registered-
-  but-unlisted one silently misses typos;
-- the `govrail` skill's stage table (when to use the command, when not
-  — judgment, not syntax): agents enumerate skills, not help output;
-- the exit-code contract registries
-  (`tests/test_exit_code_contract.py`): a failure leg for every
-  failure-capable command, or an explicit declaration that the command
-  is 0/2-only.
+- `--help` and the project's machine-checked flag registry: the
+  registry test enforces both directions — a listed-but-unregistered
+  flag gives false `unknown flag` signals on working invocations, a
+  registered-but-unlisted one silently misses typos;
+- the router skill's stage table (when to use the command, when not —
+  judgment, not syntax): agents enumerate skills, not help output;
+- the exit-code contract: a failure leg for every failure-capable
+  command, or an explicit declaration that the command cannot fail.
 
 Deprecated aliases are held to the same bar — they stay working through
 the deprecation window, and citations of them are not drift.
@@ -109,7 +105,8 @@ groups recurrences by signature, and the lookup "have I seen this
 before?" happens at record time, when it is cheapest. A surprise is
 not a bug report; it is telemetry about where the mental model and the
 process disagree. When one signature reaches three recorded surprises,
-the `surprises` gate stays red until a process note citing
-`surprise:<sig>` ships: recurring surprise means the process, not the
-person, needs to change. Recording never blocks on the threshold —
-data first, verdict in the gate.
+a process note citing `surprise:<sig>` ships: recurring surprise means
+the process, not the person, needs to change. (Escalating that
+threshold into a blocking gate is the adopting project's wiring
+choice; govrail's own plane runs one.) Recording never blocks on the
+threshold — data first, verdict wherever the project enforces it.

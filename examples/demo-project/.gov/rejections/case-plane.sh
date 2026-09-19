@@ -67,9 +67,18 @@ grep -q 'rules.md' out.txt || {
 
 git checkout -- .gov/rules.md 2>/dev/null || git checkout -q -- .gov/rules.md
 
+# UNATTENDED consent owes a reason (#311): without --reason the
+# re-baseline is refused even with --confirm-unattended.
+if python3 -m gov verify-plane --write --confirm-unattended > out.txt 2>&1; then
+  echo "case-plane: unattended --write without --reason must be refused" >&2
+  exit 1
+fi
+
 # The explicit re-baseline is the only way back: it accepts the CURRENT
-# state loudly, after which the plane is green again.
-python3 -m gov verify-plane --write --confirm-unattended > out.txt 2>&1 || {
+# state loudly, with its authority named, after which the plane is green.
+python3 -m gov verify-plane --write --confirm-unattended \
+  --reason "case-plane: reviewed restore after tamper/deletion proof" \
+  > out.txt 2>&1 || {
   echo "case-plane: --write refused a restorable state" >&2
   cat out.txt >&2
   exit 1

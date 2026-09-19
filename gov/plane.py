@@ -479,6 +479,11 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
     if ci and ".github/workflows/gov.yml" in created:
         print(f"  .github/workflows/gov.yml (CI runs gov run; govrail pinned "
               f"to =={__version__})")
+        # #273: branch protection needs the JOB id as the required-check
+        # name — say it here, where the CI was just created.
+        print("  to require this workflow in branch protection, add the "
+              "required status check 'gates' (the job id, not the "
+              "workflow name)")
 
     if "gates.json" in created:
         # A read-only existence probe picks the advice (not D13's rejected
@@ -488,13 +493,31 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         has_docs = (project / "README.md").exists() or any(
             f.name not in seeded for f in (project / "docs").glob("*.md")
         )
+        # #315: "has docs" is not "has pairs" — the monolingual project
+        # (the most common shape) runs the pairing baseline with nothing
+        # to baseline and reads a red failure as its first gov verdict.
+        # A potential counterpart anywhere in the tree, or a declared
+        # pairing config, is what makes the baseline advice survivable.
+        has_pairs = any(project.rglob("*.zh.md")) \
+            or (project / ".gov" / "pairing.json").exists() \
+            or any(project.glob("*.i18n.yaml"))
         print("next steps:")
-        print("  1. gov run                        # pairing runs advisory until baselined")
-        if has_docs:
-            print("  2. gov verify-pairing --write     # baseline doc pairs (writes .i18n.yaml records)")
-            print("  3. remove \"allowFailure\" from the pairing gate in gates.json to enforce")
+        # #309: wiring the first PRODUCT gate is the step that makes the
+        # plane worth adopting — it leads, ahead of the governance steps.
+        print("  1. wire your first product gate (the shipped gates guard")
+        print("     the governance plane, not your code):")
+        print("       gov gate add tests --paths 'tests/**' -- pytest -q")
+        print("  2. gov run                        # pairing runs advisory until baselined")
+        if has_docs and has_pairs:
+            print("  3. gov verify pairing --write     # baseline doc pairs (writes .i18n.yaml records)")
+            print("  4. remove \"allowFailure\" from the pairing gate in gates.json to enforce")
+        elif has_docs:
+            print("  3. single-language project — the pairing gate stays advisory")
+            print("     (or set \"enabled\": false on it in gates.json); when translated")
+            print("     counterparts (e.g. README.zh.md) appear, baseline them:")
+            print("     gov verify pairing --write")
         else:
-            print("  2. no paired docs detected — leave pairing advisory, or disable it:")
+            print("  3. no paired docs detected — leave pairing advisory, or disable it:")
             print("     set \"enabled\": false on the pairing gate in gates.json")
         # #251: every recovery path (git restore, --upgrade diffs, the
         # seal's drift verdicts) assumes the generated files are in git —
@@ -502,12 +525,7 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         print("  also: commit the generated governance files now — every "
               "recovery path (git restore, gov init --upgrade) assumes "
               "they are in git")
-        # The shipped gates police the GOVERNANCE plane (notes, seals,
-        # receipts) — they are not your test suite. Say so at install
-        # time instead of letting the slogan imply it.
-        print("  note: these gates guard the governance plane; wire your")
-        print("        test/lint/build gates into gates.json (presets ship")
-        print("        typed starters: gov preset list)")
+        print("  typed starters: gov preset list (python-lib / docs-bilingual / agent-heavy)")
 
     if preset is not None:
         # D53: one command for "a new project of this type" — init lands
@@ -818,6 +836,29 @@ def upgrade_files(project: Path, manifest_path: Path):
     return files_out, init_version, tpl_paths
 
 
+def _deprecated_gate_commands(project: Path) -> list[tuple[str, str, list[str]]]:
+    """(gate id, alias, replacement) for every gate command still spelled
+    the deprecated way (#274): the upgrade report connects what `gov run`
+    warns about per invocation with the config that causes it."""
+    from .commands import deprecated_in
+    gates_path = project / "gates.json"
+    if not gates_path.is_file():
+        return []
+    try:
+        doc = json.loads(gates_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    out: list[tuple[str, str, list[str]]] = []
+    for g in doc.get("gates", []):
+        if not isinstance(g, dict):
+            continue
+        dep = deprecated_in(g.get("command", []))
+        if dep:
+            alias, repl = dep
+            out.append((g.get("id", "?"), alias, repl))
+    return out
+
+
 def _upgrade_report(project: Path, manifest_path: Path,
                     json_mode: bool = False) -> int:
     """Wish 8/D27: show how the shipped templates and this project drifted.
@@ -860,6 +901,11 @@ def _upgrade_report(project: Path, manifest_path: Path,
             "initialized_with": init_version,
             "package": __version__,
             "files": classified,
+            "deprecated_commands": [
+                {"gate": gid, "alias": f"gov {alias}",
+                 "replacement": f"gov {' '.join(repl)}"}
+                for gid, alias, repl in _deprecated_gate_commands(project)
+            ],
         }, indent=2))
         return 0
     print(f"init: upgrade report for {project} — nothing is changed by this report")
@@ -867,6 +913,13 @@ def _upgrade_report(project: Path, manifest_path: Path,
     if init_version != "unknown" and init_version != __version__:
         print(f"  newer releases exist — gov whatsnew --since {init_version} "
               "shows what arrived and how to use it")
+    dep = _deprecated_gate_commands(project)
+    if dep:
+        print("  deprecated commands in gates.json — the aliases still work,")
+        print("  but every run announces them; update to the current names:")
+        for gid, alias, repl in dep:
+            print(f"    gate '{gid}': 'gov {alias}' → "
+                  f"'gov {' '.join(repl)}'")
     for rel in current:
         print(f"  {rel:<40} matches the shipped template")
     for rel in missing:

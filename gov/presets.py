@@ -63,7 +63,13 @@ MANIFEST = ".gov/manifest.json"
 SKILL_FILE = "SKILL.md"
 SKILL_DEST = ".agents/skills"
 # Closed key set: name/description required; the rest optional.
-TOP_KEYS = {"name", "description", "gates", "modes", "skills", "hints"}
+TOP_KEYS = {"name", "description", "gates", "modes", "skills", "hints",
+            "files"}
+# Config files a preset may land (#310), create-if-missing — closed so a
+# preset can only write surfaces the plane has a declared reader for,
+# same boundary as HINT_KEYS.
+FILE_DESTS = {".gov/note-presence.json": "strict-attribution config for "
+              "the note-presence gate (verify_note_presence)"}
 # The manifest keys a preset may declare. Closed on purpose: a preset may
 # only write manifest keys the plane has a declared reader for (D49's
 # note_presence_exempt is the precedent) — anything else would be a
@@ -199,6 +205,24 @@ def load(name: str, root: Path | None = None) -> dict:
             raise PresetError(
                 f"preset '{name}': skill '{skill}' has no "
                 f"{PRESETS}/{name}/skills/{skill}/{SKILL_FILE}")
+    files_raw = raw.get("files", {})
+    if not isinstance(files_raw, dict) or any(
+            not isinstance(k, str) or not isinstance(v, str)
+            for k, v in files_raw.items()):
+        raise PresetError(
+            f"preset '{name}': 'files' must map destination paths to "
+            "bundle file names")
+    unknown_dests = sorted(set(files_raw) - set(FILE_DESTS))
+    if unknown_dests:
+        raise PresetError(
+            f"preset '{name}': unknown file destination(s): "
+            f"{', '.join(unknown_dests)} (known: "
+            f"{', '.join(sorted(FILE_DESTS))})")
+    for dest, src in files_raw.items():
+        if not (bundle_dir / src).is_file():
+            raise PresetError(
+                f"preset '{name}': file '{dest}' names bundle source "
+                f"'{src}', which does not exist in {PRESETS}/{name}/")
     return raw
 
 
@@ -248,6 +272,8 @@ def show(name: str, root: Path | None = None) -> int:
     for skill in bundle.get("skills", []):
         print(f"  skill {SKILL_DEST}/{skill}/{SKILL_FILE} "
               "(copied byte-for-byte when missing, D29)")
+    for dest in bundle.get("files", {}):
+        print(f"  file {dest} (copied byte-for-byte when missing)")
     for key, value in (bundle.get("hints") or {}).items():
         print(f"  manifest hint {key} = {json.dumps(value)} "
               "(written only when the key is absent, D49)")
@@ -403,6 +429,20 @@ def apply(project: Path, name: str, root: Path | None = None) -> int:
         atomicio.write_bytes(dest, src.read_bytes(), root=repo_root)
         wrote = True
         print(f"  skill: created {SKILL_DEST}/{skill}/{SKILL_FILE}")
+
+    # b2. config files (#310): byte-for-byte, create-if-missing — the
+    #     same contract as skills. An existing file is the project's.
+    for dest_rel, src in bundle.get("files", {}).items():
+        dest = project / dest_rel
+        if dest.exists():
+            print(f"  file: {dest_rel} already present — untouched")
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        atomicio.write_bytes(
+            dest, (presets_root(root) / name / src).read_bytes(),
+            root=repo_root)
+        wrote = True
+        print(f"  file: created {dest_rel}")
 
     # c. hints: only manifest keys that are absent (D49 — the local value
     #    always wins, and the notice says so).

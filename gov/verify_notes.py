@@ -33,6 +33,37 @@ NOTES_README = "README.md"
 LIFECYCLES = ("implemented", "archived")
 CLASSES = ("feature", "bug-fix", "simplification", "architecture", "process", "testing")
 REQUIRED_SECTIONS = ("## Problem", "## Decision", "## Alternatives considered")
+# #310: below this word count a section states a verdict, not a reason —
+# exactly the "template note passes the gate" laundering the issue names.
+# Advisory only: the format gate judges structure; thinness is a signal
+# for the human (and the note audit), never a new way to go red.
+THIN_SECTION_WORDS = 12
+
+
+def _thin_section_advisories(path: Path) -> list[str]:
+    """Advisory signals for notes that are structurally valid but
+    information-free (#310): any required section under the word floor."""
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()
+    except OSError:
+        return []
+    stripped = [line.strip() for line in lines]
+    positions = []
+    for section in REQUIRED_SECTIONS:
+        try:
+            positions.append(stripped.index(section))
+        except ValueError:
+            return []  # placement/format errors already report this
+    out: list[str] = []
+    bounds = sorted(positions) + [len(lines)]
+    for section, start, end in zip(REQUIRED_SECTIONS, bounds, bounds[1:]):
+        body = "\n".join(lines[start + 1:end]).strip()
+        if len(body.split()) < THIN_SECTION_WORDS:
+            out.append(f"{path}: '{section}' is thin "
+                       f"({len(body.split())} words) — a note this short "
+                       "records a verdict, not a reason; recall can only "
+                       "retrieve what was written")
+    return out
 
 
 def check_note(path: Path) -> list[str]:
@@ -168,7 +199,18 @@ def main(argv: list[str] | None = None) -> int:
             print(err)
         print(f"verify_notes: {len(errors)} violation(s) in {len(notes)} note(s)")
         return 1
-    print(f"verify_notes: {len(notes)} note(s) ok")
+    # #310: structurally valid but information-free notes pass this gate
+    # — the format check cannot judge substance. Named as advisories so
+    # the boilerplate shortcut stays visible without a new red state.
+    advisories: list[str] = []
+    for note in notes:
+        advisories.extend(_thin_section_advisories(note))
+    for line in advisories:
+        print(f"advisory: {line}")
+    verdict = f"verify_notes: {len(notes)} note(s) ok"
+    if advisories:
+        verdict += f" ({len(advisories)} advisory)"
+    print(verdict)
     return 0
 
 

@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from . import (change_scope, decision,
-               gates, hookcmd, locks, recall, review, stats, surprise, task,
+               gates, gate, hookcmd, locks, recall, review, stats, surprise, task,
                verify_conflict_markers, verify_doc_sync, verify_plane)
 from . import checks, commands, doctor, note, plane, presets, receipt, self_test, trend, whatsnew
 from . import verify_rubric
@@ -225,10 +225,13 @@ def main(argv: list[str] | None = None) -> int:
     while cmd in commands.DEPRECATED_ALIASES:
         # D57 Wave 1: absorbed commands keep working — same behavior,
         # one deprecation line, and the alias dies after the window.
+        # The line names no removal version (#316): the promised window
+        # (0.40) passed five minors ago while the alias still works —
+        # a deadline that lies once trains users to ignore the line.
         new = commands.DEPRECATED_ALIASES[cmd]
         print(f"gov: '{cmd}' is deprecated — use 'gov {' '.join(new)}' "
-              "(removal targeted for 0.40; the alias works until then)",
-              file=sys.stderr)
+              "(the alias still works; it will be removed in a future "
+              "release)", file=sys.stderr)
         cmd, rest = new[0], [*new[1:], *rest]
 
     if cmd in commands.HELP_FLAGS:
@@ -265,6 +268,8 @@ def main(argv: list[str] | None = None) -> int:
         return update.main(rest)
     if cmd == "run":
         return gates.main(rest)
+    if cmd == "gate":
+        return gate.main(rest)
     if cmd == "receipt":
         return receipt.main(rest)
     if cmd == "self-test":

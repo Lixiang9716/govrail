@@ -9,11 +9,14 @@ English | [中文](README.zh.md)
 
 <p align="center"><img src="docs/images/totem.svg" width="150" alt="govrail totem — a whale's tail over two rails and a seal ring: power riding governed tracks, one verdict per pass"></p>
 
-A language-agnostic governance plane for agent-driven development: coding
-agents work fast in parallel while machines — not vigilance — hold the quality
-line. The runtime is Python 3 (>= 3.10) plus the tree-sitter parsers that
-power the code-stat layer — all installed by `pip install govrail`, no
-other tooling required.
+A governance plane for agent-driven development: coding agents work fast
+in parallel while machines — not vigilance — hold the quality line. The
+governance machinery (gates, notes, receipts, pairing) is language-agnostic;
+the code-facts layer runs on the eight tree-sitter grammars shipped today
+(c, cpp, go, java, javascript, python, rust, typescript — add more rules
+via `.gov/checks/<lang>.json` the same way). The runtime is Python 3
+(>= 3.10) — all installed by `pip install govrail`, no other tooling
+required.
 
 The plane ships two mechanisms: **gates** (any promise a command can check
 becomes a mechanical check) and **notes** (every non-trivial change records the
@@ -71,7 +74,9 @@ gov doctor                     # environment self-check (PATH, python, parse lay
 gov doctor --json             # machine-readable: {status, checks, problems}
 gov note new --class process --ref D6 "Title"  # scaffold a note, pre-validated
 gov init --project <path> --hooks --ci  # also install a pre-push hook and CI
-gov agent-hooks <event>                  # agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop) — the plane's presence at every step of the agent's workflow; init wires .claude/settings.json
+gov agent-hooks <event>                  # agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop): context
+                               #  injection + a small configurable deny set (.gov/hook-deny.json) + an advisory on stop;
+                               #  wired dialects: claude/codex/copilot/gemini — other hosts and MCP are out of scope
 gov uninstall --project <path>  # reverse it exactly
 gov run                        # run the default mode's gate DAG (defaultMode)
 gov run --base HEAD~1          # only the gates whose paths match the diff
@@ -104,8 +109,11 @@ gov parse <files>             # per-file function spans, line counts, depth (--j
                               # import it, never pin tree-sitter yourself.
                               # shipped grammars: c, cpp, go, java, javascript,
                               # python, rust, typescript
-gov check                     # syntax-class checks over the parse layer; suppressions counted, never invisible
+gov check                     # syntax-class checks over the parse layer; suppressions counted, never invisible;
+                              #  SKIP(nolang) names source files no rule can judge (#308)
 gov receipt verify <commit>   # was a full green run recorded on this tree? (#124)
+gov receipt show --markdown   # render receipts for a PR comment / CI job summary (#313)
+gov gate add tests --paths 'tests/**' -- pytest -q  # wire a product gate, validated + verified (#309)
 gov recall <terms>            # retrieve notes, decisions, postmortems (--any relaxes the AND)
 gov note audit               # staleness signals in implemented notes
 gov note audit --json         # machine-readable: {findings: [{file, signal}], ...}
@@ -134,9 +142,10 @@ commands:
   init             inject the plane into a project (--hooks/--ci add runners; --hooks --pre-commit adds the opt-in commit-stage gates; --adopt-new merges new shipped gates; --upgrade shows template drift; installs .claude/settings.json agent hooks unless one exists)
   uninstall        reverse init
   run              run the project's gate DAG (args forwarded to gates.py; --receipt records a tamper-evident run receipt, #124; --merge preflights the union of parallel branches in a scratch worktree before landing)
+  gate             gate-set surgery (add): wire a product gate into gates.json with schema validation and a verification run — no hand-edited JSON (#309)
   self-test        run governance rejection cases
   receipt          verifiable run receipts (verify/show): verify a cited receipt against a commit (issue #124/D42)
-  agent-hooks      agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop — govrail's presence at every point of the agent's workflow)
+  agent-hooks      agent lifecycle hooks (session-start/pre-tool-use/post-tool-use/user-prompt-submit/stop — context injection, a configurable deny set, an advisory on stop; a presence, not the enforcement; claude/codex/copilot/gemini dialects)
   verify-plane     tamper-evidence for the plane's own config (rules.md, gates.json, pairing/decisions/surfaces, .gov/rejections/**; --write re-baselines — interactive consent, --confirm-unattended for agents)
   hooks            git-hook gate runners (the installed hooks delegate here; 'hooks pre-commit' runs the gates whose 'stages' include 'pre-commit' under their configured advisory/blocking contract)
   doctor           environment self-check (PATH, python, hooks, gates schema)
