@@ -77,7 +77,8 @@ def test_demo_specimen_matches_the_plane():
     # Self-hosted cases judge the govrail repo itself (scripts/ + ruff) —
     # the demo specimen carries neither, so they never ship there.
     repo_only = {"case-import-layers.sh", "case-size-limits.sh", "case-lint.sh",
-                 "case-skill-coverage.sh", "case-postmortems.sh"}
+                 "case-skill-coverage.sh", "case-postmortems.sh",
+                 "case-surprises.sh"}
     assert not (demo_cases & repo_only), (
         f"repo-only case(s) {sorted(demo_cases & repo_only)} leaked into the "
         "demo — run scripts/sync_demo_specimen.py (it prunes them)")

@@ -1,0 +1,1 @@
+{"ts": "2026-09-19T06:02:26+00:00", "sig": "truth-source-register-stale", "expectation": "The truth-source register row 7 says the constitution has 8 rules", "reality": "It has carried 10 since rule 9 landed on 2026-09-18 (11 now, with rule 11); the register row was never updated when the rules count moved", "surface": "docs/truth-sources.md"}

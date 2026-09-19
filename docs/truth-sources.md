@@ -25,7 +25,7 @@ extends it to code constants, ledgers, and seals.
 
 | # | Truth source | Governs | Copies | Pinned by |
 |---|---|---|---|---|
-| 7 | `.gov/rules.md` | the constitution (8 rules) | `gov/templates/rules.md`, the demo specimen's copy | `tests/test_template_sync.py` |
+| 7 | `.gov/rules.md` | the constitution (11 rules) | `gov/templates/rules.md`, the demo specimen's copy | `tests/test_template_sync.py` |
 | 8 | `gov/templates/gates.json` | the adopter gate DAG base | the demo's gates (base + its typed extras); the repo root's `gates.json` is a **dogfood instance**, not the base | `tests/test_template_sync.py` |
 | 9 | `gov/templates/gov.yml` | the adopter CI shape | `gov init --ci` renders it (version pinned) | `tests/test_template_sync.py` |
 | 10 | `.gov/pairing.json` + each `*.i18n.yaml` | bilingual pair truth (git blob hashes per side) | — | `gov verify pairing` (the pairing gate) |

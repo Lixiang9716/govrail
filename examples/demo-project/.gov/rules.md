@@ -99,3 +99,17 @@ a different drift, so missing any one is a regression:
 
 Deprecated aliases are held to the same bar — they stay working through
 the deprecation window, and citations of them are not drift.
+
+## 11. Record surprises; the third recurrence is a process defect
+
+When reality differs from what you expected, record it the session you
+notice it: `gov surprise record "<what you expected>" --reality "<what
+happened>"` — the tracked, append-only ledger `.gov/surprises.jsonl`
+groups recurrences by signature, and the lookup "have I seen this
+before?" happens at record time, when it is cheapest. A surprise is
+not a bug report; it is telemetry about where the mental model and the
+process disagree. When one signature reaches three recorded surprises,
+the `surprises` gate stays red until a process note citing
+`surprise:<sig>` ships: recurring surprise means the process, not the
+person, needs to change. Recording never blocks on the threshold —
+data first, verdict in the gate.

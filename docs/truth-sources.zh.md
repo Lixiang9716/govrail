@@ -23,7 +23,7 @@
 
 | # | 真相源 | 管辖 | 副本 | 钉住它的测试 |
 |---|---|---|---|---|
-| 7 | `.gov/rules.md` | 宪法（8 条规则） | `gov/templates/rules.md`、demo 标本副本 | `tests/test_template_sync.py` |
+| 7 | `.gov/rules.md` | 宪法（11 条规则） | `gov/templates/rules.md`、demo 标本副本 | `tests/test_template_sync.py` |
 | 8 | `gov/templates/gates.json` | 采纳者 gate DAG 基底 | demo 的 gates（基底 + 其类型化特有项）；仓库根的 `gates.json` 是 **dogfood 实例**而非基底 | `tests/test_template_sync.py` |
 | 9 | `gov/templates/gov.yml` | 采纳者 CI 形态 | `gov init --ci` 渲染它（钉版本） | `tests/test_template_sync.py` |
 | 10 | `.gov/pairing.json` + 各 `*.i18n.yaml` | 双语配对真相（每侧 git blob hash） | — | `gov verify pairing`（pairing gate） |

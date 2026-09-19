@@ -55,6 +55,8 @@ HELP_ARGV: dict[str, list[list[str]]] = {
     "receipt": [["receipt", "verify", "--help"],   # --record is verify's
                 ["receipt", "show", "--help"]],    # --commit is show's
     "preset": [["preset", "apply", "--help"]],     # --project is apply's
+    "surprise": [["surprise", "record", "--help"],  # --reality/--sig/--surface
+                 ["surprise", "list", "--help"]],   # --sig/--json
 }
 
 

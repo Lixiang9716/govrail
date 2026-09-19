@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from . import (change_scope, decision,
-               gates, hookcmd, locks, recall, review, stats, task,
+               gates, hookcmd, locks, recall, review, stats, surprise, task,
                verify_conflict_markers, verify_doc_sync, verify_plane)
 from . import checks, commands, doctor, note, plane, presets, receipt, self_test, trend, whatsnew
 from . import verify_rubric
@@ -316,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         return whatsnew.main(rest)
     if cmd == "recall":
         return recall.main(rest)
+    if cmd == "surprise":
+        return surprise.main(rest)
     if cmd == "lease":
         sub = rest[0] if rest else ""
         if sub in ("-h", "--help"):

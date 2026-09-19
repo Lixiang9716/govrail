@@ -94,6 +94,7 @@ FLAGS: dict[str, set[str]] = {
     "recall": {"--any", "--snippet"},
     "audit-notes": {"--json"},
     "change-scope": {"--base"},
+    "surprise": {"--reality", "--sig", "--surface", "--json"},
     "archive-notes": {"--rebaseline"},
     "agent-hooks": {"--dialect"},  # D60: the installed platform's output contract
     "task": {"--check", "--rules", "--mode", "--timeout",
