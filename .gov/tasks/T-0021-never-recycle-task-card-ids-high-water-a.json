@@ -1,0 +1,226 @@
+{
+  "title": "Never recycle task card ids \u2014 high-water allocation over tree + git history (#327)",
+  "created": "2026-09-19T11:05:49+00:00",
+  "rules": {
+    "hash": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "files": {
+      ".gov/rules.md": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976",
+      "gates.json": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
+    }
+  },
+  "checklist": [
+    "caller verbatim: \u73b0\u5728\u5408\u5e76\u628a\u5148\u770b\u770b\u8fd8\u6709\u6ca1\u6709issue\uff0c\u6709\u7684\u8bdd\uff0c\u7ee7\u7eed\u4fee\u590d",
+    "_next_id: max(ever-seen) + 1 over current cards AND git-history paths under .gov/tasks/",
+    "regression test: committed-then-deleted card id is never reused",
+    "note + self-test + gov run green; pushed; issue closed",
+    "post-release ritual: editable reinstall, gov resolves to repo 0.47.0"
+  ],
+  "status": "done",
+  "receipt": {
+    "ts": "2026-09-19T11:07:27+00:00",
+    "mode": "all",
+    "rules": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "green": true,
+    "gates": [
+      {
+        "gate": "self-test",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 4314,
+        "detail": "PASS test_verify_notes_rejects_unknown_argument\nPASS test_verify_notes_rejects_missing_section\nPASS test_verify_notes_rejects_hollow_skeleton\nPASS test_verify_notes_rejects_wrong_section_order\nPASS test_verify_notes_rejects_unknown_lifecycle\nPASS test_note_presence_warns_then_strict_blocks\nPASS test_note_presence_rejects_ill_shaped_manifest\nPASS test_verify_notes_rejects_status_lying\nPASS test_note_presence_auto_base_catches_committed_work\nPASS test_gates_rejects_duplicate_id\nPASS test_note_presence_task_receipts_and_manifest_exemptions\nPASS test_gates_rejects_cycle\nPASS test_archive_seal_detects_tampering_and_refuses_laundering\nPASS test_gates_rejects_unknown_needs\nPASS test_gates_rejects_non_object_gate\nPASS test_gates_skips_transitively\nPASS test_gates_default_mode_scopes_run\nPASS test_gates_rejects_unknown_default_mode\nPASS test_gates_disabled_gate_never_runs\nPASS test_gates_advisory_failure_reports_without_blocking\nPASS test_run_base_scopes_gates_by_paths\nPASS test_gates_rejects_gate_in_no_mode\nPASS test_passing_gate_output_stays_visible\nPASS test_run_failure_summary_and_gate_flag\nPASS test_gates_rejects_unknown_keys\nPASS test_pairing_rejects_missing_record\nPASS test_failure_classifier_labels_tool_vs_environment\nPASS test_pairing_write_resolves_bare_stem_and_zh_side\nPASS test_pairing_custom_counterpart_convention\nPASS test_run_merge_rejects_text_conflict\nPASS test_pairing_explicit_registration_sticks\nPASS test_change_scope_suggests_from_paths\nPASS test_rubric_rejects_zero_items\nPASS test_pairing_staged_rejects_stale_sidecar\nPASS test_verify_decisions_rejects_broken_table\nPASS test_rubric_rejects_broken_structure\nPASS test_doc_sync_rejects_changelog_without_highlights\nPASS test_verify_decisions_rejects_base_collision\nPASS test_conflict_markers_bare_separator_needs_sibling\nPASS test_conflict_markers_rejects_marked_file\nPASS test_cli_init_help_no_side_effect\nPASS test_self_test_adopts_project_rejection_cases\nPASS test_coverage_warning_names_the_marker_fix\nPASS test_skills_text_command_drift_is_named\nPASS test_init_hooks_ci_roundtrip\nPASS test_registry_real_flags_are_not_drift\nPASS test_preset_rejects_unknown_name\nPASS test_d57_hubs_and_aliases\nPASS test_parse_layer_metrics_mean_what_they_claim\nPASS test_check_engine_mechanisms_are_real\nPASS test_task_check_rejects_tampered_receipt\nPASS test_text_subprocess_decodes_are_pinned\nPASS test_task_check_rejects_stale_rules_pin\nPASS test_receipt_rejects_forged_record\nPASS test_task_survives_pre37_argparse_shadow\nPASS test_receipt_rejects_partial_run_as_full_evidence\nPASS test_verify_notes_rejects_missing_section\nPASS test_verify_notes_rejects_hollow_skeleton\nPASS test_verify_notes_rejects_unknown_argument\nPASS test_note_presence_warns_then_strict_blocks\nPASS test_verify_notes_rejects_wrong_section_order\nPASS test_verify_notes_rejects_unknown_lifecycle\nPASS test_note_presence_auto_base_catches_committed_work\nPASS test_note_presence_task_receipts_and_manifest_exemptions\nPASS test_note_presence_rejects_ill_shaped_manifest\nPASS test_verify_notes_rejects_status_lying\nPASS test_archive_seal_detects_tampering_and_refuses_laundering\nPASS test_gates_rejects_duplicate_id\nPASS test_gates_rejects_cycle\nPASS test_gates_rejects_unknown_needs\nPASS test_gates_skips_transitively\nPASS test_gates_rejects_non_object_gate\nPASS test_gates_default_mode_scopes_run\nPASS test_gates_rejects_unknown_default_mode\nPASS test_gates_disabled_gate_never_runs\nPASS test_gates_advisory_failure_reports_without_blocking\nPASS test_run_base_scopes_gates_by_paths\nPASS test_run_failure_summary_and_gate_flag\nPASS test_passing_gate_output_stays_visible\nPASS test_gates_rejects_gate_in_no_mode\nPASS test_gates_rejects_unknown_keys\nPASS test_run_merge_rejects_text_conflict\nPASS test_failure_classifier_labels_tool_vs_environment\nPASS test_pairing_rejects_missing_record\nPASS test_pairing_write_resolves_bare_stem_and_zh_side\nPASS test_pairing_custom_counterpart_convention\nPASS test_pairing_explicit_registration_sticks\nPASS test_pairing_staged_rejects_stale_sidecar\nPASS test_change_scope_suggests_from_paths\nPASS test_rubric_rejects_broken_structure\nPASS test_rubric_rejects_zero_items\nPASS test_verify_decisions_rejects_broken_table\nPASS test_verify_decisions_rejects_base_collision\nPASS test_doc_sync_rejects_changelog_without_highlights\nPASS test_conflict_markers_rejects_marked_file\nPASS test_conflict_markers_bare_separator_needs_sibling\nPASS test_d57_hubs_and_aliases\nPASS test_cli_init_help_no_side_effect\nPASS test_init_hooks_ci_roundtrip\nPASS test_self_test_adopts_project_rejection_cases\nPASS test_coverage_warning_names_the_marker_fix\nPASS test_skills_text_command_drift_is_named\nPASS test_registry_real_flags_are_not_drift\nPASS test_parse_layer_metrics_mean_what_they_claim\nPASS test_check_engine_mechanisms_are_real\nPASS test_preset_rejects_unknown_name\nPASS test_text_subprocess_decodes_are_pinned\nPASS test_task_check_rejects_stale_rules_pin\nPASS test_task_check_rejects_tampered_receipt\nPASS test_task_survives_pre37_argparse_shadow\nPASS test_receipt_rejects_forged_record\nPASS test_receipt_rejects_partial_run_as_full_evidence\nPASS .gov/rejections/case-archive.sh\nPASS .gov/rejections/case-check.sh\nPASS .gov/rejections/case-conflict-markers.sh\nPASS .gov/rejections/case-decisions.sh\nPASS .gov/rejections/case-doc-budgets.sh\nPASS .gov/rejections/case-doc-sync.sh\nPASS .gov/rejections/case-import-layers.sh\nPASS .gov/rejections/case-lint.sh\nPASS .gov/rejections/case-note-presence.sh\nPASS .gov/rejections/case-notes.sh\nPASS .gov/rejections/case-persistence.sh\nPASS .gov/rejections/case-plane.sh\nPASS .gov/rejections/case-postmortems.sh\nPASS .gov/rejections/case-pre-commit-hook.sh\nPASS .gov/rejections/case-rubric.sh\nPASS .gov/rejections/case-self-test.sh\nPASS .gov/rejections/case-size-limits.sh\nPASS .gov/rejections/case-skill-coverage.sh\nPASS .gov/rejections/case-staged-derive.sh\nPASS .gov/rejections/case-staged-lint.sh\nPASS .gov/rejections/case-surprises.sh\nPASS .gov/rejections/case-task.sh\ncoverage (gate x project rejection cases): self-test(1) notes(1) pairing(1) note-presence(1) conflict-markers(1) check(1) import-layers(1) size-limits(1) rubric(1) archive(1) decisions(1) task(1) doc-sync(1) plane(1) lint(1) skill-coverage(1) postmortems(1) surprises(1) doc-budgets(1) persistence(1) staged-lint(1) staged-derive(1)\nself-test: tools 56 + project 22 \u2014 all pass",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "notes",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 90,
+        "detail": "verify_notes: 176 note(s) ok",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "pairing",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 128,
+        "detail": "verify_translation_pairing: 14 pair(s) ok",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "note-presence",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 85,
+        "detail": "verify_note_presence: base=HEAD (dirty worktree \u2014 reviewing the working tree)\nverify_note_presence: 2 non-trivial file(s), 1 note file(s) \u2014 ok",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "conflict-markers",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 89,
+        "detail": "verify_conflict_markers: base=HEAD (dirty worktree \u2014 reviewing the working tree)\nverify_conflict_markers: 4 changed file(s) scanned, no conflict markers",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "check",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 188,
+        "detail": "gov/task.py:215: [python/pathlib-text-encoding] read_text()/write_text() decode with the HOST locale codec unless encoding= is passed (#172's class); pass encoding='utf-8' explicitly\ngov/task.py:314: [python/pathlib-text-encoding] read_text()/write_text() decode with the HOST locale codec unless encoding= is passed (#172's class); pass encoding='utf-8' explicitly\ngov/task.py:399: [python/pathlib-text-encoding] read_text()/write_text() decode with the HOST locale codec unless encoding= is passed (#172's class); pass encoding='utf-8' explicitly\ngov check: 3 finding(s) (0 blocking), 0 suppressed\ngov check: base=HEAD (dirty worktree \u2014 reviewing the working tree) \u2014 4 changed file(s) in scope",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "import-layers",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 203,
+        "detail": "import-layers: 56 modules ok (9 leaves, dispatcher importers: __main__, 49 lazy edge(s) \u2014 direction-checked, cycle-exempt)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "size-limits",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 36,
+        "detail": "size-limits: 69 file(s) within limits (default 1600, 0 override(s))",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "rubric",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 79,
+        "detail": "verify_rubric: 10 item(s) ok + zh",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "archive",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 86,
+        "detail": "verify_archive: 18 archived file(s) sealed and intact",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "decisions",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 92,
+        "detail": "note: referenced by no note: D6, D7, D16, D35, D36 (informational)\nverify_decisions: 67 decision(s) ok, 5 orphan(s)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "task",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 95,
+        "detail": "done  T-0001 Fix code-review blockers on PR #286 (gov agent-hooks) \u2014 caller said: fix it\ndone  T-0002 multi-platform agent hooks: codex/copilot/gemini templates + dialect layer\ndone  T-0003 CI \u5168\u7eff\u624d\u51c6 auto-merge\uff1aall-green \u6c47\u603b job + \u5fc5\u9700\u68c0\u67e5\u5207\u6362\ndone  T-0004 \u5b9e\u73b0\u4ee3\u7801\u8bbe\u8ba1\u5951\u7ea6\uff1a\u5b88\u62a4\u95e8+\u6ce8\u518c\u8868+self_test\u5305\u5316+\u6587\u6863\uff0c\u8bc4\u5ba1\u540eauto-merge\ndone  T-0005 CI lint \u6536\u7f16\u8fdb gates\uff1a\u4fee\u51c0 ruff \u5168\u90e8\u53d1\u73b0 + lint \u95e8 + \u62d2\u7edd\u6848\u4f8b\ndone  T-0006 skill-coverage gate: every shipped command must be routed in the router skill\ndone  T-0007 postmortem 0001: the required check abstained and abstention merged (#290)\ndone  T-0008 postmortems gate + 0001 + late-entry rule\ndone  T-0009 surprise ledger: expectation-vs-reality is recorded; the third strike escalates into process improvement\ndone  T-0010 doc-budgets gate + generated-truth verifier header (DSH comparison follow-ups)\ndone  T-0011 persistence: declared format inventory + change acknowledgment chain (D63)\ndone  T-0012 staged-lint gate: ruff --fix on staged files, restaged, partial-staging protected\ndone  T-0013 staged-derive gate: derived truths regenerate at commit, never reject\ndone  T-0014 evidence discipline into the review rubric (R10)\ndone  T-0015 Resolve all 14 open issues (#308-#319, #273, #274) \u2014 P0 enforcement gaps, P1 consistency, P2 product polish\ndone  T-0016 Resolve follow-up issues #320-#325 \u2014 update choreography, task-card exits, hook noise, lock hygiene\ndone  T-0017 Slow the release cadence: batched accumulation, deliberate cut (D66)\ndone  T-0018 Windows runner fix: --confirm-unattended must disable the interactive prompt; test git identity\ndone  T-0019 Carry --reason through every automation verify-plane --write call site; pin with a repo-scan test\ndone  T-0020 Ship preset bundle files in the wheel: package-data glob fix + structural pin (#310 follow-through)\nopen  T-0021 Never recycle task card ids \u2014 high-water allocation over tree + git history (#327) (obey rules@54be320fc153)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "doc-sync",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 88,
+        "detail": "verify_doc_sync: syncing CHANGELOG.md against gov/HIGHLIGHTS.md (govrail's default layout; declare your own in .gov/docsync.json: {\"highlights\": \"<path>\"})\nverify_doc_sync: 71 version(s) paired (CHANGELOG \u2194 HIGHLIGHTS)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "plane",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 80,
+        "detail": "verify_plane: 26 plane file(s) sealed and intact",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "lint",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 12,
+        "detail": "All checks passed!",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "skill-coverage",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 33,
+        "detail": "skill-coverage: 25/26 commands routed in .agents/skills/govrail/SKILL.md (1 excluded with reason)",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "postmortems",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 24,
+        "detail": "postmortems: 2 entries intact \u2014 sections present, guardrails pointed and resolvable",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "surprises",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 39,
+        "detail": "surprises: 3 entries, 3 signature(s), 0 escalated with linked improvement",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "doc-budgets",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 26,
+        "detail": "doc-budgets: 20 doc(s) within their declared ceilings",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "persistence",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 34,
+        "detail": "persistence: 10 declared type(s), 1 record(s) \u2014 chain intact, catalog fresh",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "staged-lint",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 35,
+        "detail": "staged-lint: no staged python files \u2014 nothing to judge",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      },
+      {
+        "gate": "staged-derive",
+        "outcome": "PASS",
+        "blocking": false,
+        "duration_ms": 30,
+        "detail": "staged-derive: no derived-truth inputs staged \u2014 nothing to regenerate",
+        "selected_by": "mode:all",
+        "scoped_out": false
+      }
+    ]
+  },
+  "id": "T-0021"
+}

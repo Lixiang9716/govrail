@@ -117,8 +117,37 @@ def _load_cards() -> list[tuple[str, Path, dict]]:
     return cards
 
 
-def _next_id(cards: list[tuple[str, Path, dict]]) -> str:
+def _history_ids(root: Path) -> set[str]:
+    """Card ids that EVER existed under .gov/tasks/ per git history
+    (#327): a deleted card's file still shows in the log, so its id is
+    retired even though the tree no longer carries it. Empty outside a
+    repository (fresh scratch projects; nothing was ever committed, so
+    nothing can be cited against history)."""
+    proc = subprocess.run(
+        ["git", "-C", str(root), "log", "--name-only", "--format=",
+         "--", ".gov/tasks/"],
+        capture_output=True, text=True, encoding="utf-8",
+        errors="replace")
+    ids: set[str] = set()
+    for line in (proc.stdout or "").splitlines():
+        m = re.fullmatch(r"\.gov/tasks/(T-\d{4,})-.*\.json", line.strip())
+        if m:
+            ids.add(m.group(1))
+    return ids
+
+
+def _next_id(cards: list[tuple[str, Path, dict]], root: Path | None = None,
+             history: set[str] | None = None) -> str:
+    """High-water allocation (#327): ids are ADDRESSES, like decision
+    numbers — a freed slot is never reused, because every historical
+    citation of T-n would silently re-point at a different brief. Seen
+    ids = current cards plus every id git history ever recorded under
+    .gov/tasks/; the next id is strictly beyond the high-water mark."""
     used = {cid for cid, _, _ in cards}
+    if root is not None:
+        used |= _history_ids(root)
+    if history:
+        used |= history
     n = 1
     while f"T-{n:04d}" in used:
         n += 1
@@ -180,7 +209,7 @@ def cmd_new(args: argparse.Namespace) -> int:
     # on a half-written card).
     with lockfile.exclusive(TASKS_DIR / ".new.lock"):
         cards = _load_cards()
-        cid = _next_id(cards)
+        cid = _next_id(cards, root=Path.cwd())
         card["id"] = cid
         path = TASKS_DIR / f"{cid}-{_slugify(title)}.json"
         atomicio.write_text(path, json.dumps(card, indent=2) + "\n")

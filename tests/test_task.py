@@ -516,3 +516,39 @@ def test_new_warns_when_diff_touches_rules_bearing_files(tmp_path,
         + "\n# in-flight edit\n", encoding="utf-8")
     assert task.main(["new", "Lands the adoption"]) == 0
     assert "goes stale" in capsys.readouterr().err
+
+
+def test_never_recycle_a_committed_card_id(tmp_path, monkeypatch):
+    """#327: card ids are addresses, not free slots — a committed card
+    that was later deleted (the pre-void re-brief flow) keeps its number
+    retired; task new must allocate strictly beyond the high-water mark
+    so every historical citation of T-n names the same brief."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "First brief ever"]) == 0
+    first = next((proj / ".gov/tasks").glob("T-*.json"))
+    subprocess.run(["git", "init", "-q", "."], cwd=proj, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=proj,
+                   check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=proj,
+                   check=True)
+    subprocess.run(["git", "add", "-A"], cwd=proj, check=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm",
+                    "card"], cwd=proj, check=True)
+    # the pre-#322 re-brief flow: delete the committed card, create anew
+    first.unlink()
+    assert task.main(["new", "Re-brief of the first brief"]) == 0
+    second = next((proj / ".gov/tasks").glob("T-*.json"))
+    assert second.name.startswith("T-0002-"), second.name
+
+
+def test_history_scan_is_reserved_for_git_anchored_projects(tmp_path,
+                                                            monkeypatch):
+    """Outside git, allocation still walks past current cards (history
+    has nothing to say about a tree that was never committed)."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "One"]) == 0
+    assert task.main(["new", "Two"]) == 0
+    ids = sorted(p.name for p in (proj / ".gov/tasks").glob("T-*.json"))
+    assert ids == ["T-0001-one.json", "T-0002-two.json"]
