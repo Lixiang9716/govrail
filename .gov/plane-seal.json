@@ -48,6 +48,9 @@
     ".gov/rejections/case-size-limits.sh": {
       "sha256": "f8698a414953f03820102f03d470c9f447d1c69846998b68f3bd8cf86f57c9c8"
     },
+    ".gov/rejections/case-skill-coverage.sh": {
+      "sha256": "01329fd79c688c61511ef4e8d5fc58a788dbab9a914f9804e536c03acdd6c8bc"
+    },
     ".gov/rejections/case-task.sh": {
       "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
     },
@@ -55,11 +58,11 @@
       "sha256": "650ebb4a4b7f4cff41b0086cfa23856019123abd64adc78760a1af9ce56f6088"
     },
     "gates.json": {
-      "sha256": "76c5c71a2e1467c63889a51d409defaa26f5345b16758fa1ae7a4b1aa00729eb"
+      "sha256": "c4505df051f7de0535fa7fa9a9d40d90e8af4c142f041a8ccaa4c371df2b0b73"
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-18T20:45:49+00:00",
+    "ts": "2026-09-19T04:04:50+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }

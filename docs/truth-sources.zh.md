@@ -13,7 +13,7 @@
 | # | 真相源 | 管辖 | 副本 | 钉住它的测试 |
 |---|---|---|---|---|
 | 1 | `gov/version.py` `__version__` | 包版本 | pyproject 动态读取；发布 tag 与它校验 | release 工作流的 tag 校验 |
-| 2 | `gov/cli.py` `_COMMANDS` | 命令表面与一行描述 | README 的生成命令区块（`gov:commands` 标记） | `tests/test_docs_cli_consistency.py` |
+| 2 | `gov/commands.py` `COMMANDS` | 命令表面与一行描述 | README 的生成命令区块（`gov:commands` 标记）；govrail skill 的阶段表条目 | `tests/test_docs_cli_consistency.py`；skill-coverage 门（`scripts/check_skill_coverage.py`） |
 | 3 | `gov/audit_notes.py` `FLAGS` | 每个命令的旗标表面 | `gov <cmd> --help` 输出 | `tests/test_flag_registry.py` |
 | 4 | `gov/verify_translation_pairing.py` `DEFAULT_CONFIG` | 配对默认值（include、counterparts、exclude） | `docs/i18n/README.md` 的示例 JSON | `tests/test_truth_sources.py` |
 | 5 | `gov/note.py` `CLASSES` + `gov/verify_notes.py` `LIFECYCLES` | 笔记分类学（闭合集） | notes README 中的枚举 | `tests/test_truth_sources.py` |

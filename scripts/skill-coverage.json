@@ -1,0 +1,7 @@
+{
+  "registry": "gov/commands.py",
+  "skill": ".agents/skills/govrail/SKILL.md",
+  "exclusions": {
+    "hooks": "git-hook runner plumbing: the installed hooks delegate here and 'gov run' owns the routing judgment; agents and humans never invoke it directly"
+  }
+}
