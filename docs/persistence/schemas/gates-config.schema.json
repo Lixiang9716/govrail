@@ -1,0 +1,20 @@
+{
+  "type": "gates-config",
+  "artifact": "gates.json (+ gov/templates/gates.json)",
+  "kind": "json-object",
+  "writer": "hand-edited (reviewed diff)",
+  "readers": [
+    "gov run",
+    "gov self-test coverage matrix",
+    "hooks",
+    "CI"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "modes": "object mode -> array of gate ids",
+    "defaultMode": "string",
+    "concurrency": "integer",
+    "gates": "array of {id, label, command[], description?, allowFailure?, stages?, timeoutMs?}"
+  },
+  "notes": "Every enabled gate must be in a mode; every project gate ships a rejection case."
+}

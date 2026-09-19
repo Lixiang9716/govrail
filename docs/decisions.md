@@ -524,3 +524,11 @@
 - **状态**：已决
 - **决定**：(b)。记录永不因阈值阻塞——数据先行，裁决在门里（#265 的形状：事实与裁决分离）；"记录时看历史"在 record 时打印同词命中与既有签名，让"我是不是发生过"在最便宜的时刻被回答；签名由人挑选（记录面给全量计数辅助一致性），机器不做模糊裁决（facts, not verdicts）；账本损坏行与单侧条目（缺 expectation/reality）响亮失败（rule 5）——计数驱动阈值，静默缩水等于隐藏升级。escalation 的证明物是 process note 引用 `surprise:<sig>`，门扫 notes 语料核销。rule 11 入 .gov/rules.md，模板/演示镜像同步。发布面：命令随包分发（采用者可用），门与 rule 11 随宪法走；门先 dogfood-only，翻 template 留作有运行证据的独立决定（P0-3 惯例）。
 - **被否**：(a) 惊讶蒸发是本次问题的根源；(c) prose 台账无计数、无门、无记录时检索，正是 rule 1 要消灭的"愿望式纪律"；**记录时即拒绝第三击**——丢第三次事件的数据换强制力，而门禁用红色达成同样强制且不丢数据；**机器模糊匹配签名**——同义改写判定是裁决不是事实，误分人会学会忽略它；**账本进封印面**——它是证据遥测不是宪法（rituals.jsonl 同例）。
+
+## D63 — D63 — 持久化确认链：平面写盘格式只在带记录的变更中移动
+
+- **问题**：平面自己写盘的每一种格式——封印、rituals 台账、惊讶台账、任务卡、回执、清单、配对状态、笔记契约、gates 配置——都是采用者跨版本依赖的用户数据,但"这些形状是什么、何时变过、是否兼容"散落在代码里,没有任何机制阻止一次重构顺手改掉某格式并静默弄坏采用者的旧数据。外部对标(DSH 的 persistence-changes)证明该纪律可以完全机械化:声明清单 + 摘要链 + 锚定活文件的验证门。
+- **选项**：(a) 维持现状,格式兼容靠评审记忆;(b) 确认链:docs/persistence/schemas/ 逐类型形状描述符(从读写代码撰写)+ changes/ 逐变更确认记录(fenced JSON:类别 baseline/compatible/breaking + 逐类型 before/after 摘要)+ 生成式 catalog.json,persistence 门(blocking,自吃专用)审判链完整性、活文件摘要锚定、TODO 草稿、目录新鲜度,rule 11 式同 PR 纪律;(c) 为每种格式写 JSON Schema 并在运行时校验产物
+- **状态**：已决
+- **决定**：(b)。十条已声明类型(plane-seal、rituals-ledger、surprises-ledger、task-card、run-receipt、manifest、pairing-config、pairing-record、note-file、gates-config)入册;类别语义:compatible 旧读取者继续工作,breaking 旧读取者必须响亮拒绝且 `gov update` 拥有迁移叙事;`.gov/history/` 是 runtime-deletable(N9),确认在案但永不迁移。验证的诚实边界写进 README:链在树内自洽且锚定已声明形状,代码符合 schema 靠评审与测试——与 DSH 对其验证器的声明一致。
+- **被否**：(a) 采用者数据被静默破坏正是 #259 一类事故的根源形态;(c) 运行时校验器要对每种格式造产物、拉校验依赖,成本远超首轮收益,且描述符以可读字段表承担同等沟通职责——留作后续独立决定;**摘要锚 git 历史而非记录链**——重写历史的威胁模型(第 17 行)已由结构保证,重复收费。

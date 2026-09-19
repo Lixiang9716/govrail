@@ -1,0 +1,19 @@
+{
+  "type": "pairing-record",
+  "artifact": "docs/**/*.i18n.yaml (and other paired dirs)",
+  "kind": "yaml-object",
+  "writer": "gov verify-pairing --write",
+  "readers": [
+    "gov verify-pairing",
+    "pairing gate"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "pair": "object {en: git-blob-hash, zh: git-blob-hash}",
+    "counterpart": "string zh-side path",
+    "last_confirmed": "utc-iso-8601",
+    "en_commit": "string short sha",
+    "zh_commit": "string short sha"
+  },
+  "notes": "Blob hashes pin each side's exact content; commits are informational context."
+}

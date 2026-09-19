@@ -40,6 +40,7 @@ extends it to code constants, ledgers, and seals.
 
 | # | Truth source | Governs | Pinned by |
 |---|---|---|---|
+| 18 | `docs/persistence/schemas/` + `catalog.json` | the declared shapes of every format the plane writes to disk | the acknowledgment records in `docs/persistence/changes/` (digest-chained) | the persistence gate (`scripts/check_persistence.py`) |
 | 17 | git history | the adoption record: a seal present in history can never silently become "never adopted" (N7); past ritual-ledger and pairing states survive in it | structural — history rewrite is outside any worktree tool's threat model |
 
 ## Explicitly NOT truth sources

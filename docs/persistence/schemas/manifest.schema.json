@@ -1,0 +1,19 @@
+{
+  "type": "manifest",
+  "artifact": ".gov/manifest.json",
+  "kind": "json-object",
+  "writer": "gov/plane.py init/update",
+  "readers": [
+    "gov update",
+    "doctor",
+    "whatsnew"
+  ],
+  "runtime": "tracked",
+  "fields": {
+    "version": "string govrail version at init/last update",
+    "created": "array of created paths",
+    "gitHooks": "array",
+    "templates": "object path -> sha256"
+  },
+  "notes": "The adoption anchor the update machinery reasons from."
+}

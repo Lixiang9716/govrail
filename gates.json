@@ -19,7 +19,8 @@
       "skill-coverage",
       "postmortems",
       "surprises",
-      "doc-budgets"
+      "doc-budgets",
+      "persistence"
     ],
     "quick": [
       "notes",
@@ -245,6 +246,15 @@
         "scripts/check_doc_budgets.py"
       ],
       "description": "every standing doc in scripts/doc-budgets.json stays within its character ceiling — prose grows one paragraph at a time until the reading cost is paid forever; ledgers (decisions, CHANGELOG) are deliberately unjudged"
+    },
+    {
+      "id": "persistence",
+      "label": "declared persisted-format shapes change only with a chained acknowledgment record",
+      "command": [
+        "python3",
+        "scripts/check_persistence.py"
+      ],
+      "description": "every schema descriptor in docs/persistence/schemas chains through the records in docs/persistence/changes to a live-digest anchor — touching a format the plane writes without acknowledging the compatibility impact is red; catalog.json (generated) must be fresh"
     }
   ]
 }
