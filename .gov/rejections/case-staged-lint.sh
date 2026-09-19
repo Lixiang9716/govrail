@@ -9,6 +9,13 @@ scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 
 script="$PWD/scripts/staged_lint.py"
+# The gate's checker is ruff; in environments without it (wheel-only
+# installs, minimal containers) the gate itself would report MISSING —
+# this proof skips NAMED, never silently passed (case-lint precedent).
+if ! command -v ruff >/dev/null 2>&1; then
+  echo "case-staged-lint: SKIP — ruff not installed here; the staged-lint gate would report MISSING"
+  exit 0
+fi
 git init -q "$scratch" && cd "$scratch" || exit 2
 git config user.email t@t && git config user.name t
 

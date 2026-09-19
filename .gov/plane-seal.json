@@ -64,7 +64,7 @@
       "sha256": "8d86367cfd87c05cebf3af36c78a5b7fe85a505ef3d41486bf1affd14501f6ca"
     },
     ".gov/rejections/case-staged-lint.sh": {
-      "sha256": "40d8fc731d6a29cfd0ad725785a6639152033e376d154264ef8457f788d3deae"
+      "sha256": "b04b6f5f0f622b241c9ab21a24f68f3fde30081956dba11420c879655e3c46e7"
     },
     ".gov/rejections/case-surprises.sh": {
       "sha256": "0203b1e4c17ffd6112ca56076e64f66a7b37024525d28b1e35b8d969e41d4e53"
@@ -80,7 +80,7 @@
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-19T07:45:51+00:00",
+    "ts": "2026-09-19T08:13:47+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }

@@ -58,10 +58,16 @@ def main(argv: list[str] | None = None) -> int:
         (fully_staged if not worktree_diff else partial).append(f)
 
     if fully_staged:
-        subprocess.run(
-            ["ruff", "check", "--fix", *fully_staged],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace")
+        try:
+            subprocess.run(
+                ["ruff", "check", "--fix", *fully_staged],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace")
+        except FileNotFoundError:
+            print("staged-lint: ruff not installed — the lint gate "
+                  "would report MISSING (dev dependency, dogfood-only)",
+                  file=sys.stderr)
+            raise SystemExit(2)
         fixed = [f for f in fully_staged
                  if _git("diff", "--name-only", "--", f).strip()]
         if fixed:
@@ -69,9 +75,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"staged-lint: autofixed and restaged {len(fixed)} "
                   f"file(s): {', '.join(fixed)}")
 
-    remaining = subprocess.run(
-        ["ruff", "check", *staged],
-        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        remaining = subprocess.run(
+            ["ruff", "check", *staged],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+    except FileNotFoundError:
+        print("staged-lint: ruff not installed — the lint gate "
+              "would report MISSING (dev dependency, dogfood-only)",
+              file=sys.stderr)
+        raise SystemExit(2)
     if remaining.returncode != 0:
         print(remaining.stdout, end="")
         if partial:
