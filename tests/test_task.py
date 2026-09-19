@@ -552,3 +552,105 @@ def test_history_scan_is_reserved_for_git_anchored_projects(tmp_path,
     assert task.main(["new", "Two"]) == 0
     ids = sorted(p.name for p in (proj / ".gov/tasks").glob("T-*.json"))
     assert ids == ["T-0001-one.json", "T-0002-two.json"]
+
+
+def test_close_receipt_is_judged_by_the_shared_predicate(tmp_path,
+                                                         monkeypatch):
+    """#329: close writes what check READS — a scope-limited close whose
+    run carries NOT_SELECTED records must produce a receipt the task
+    gate accepts (the writer/reader drift bricked cards before)."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["noop"], "gov": ["scoped"]},
+        "gates": [{"id": "noop", "command": PASS},
+                  {"id": "scoped", "command": PASS,
+                   "paths": ["docs/**"]}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "Scope-limited close"]) == 0
+    assert task.main(["close", "T-0001", "--mode", "all",
+                      "--timeout", "60"]) == 0
+    card = json.loads(next((proj / ".gov/tasks").glob(
+        "T-0001-*.json")).read_text(encoding="utf-8"))
+    assert any(g["outcome"] == "NOT_SELECTED" for g in card["receipt"]["gates"])
+    assert task.main(["check"]) == 0, "the written receipt must read green"
+
+
+def test_void_exits_a_done_card_with_a_rejected_receipt(tmp_path,
+                                                        monkeypatch):
+    """#329's state-machine hole: done + rejected receipt refused close
+    AND void — the only exits were git surgery. Void now validates the
+    receipt before trusting its presence."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "Will be bricked"]) == 0
+    card_path = next((proj / ".gov/tasks").glob("T-*.json"))
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    card["status"] = "done"
+    card["receipt"] = {"ts": "t", "mode": "all", "green": True,
+                       "rules": card["rules"]["hash"],
+                       "gates": [{"gate": "boom", "outcome": "FAIL",
+                                  "blocking": True}]}
+    card_path.write_text(json.dumps(card, indent=2) + "\n",
+                         encoding="utf-8")
+    assert task.main(["check"]) == 1            # the bricked verdict
+    with pytest.raises(SystemExit):  # still owes --reason (exit 2)
+        task.main(["void", "T-0001"])
+    assert task.main(["void", "T-0001", "--reason",
+                      "receipt rejected — exiting the bricked state"]) == 0
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    assert card["status"] == "voided"
+    assert task.main(["check"]) == 0
+
+
+def test_void_still_refuses_a_verifiably_green_done_card(tmp_path,
+                                                         monkeypatch):
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "Legitimately done"]) == 0
+    card_path = next((proj / ".gov/tasks").glob("T-*.json"))
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    card["status"] = "done"
+    card["receipt"] = {"ts": "t", "mode": "all", "green": True,
+                       "rules": card["rules"]["hash"],
+                       "gates": [{"gate": "ok", "outcome": "PASS",
+                                  "blocking": False}]}
+    card_path.write_text(json.dumps(card, indent=2) + "\n",
+                         encoding="utf-8")
+    assert task.main(["void", "T-0001", "--reason", "no cause"]) == 2
+
+
+def test_refresh_receipt_reruns_a_bricked_done_card(tmp_path, monkeypatch):
+    """#329's optional exit: close --refresh-receipt re-runs the gates on
+    a done card whose receipt fails validation and rewrites it; a
+    verifiable green receipt refuses the refresh."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["noop"]},
+        "gates": [{"id": "noop", "command": PASS}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "Bricked by an old contract"]) == 0
+    card_path = next((proj / ".gov/tasks").glob("T-*.json"))
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    card["status"] = "done"
+    card["receipt"] = {"ts": "t", "mode": "all", "green": True,
+                       "rules": card["rules"]["hash"],
+                       "gates": [{"gate": "boom", "outcome": "FAIL",
+                                  "blocking": True}]}
+    card_path.write_text(json.dumps(card, indent=2) + "\n",
+                         encoding="utf-8")
+    assert task.main(["close", "T-0001", "--mode", "all",
+                      "--timeout", "60"]) == 2   # done, flag missing
+    assert task.main(["close", "T-0001", "--mode", "all", "--timeout",
+                      "60", "--refresh-receipt"]) == 0
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    assert all(g["outcome"] == "PASS" for g in card["receipt"]["gates"])
+    assert task.main(["check"]) == 0
+    # a verifiable green receipt refuses the refresh
+    assert task.main(["close", "T-0001", "--mode", "all", "--timeout",
+                      "60", "--refresh-receipt"]) == 2

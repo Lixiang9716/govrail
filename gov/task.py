@@ -220,6 +220,23 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def _receipt_failures(gates_records: list) -> list[str]:
+    """Gate ids whose outcome fails the green judgment — the ONE
+    predicate for both writing (close, #323) and reading (_check_receipt,
+    #329): the writer and the reader of a receipt must never disagree
+    again. PASS passes; NON_RUN outcomes (SCOPED_OUT/NOT_SELECTED/
+    NOT_RUN/DISABLED) are bookkeeping, not verdicts; everything else —
+    FAIL/TIMEOUT/MISSING and SKIP (evidence genuinely missing) — fails.
+    """
+    try:
+        from . import gates as gates_mod
+    except ImportError:  # direct-script execution
+        import gates as gates_mod
+    ok = {"PASS", *gates_mod.NON_RUN_OUTCOMES}
+    return [g.get("gate", "?") for g in gates_records
+            if not isinstance(g, dict) or g.get("outcome") not in ok]
+
+
 def _check_receipt(cid: str, card: dict) -> list[str]:
     """Problems with a done card's receipt; empty means verifiable green."""
     problems: list[str] = []
@@ -229,8 +246,7 @@ def _check_receipt(cid: str, card: dict) -> list[str]:
     gates = receipt.get("gates")
     if not isinstance(gates, list) or not gates:
         return [f"{cid}: receipt records no gate run"]
-    bad = [g.get("gate", "?") for g in gates
-           if not isinstance(g, dict) or g.get("outcome") != "PASS"]
+    bad = _receipt_failures(gates)
     if bad:
         problems.append(f"{cid}: receipt run is not all-green "
                         f"({', '.join(bad)})")
@@ -297,9 +313,19 @@ def cmd_void(args: argparse.Namespace) -> int:
     cards = _load_cards()
     path, card = _resolve(cards, args.id)
     if card.get("status") == "done":
-        print(f"task: {card['id']} is done (green receipt on file) — "
-              "nothing to void", file=sys.stderr)
-        return 2
+        # #329: trust the receipt's VALIDITY, not its presence — a done
+        # card whose receipt fails validation is exactly the bricked
+        # state this exit exists for (check is red on it, close refuses
+        # it); voiding is the tool-sanctioned way out.
+        problems = _check_receipt(card["id"], card)
+        if problems:
+            print(f"task: {card['id']} is done but its receipt fails "
+                  f"validation ({'; '.join(problems)}) — voiding is the "
+                  "exit from this bricked state")
+        else:
+            print(f"task: {card['id']} is done (green receipt on file) — "
+                  "nothing to void", file=sys.stderr)
+            return 2
     if card.get("status") == "voided":
         reason = card.get("void", {}).get("reason", "no reason recorded")
         print(f"task: {card['id']} is already voided ({reason})",
@@ -326,9 +352,23 @@ def cmd_close(args: argparse.Namespace) -> int:
     cards = _load_cards()
     path, card = _resolve(cards, args.id)
     if card.get("status") != "open":
-        print(f"task: {card['id']} is {card.get('status')!r}, not open",
-              file=sys.stderr)
-        return 2
+        # #329: a done card whose receipt FAILS validation is a bricked
+        # state (check red, void refused, close refused) —
+        # --refresh-receipt is its exit: re-run the gates and rewrite
+        # the receipt. A done card with a verifiable green receipt has
+        # nothing to refresh.
+        if card.get("status") == "done" and args.refresh_receipt:
+            problems = _check_receipt(card["id"], card)
+            if not problems:
+                print(f"task: {card['id']} has a verifiable green receipt "
+                      "— nothing to refresh", file=sys.stderr)
+                return 2
+            print(f"task: refreshing {card['id']}'s receipt — the recorded "
+                  f"one fails validation ({'; '.join(problems)})")
+        else:
+            print(f"task: {card['id']} is {card.get('status')!r}, not open",
+                  file=sys.stderr)
+            return 2
     pinned = card.get("rules", {}).get("hash")
     if pinned != combined:
         print(f"task: {card['id']} pins rules@{str(pinned)[:12]} but the "
@@ -350,10 +390,6 @@ def cmd_close(args: argparse.Namespace) -> int:
               "steal it knowingly, or have the holder release first",
               file=sys.stderr)
         return 2
-    try:
-        from . import gates as gates_mod
-    except ImportError:  # direct-script execution
-        import gates as gates_mod
     argv = [sys.executable, "-m", "gov", "run", "--json",
             "--mode", args.mode]
     try:
@@ -370,18 +406,13 @@ def cmd_close(args: argparse.Namespace) -> int:
         print("task: gate run produced no JSON report\n"
               f"{proc.stdout}\n{proc.stderr}", file=sys.stderr)
         return 1
-    # #323: a mode that does not cover every enabled gate yields
-    # NOT_SELECTED (and scoped runs yield SCOPED_OUT) records for gates
-    # that never RAN — counting them as failures made close impossible
-    # in any repo whose enabled set outgrew the mode, with no valid mode
-    # left. Non-run is bookkeeping, not a verdict (trend's NON_RUN
-    # contract, receipt semantics); SKIP stays a refusal: a dependency
-    # failed, so evidence is genuinely missing.
-    non_run = getattr(gates_mod, "NON_RUN_OUTCOMES",
-                      {"SCOPED_OUT", "NOT_SELECTED", "NOT_RUN", "DISABLED"})
-    ok_outcomes = {"PASS", *non_run}
-    failed = [r.get("gate", "?") for r in records
-              if r.get("outcome") not in ok_outcomes]
+    # #323/#329: the green judgment is the shared predicate — close
+    # writes and _check_receipt reads the SAME rule, or the two drift
+    # apart (a close whose scope-limited run left NOT_SELECTED records
+    # used to write receipts the checker then rejected, bricking the
+    # card). SKIP stays a refusal: a dependency failed, so evidence is
+    # genuinely missing.
+    failed = _receipt_failures(records)
     if failed:
         # A card closes only on an all-green run; a red run changes nothing
         # (the run itself is already in .gov/history/gates.jsonl).
@@ -594,6 +625,11 @@ def main(argv: list[str] | None = None) -> int:
     p_close.add_argument("--agent", metavar="ID",
                          help="closer identity for the lease check (default: "
                               "$GOV_CALLER, then user@host)")
+    p_close.add_argument("--refresh-receipt", action="store_true",
+                         help="on a done card whose receipt fails "
+                              "validation (bricked state, #329): re-run "
+                              "the gates and rewrite the receipt; a "
+                              "verifiable green receipt refuses")
     p_close.add_argument("--force", action="store_true",
                          help="close even when the card is claimed by another "
                               "holder — a knowing steal of their live lease")

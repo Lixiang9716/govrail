@@ -99,7 +99,7 @@ FLAGS: dict[str, set[str]] = {
     "agent-hooks": {"--dialect"},  # D60: the installed platform's output contract
     "task": {"--check", "--rules", "--mode", "--timeout",
              "--agent", "--ttl", "--wait", "--json", "--force",
-             "--reason"},  # across subcommands; --agent/--force on close, --reason on void (#322)
+             "--reason", "--refresh-receipt"},  # across subcommands; --agent/--force on close, --reason on void (#322)
     "preset": {"--project"},  # on the `apply` subcommand (list/show are flagless)
     "update": {"--apply", "--confirm-unattended"},
     "acquire": {"--agent", "--ttl", "--wait"},
