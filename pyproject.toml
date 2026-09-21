@@ -57,7 +57,6 @@ dependencies = [
     "tree-sitter-scala",
     "tree-sitter-sql",
     "tree-sitter-svelte",
-    "tree-sitter-tlaplus",
     "tree-sitter-toml",
     "tree-sitter-yaml",
     "tree-sitter-zig",

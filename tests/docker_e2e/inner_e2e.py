@@ -3205,7 +3205,7 @@ def stats_empty_tree(base):
         "haskell", "html", "java", "javascript", "json", "julia", "kotlin",
         "lua", "make", "markdown", "nix", "objc", "ocaml", "php",
         "powershell", "python", "ruby", "rust", "scala", "sql",
-        "svelte", "swift", "tlaplus", "toml", "typescript", "yaml", "zig",
+        "svelte", "swift", "toml", "typescript", "yaml", "zig",
     }, sorted(v)
     # a grammar-first pack's rule echo proves the pack LOADED, not merely
     # that a row exists

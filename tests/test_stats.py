@@ -512,7 +512,6 @@ SNIPPETS: dict[str, tuple[str, str, int]] = {
     "sql": ("q.sql", "SELECT * FROM t WHERE a IN (SELECT b FROM u);\n", 0),
     "svelte": ("C.svelte", "<script>let a = 1;</script>\n{#if a}<p>x</p>{/if}\n", 0),
     "swift": ("M.swift", "func go(_ x: Int) -> Int {\n    if x > 0 {\n        return x\n    }\n    return 0\n}\n", 1),
-    "tlaplus": ("M.tla", "---- MODULE M ----\nOp == IF x THEN 1 ELSE 2\n====\n", 1),
     "toml": ("c.toml", "[a]\nb = 1\n", 0),
     "typescript": ("m.ts", "function f(): number { if (true) { return 1; } return 0; }\n", 1),
     "yaml": ("c.yaml", "a:\n  - 1\n  - 2\n", 0),
@@ -605,3 +604,28 @@ class TestUnavailableGrammar:
         reports, skipped = stats.parse_report([tmp_path / "x.adb"])
         assert not reports
         assert skipped and "language pack 'ada'" in skipped[0]["reason"], skipped
+
+
+class TestFactoryShape:
+    def test_every_pack_factory_returns_a_capsule_not_a_pointer(self):
+        """The Windows-ABI class, caught locally instead of in CI.
+
+        A grammar whose factory returns a raw POINTER int works on Linux
+        and macOS and dies on Windows: the binding casts the int to
+        ``c_ulong``, which is 32-bit there, so a 64-bit pointer overflows
+        (``OverflowError: Python int too large to convert to C unsigned
+        long``). Every shipped grammar returns a PyCapsule; tlaplus
+        returned an int and was dropped from the set rather than shipped
+        broken on one platform — the same check that found it runs here.
+        """
+        import importlib
+        for name in parse.available():
+            raw = json.loads((Path("gov/langs") / f"{name}.json")
+                             .read_text(encoding="utf-8"))
+            mod = importlib.import_module(raw["grammar"])
+            factory = raw.get("factory") or "language"
+            fn = getattr(mod, factory, None) or getattr(mod, "language_typescript")
+            assert type(fn()).__name__ == "PyCapsule", (
+                f"{name}: {raw['grammar']}.{factory}() returns "
+                f"{type(fn()).__name__}, not a PyCapsule — that shape "
+                "overflows on Windows (see the docstring)")
