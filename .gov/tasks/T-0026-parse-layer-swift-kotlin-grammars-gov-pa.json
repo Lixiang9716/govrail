@@ -1,0 +1,20 @@
+{
+  "title": "parse layer: Swift + Kotlin grammars, gov parse walks the pack set (#335, #351)",
+  "created": "2026-09-21T09:14:19+00:00",
+  "rules": {
+    "hash": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "files": {
+      ".gov/rules.md": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976",
+      "gates.json": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
+    }
+  },
+  "checklist": [
+    "pyproject carries tree-sitter-swift + tree-sitter-kotlin; wheel ships both packs",
+    "packs load against their grammars; known-answer fixtures for depths and spans",
+    "gov parse covers a pack without check rules; README pair states ten grammars",
+    "full suite + gov run green; PR merged; #335/#351 commented and closed"
+  ],
+  "status": "open",
+  "receipt": null,
+  "id": "T-0026"
+}

@@ -1,0 +1,49 @@
+{
+  "classes": [
+    "class_declaration",
+    "object_declaration"
+  ],
+  "comment": [
+    "line_comment",
+    "block_comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_declaration",
+    "anonymous_function",
+    "lambda_literal"
+  ],
+  "globs": [
+    "*.kt",
+    "*.kts"
+  ],
+  "grammar": "tree_sitter_kotlin",
+  "nesting": [
+    "if_expression",
+    "for_statement",
+    "while_statement",
+    "do_while_statement",
+    "when_expression",
+    "try_expression"
+  ],
+  "string": [
+    "string_literal",
+    "multiline_string_literal"
+  ]
+}

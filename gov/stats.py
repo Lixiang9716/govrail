@@ -365,14 +365,17 @@ def parse_report(paths: list[Path],
     ``paths``, PLUS the honest complement (#270): files the walk saw but
     no grammar claims, returned as ``skipped`` — a size gate must be
     able to tell "parsed clean" from "never parsed at all"."""
-    try:
-        from .checks import available_langs
-    except ImportError:  # direct script execution
-        from checks import available_langs
-    names = [lang] if lang else available_langs()
+    from . import parse
+    # #335: the parsed set is every installed PACK, the same set
+    # `gov stats` walks — not the rules-bearing set the check gate
+    # judges. A size gate reads structure facts and must see a language
+    # whose grammar shipped even when no `gov/checks/<lang>.json` rules
+    # exist for it (Swift and Kotlin land exactly that way: grammar
+    # first, rules only when they can be honest).
+    names = [lang] if lang else parse.available()
     reports: list[dict] = []
     skipped: list[dict] = []
-    from . import parse
+
     for target in paths:
         target = Path(target)
         if target.is_dir():
@@ -418,11 +421,9 @@ def parse_main(argv: list[str] | None = None) -> int:
     try:
         from . import parse as parse_layer
         parse_unavailable = parse_layer.ParseUnavailable
-        from .checks import available_langs
     except ImportError:  # direct script execution
         import parse as parse_layer
-        from checks import available_langs
-    names = available_langs()
+    names = parse_layer.available()
     parser = argparse.ArgumentParser(
         prog="gov parse",
         description="Per-file structure facts from the parse layer "
