@@ -12,10 +12,10 @@ English | [中文](README.zh.md)
 A governance plane for agent-driven development: coding agents work fast
 in parallel while machines — not vigilance — hold the quality line. The
 governance machinery (gates, notes, receipts, pairing) is language-agnostic;
-the code-facts layer runs on the forty-one tree-sitter grammars shipped
+the code-facts layer runs on the forty tree-sitter grammars shipped
 today — ada, bash, c, c-sharp, cpp, cuda, dart, elixir, fortran, go,
 groovy, haskell, java, javascript, julia, kotlin, lua, nix, objective-c,
-ocaml, php, powershell, python, ruby, rust, scala, solidity, swift,
+ocaml, php, powershell, python, ruby, rust, scala, swift,
 tlaplus, typescript, zig, plus the markup and data formats a size gate
 still counts (css, html, json, make, markdown, svelte, toml, yaml, sql,
 embedded templates); `gov doctor` names the installed set. The check gate

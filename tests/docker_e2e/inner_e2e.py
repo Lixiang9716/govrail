@@ -3204,7 +3204,7 @@ def stats_empty_tree(base):
         "elixir", "embedded-template", "fortran", "go", "groovy",
         "haskell", "html", "java", "javascript", "json", "julia", "kotlin",
         "lua", "make", "markdown", "nix", "objc", "ocaml", "php",
-        "powershell", "python", "ruby", "rust", "scala", "solidity", "sql",
+        "powershell", "python", "ruby", "rust", "scala", "sql",
         "svelte", "swift", "tlaplus", "toml", "typescript", "yaml", "zig",
     }, sorted(v)
     # a grammar-first pack's rule echo proves the pack LOADED, not merely

@@ -55,7 +55,6 @@ dependencies = [
     "tree-sitter-powershell",
     "tree-sitter-ruby",
     "tree-sitter-scala",
-    "tree-sitter-solidity",
     "tree-sitter-sql",
     "tree-sitter-svelte",
     "tree-sitter-tlaplus",

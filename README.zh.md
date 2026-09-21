@@ -9,7 +9,7 @@
 
 <p align="center"><img src="docs/images/totem.svg" width="150" alt="govrail 图腾——鲸尾悬于双轨与封印环之上：力量行驶在受治的轨道，每次通过只有一个判决"></p>
 
-一个面向 agent 驱动开发的治理平面：让 coding agent 快速并行工作，同时由机器——而非人的警惕——守住质量线。治理机制（门禁、笔记、回执、配对）与语言无关；代码事实层跑在今天随包分发的 41 种 tree-sitter grammar 上——ada、bash、c、c-sharp、cpp、cuda、dart、elixir、fortran、go、groovy、haskell、java、javascript、julia、kotlin、lua、nix、objc、ocaml、php、powershell、python、ruby、rust、scala、solidity、sql、svelte、swift、tlaplus、typescript、zig，以及尺寸门禁仍要计数的标记/数据格式（css、html、json、make、markdown、toml、yaml、erb 模板）；`gov doctor` 会列出已装集合。check 门禁只判有规则的语言（自定义规则照旧加 `.gov/checks/<lang>.json`），而 `gov parse`/`gov stats` 读全部已装语法。运行时是 Python 3（>= 3.10）——全部由 `pip install govrail` 安装，无需其他工具。
+一个面向 agent 驱动开发的治理平面：让 coding agent 快速并行工作，同时由机器——而非人的警惕——守住质量线。治理机制（门禁、笔记、回执、配对）与语言无关；代码事实层跑在今天随包分发的 40 种 tree-sitter grammar 上——ada、bash、c、c-sharp、cpp、cuda、dart、elixir、fortran、go、groovy、haskell、java、javascript、julia、kotlin、lua、nix、objc、ocaml、php、powershell、python、ruby、rust、scala、sql、svelte、swift、tlaplus、typescript、zig，以及尺寸门禁仍要计数的标记/数据格式（css、html、json、make、markdown、toml、yaml、erb 模板）；`gov doctor` 会列出已装集合。check 门禁只判有规则的语言（自定义规则照旧加 `.gov/checks/<lang>.json`），而 `gov parse`/`gov stats` 读全部已装语法。运行时是 Python 3（>= 3.10）——全部由 `pip install govrail` 安装，无需其他工具。
 
 平面提供两个机制：**门禁**（任何能被命令检查的承诺都变成机械检查）和**笔记**（每个非平凡改动记录决策、被打败的方案与后果）。双语配对让对外展示文档保持同步。
 

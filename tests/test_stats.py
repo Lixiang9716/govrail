@@ -509,9 +509,6 @@ SNIPPETS: dict[str, tuple[str, str, int]] = {
     "ruby": ("m.rb", "def go(x)\n  if x > 0\n    x\n  end\nend\n", 1),
     "rust": ("m.rs", "fn go(x: i32) -> i32 {\n    if x > 0 {\n        return x;\n    }\n    0\n}\n", 1),
     "scala": ("M.scala", "object M { def go(x: Int): Int = if (x > 0) x else 0 }\n", 1),
-    "solidity": ("C.sol",
-                 "pragma solidity ^0.8.0;\ncontract C { function go(uint x) public pure "
-                 "returns (uint) { if (x > 0) { return x; } return 0; } }\n", 1),
     "sql": ("q.sql", "SELECT * FROM t WHERE a IN (SELECT b FROM u);\n", 0),
     "svelte": ("C.svelte", "<script>let a = 1;</script>\n{#if a}<p>x</p>{/if}\n", 0),
     "swift": ("M.swift", "func go(_ x: Int) -> Int {\n    if x > 0 {\n        return x\n    }\n    return 0\n}\n", 1),

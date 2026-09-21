@@ -1,4 +1,4 @@
-# Agent Note: the parse layer ships every tree-sitter grammar — 41 packs, a declared factory, and the footprint stated out loud
+# Agent Note: the parse layer ships every tree-sitter grammar — 40 packs, a declared factory, and the footprint stated out loud
 
 Status: implemented
 
@@ -19,19 +19,23 @@ covers the languages it happened to ship yesterday".
 
 ## Decision
 
-- **The parse layer now ships 41 packs**, i.e. every tree-sitter grammar
+- **The parse layer now ships 40 packs**, i.e. every tree-sitter grammar
   whose wheels cover the platform matrix the project itself verifies:
   linux glibc x86_64/aarch64, macOS x86_64/arm64, Windows amd64. That is
-  the previous ten plus thirty-one: ada, bash, c-sharp, css, cuda, dart,
+  the previous ten plus thirty: ada, bash, c-sharp, css, cuda, dart,
   elixir, embedded-template, fortran, groovy, haskell, hcl, html, json,
   julia, lua, make, markdown, nix, objc, ocaml, php, powershell, ruby,
   scala, solidity, sql, svelte, tlaplus, toml, yaml, zig (thirty-two
   packages total, one per language; `gov stats` names the set).
 - **Excluded, with the reason**: `perl` (no macOS x86_64 wheel),
-  `dockerfile` (2 of 7 platforms), `cmake` and `graphql` (1 of 7). They
-  are one `pip` gap away from joining — the packs are ~10 lines each —
-  and naming them here is what keeps the omission a decision instead of
-  an oversight. The one covered platform gap that remains is Kotlin's
+  `dockerfile` (2 of 7 platforms), `cmake` and `graphql` (1 of 7), and
+  `solidity` — whose wheel COPIES fine on Windows but cannot be loaded
+  there (its ABI disagrees with the platform build; the named
+  ParseUnavailable that `gov doctor` now prints caught it in the Windows
+  unit job, which is the whole reason grammar-construction failures are
+  wrapped instead of escaping as a raw traceback). Each is one `pip` gap
+  away from joining — the packs are ~10 lines each — and naming them
+  here is what keeps the omission a decision instead of an oversight. The one covered platform gap that remains is Kotlin's
   musl-aarch64 wheel (source build there), stated in the previous note.
 - **Packs declare their factory when the binding does not ship
   `language()`**: php ships only `language_php`/`language_php_only` and
@@ -46,7 +50,7 @@ covers the languages it happened to ship yesterday".
   than silently exempted. Nothing in the plane reads a zero as
   "missing"; the `rule` echo on every stats row says which kinds were
   counted.
-- **Every pack is proven against its language as WRITTEN**: a 41-entry
+- **Every pack is proven against its language as WRITTEN**: a 40-entry
   fixture table parses one tiny valid snippet per language and asserts
   zero ERROR/missing nodes plus at least one span from the pack's own
   `functions` kinds. That catches the failure the load-time kind check
@@ -59,9 +63,9 @@ covers the languages it happened to ship yesterday".
   4.3). That is a real cost against the "light" posture, and it is the
   maintainer's to spend: the eight heaviest are ~55 MB of it if a trim
   is ever wanted, and removing a language is one dependency line plus
-  one pack file. `gov stats` on this repository with 41 packs runs in
+  one pack file. `gov stats` on this repository with 40 packs runs in
   ~1.1 s.
-- README (both sides) states forty-one grammars and the
+- README (both sides) states forty grammars and the
   packs-vs-rules axis; the docker e2e scenario pins the shipped set by
   NAME (a vanished pack and a silently-arrived one are both
   regressions).
