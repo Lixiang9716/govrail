@@ -2963,6 +2963,7 @@ def task_receipt_audit(base):
     gov("task", "new", "Do the audit", "--check", "item one", cwd=p)
     r = gov("task", "check", cwd=p)
     assert "open  T-0001" in r.stdout, r.stdout
+    assert "1 unticked item(s)" in r.stdout, r.stdout  # #358: named, advisory
     # a rules.md edit makes the open card's pin stale (governance moved)
     rules = p / ".gov" / "rules.md"
     rules.write_text(
@@ -3213,6 +3214,12 @@ def agent_lifecycle_receipt(base):
     gov("task", "new", "Ship the fix", "--check", "note added", cwd=p)
     commit_all(p, "card")   # an agent commits before closing; a dirty
     # tree makes the advisory pairing gate non-green and close refuses
+    # #358: the checklist is a contract — close refuses while an item is
+    # unticked, so the arc ticks it first (the canonical marker) and the
+    # refusal itself is pinned below.
+    r = gov("task", "close", "T-0001", cwd=p, expect=1)
+    assert "unticked checklist item" in r.stderr, r.stderr
+    gov("task", "tick", "T-0001", "1", cwd=p)
     gov("task", "close", "T-0001", cwd=p)
     card_path = next((p / ".gov" / "tasks").glob("T-0001-*.json"))
     card = json.loads(card_path.read_text(encoding="utf-8"))

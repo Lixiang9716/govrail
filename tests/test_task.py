@@ -188,8 +188,21 @@ def _lease_dir(proj: Path) -> Path:
 
 
 def _task_lease(proj: Path, cid: str = "T-0001") -> Path:
+    """The lease file for the card `cid` names.
+
+    Since #332 the key is the CARD's identity (id + its own created
+    stamp), not the bare id — two worktrees' T-0001s are different cards
+    — so the helper reads the card exactly as the commands do.
+    """
     from gov.locks import _lock_stem
-    return _lease_dir(proj) / (_lock_stem(f"task/{cid}") + ".json")
+    card = _card_of(proj, cid)
+    return _lease_dir(proj) / (_lock_stem(task._lease_resource(card)) + ".json")
+
+
+def _card_of(proj: Path, cid: str) -> dict:
+    for path in sorted((proj / ".gov" / "tasks").glob(f"{cid}-*.json")):
+        return json.loads(path.read_text(encoding="utf-8"))
+    raise AssertionError(f"no card {cid} under {proj}/.gov/tasks")
 
 
 def test_claim_leases_open_card_and_announces(tmp_path, monkeypatch, capsys):
@@ -203,9 +216,10 @@ def test_claim_leases_open_card_and_announces(tmp_path, monkeypatch, capsys):
     assert task.main(["claim", "T-0001", "--ttl", "120"]) == 0
     err = capsys.readouterr().err
     assert "w1" in err and "until" in err            # holder + expiry instant
-    assert "task/T-0001" in err                      # the lease resource named
+    key = task._lease_resource(_card_of(proj, "T-0001"))
+    assert key in err                                # the lease resource named
     data = json.loads(_task_lease(proj).read_text(encoding="utf-8"))
-    assert data["resource"] == "task/T-0001"
+    assert data["resource"] == key
     assert data["holder"] == "w1"
     # D43 boundary: the card JSON is byte-identical — the claim lives only
     # in the runtime domain
@@ -287,7 +301,8 @@ def test_expired_claim_is_taken_over(tmp_path, monkeypatch):
     assert task.main(["new", "Stale claim"]) == 0
     _lease_dir(proj).mkdir(parents=True, exist_ok=True)
     _task_lease(proj).write_text(json.dumps({
-        "resource": "task/T-0001", "holder": "corpse",
+        "resource": task._lease_resource(_card_of(proj, "T-0001")),
+        "holder": "corpse",
         "acquired_at": "2020-01-01T00:00:00+00:00",
         "expires_at": "2020-01-01T00:01:00+00:00",
     }), encoding="utf-8")
@@ -834,3 +849,60 @@ def test_resolve_ambiguous_ids_name_each_file(tmp_path, monkeypatch,
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert "ambiguous" in err and "T-0001-worker-a.json" in err
+
+
+def test_close_refuses_unticked_items_and_tick_unblocks(tmp_path, monkeypatch,
+                                                        capsys):
+    """#358: the checklist is the contract the card carries — a close with
+    unticked items refuses, and both exits (tick, void) exist."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["noop"]}, "gates": [{"id": "noop", "command": PASS}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "Two steps", "--check", "one",
+                      "--check", "two"]) == 0
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "--mode", "all", "--timeout", "60"]) == 1
+    err = capsys.readouterr().err
+    assert "unticked checklist item(s) (1, 2)" in err
+    assert "gov task tick T-0001 <n>" in err
+    # tick them and the same close goes through
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    assert task.main(["tick", "T-0001", "2"]) == 0
+    assert task.main(["close", "T-0001", "--mode", "all", "--timeout", "60"]) == 0
+    assert task.main(["check"]) == 0
+
+
+def test_check_names_unticked_items_without_blocking(tmp_path, monkeypatch,
+                                                     capsys):
+    """#358: an in-flight card MAY carry unticked items — the default
+    report names the count (a fact), --strict is where teeth are opted
+    into."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, checklist=["one", "two", "three"])
+    assert task.main(["check"]) == 0
+    out = capsys.readouterr().out
+    assert "1 open (3 unticked item(s); --strict blocks on them)" in out
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["check"]) == 0
+    assert "1 open (2 unticked item(s)" in capsys.readouterr().out
+
+
+def test_lease_key_is_the_card_identity_not_the_bare_id(tmp_path, monkeypatch,
+                                                        capsys):
+    """#332: two worktrees' same-numbered cards are different cards; the
+    lease key carries the card's own identity so they stop colliding."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    a = _open_card(proj, cid="T-0003", slug="worker-a",
+                   created="2026-01-01T00:00:00+00:00")
+    b = _open_card(proj, cid="T-0003", slug="worker-b",
+                   created="2026-01-02T00:00:00+00:00")
+    assert task._lease_resource(a) != task._lease_resource(b)
+    assert task._lease_resource(a).startswith("task/T-0003-")
+    assert task._lease_resource(b).startswith("task/T-0003-")
