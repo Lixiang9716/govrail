@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.48.0](https://github.com/Lixiang9716/govrail/compare/v0.47.1...v0.48.0) (2026-09-21)
+
+
+### Features
+
+* **agent-hooks:** capture what the platform actually sends ([#365](https://github.com/Lixiang9716/govrail/issues/365)) ([1743ace](https://github.com/Lixiang9716/govrail/commit/1743ace96217ddf47d3bf8a2e8edf5c9ba4d2f20))
+* **parse:** ship every tree-sitter grammar — 41 packs, a declared factory, snippet fixtures ([#362](https://github.com/Lixiang9716/govrail/issues/362)) ([4016f6f](https://github.com/Lixiang9716/govrail/commit/4016f6f747fd211eeb628f9a27fe5508020da4ed))
+* **parse:** Swift and Kotlin grammars join the parse layer; gov parse walks the pack set ([#361](https://github.com/Lixiang9716/govrail/issues/361)) ([c8042fd](https://github.com/Lixiang9716/govrail/commit/c8042fd6832e4d885b8f4dc98b304cb34bb8a31f))
+
+
+### Bug Fixes
+
+* **surface:** issue batch [#340](https://github.com/Lixiang9716/govrail/issues/340)-[#349](https://github.com/Lixiang9716/govrail/issues/349) — check-gate exclusions, truth-telling machine surfaces, recall QoL ([#350](https://github.com/Lixiang9716/govrail/issues/350)) ([026dda7](https://github.com/Lixiang9716/govrail/commit/026dda78982276c2e569eef30fc7148a6e00f388))
+* **surface:** issue batch 2 — task cards got hands, notices stop repeating, runtime artifacts stay out of git status ([#359](https://github.com/Lixiang9716/govrail/issues/359)) ([96e4282](https://github.com/Lixiang9716/govrail/commit/96e42821447ef5594592e483bfa75a8c1d7cef76))
+* **task:** one green predicate for receipts; bricked done cards get exits ([#329](https://github.com/Lixiang9716/govrail/issues/329)) ([aaaee7a](https://github.com/Lixiang9716/govrail/commit/aaaee7a4fcb29030fbcd43544f7971ea8de7afb5))
+* **task:** the checklist is a contract again, and a lease names its card ([#360](https://github.com/Lixiang9716/govrail/issues/360)) ([8a6cd60](https://github.com/Lixiang9716/govrail/commit/8a6cd6080ae5857e614997ce5d299062e2830bcc))
+* the pairing config exists from init ([#367](https://github.com/Lixiang9716/govrail/issues/367)); a stale pin can be advanced on purpose ([#368](https://github.com/Lixiang9716/govrail/issues/368)) ([#370](https://github.com/Lixiang9716/govrail/issues/370)) ([a8c4683](https://github.com/Lixiang9716/govrail/commit/a8c4683056f1ec56a75b86aee130feaf4f88b1c3))
+* the push scope is what the push carries; notes can point forward; gate add can be previewed ([#369](https://github.com/Lixiang9716/govrail/issues/369)) ([52d447e](https://github.com/Lixiang9716/govrail/commit/52d447e23ac2302789c7c070970ce63ff284dec9))
+
 ## [0.47.1](https://github.com/Lixiang9716/govrail/compare/v0.47.0...v0.47.1) (2026-09-19)
 
 
