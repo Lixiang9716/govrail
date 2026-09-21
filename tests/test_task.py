@@ -654,3 +654,46 @@ def test_refresh_receipt_reruns_a_bricked_done_card(tmp_path, monkeypatch):
     # a verifiable green receipt refuses the refresh
     assert task.main(["close", "T-0001", "--mode", "all", "--timeout",
                       "60", "--refresh-receipt"]) == 2
+
+
+
+
+def test_void_reminds_when_card_mutation_is_uncommitted(tmp_path,
+                                                        monkeypatch,
+                                                        capsys):
+    """#345: the void lands after the last content commit (the
+    void-before-push ritual) — the output must say the pushed tree is
+    stale until a follow-up commit carries the exit."""
+    import subprocess
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    for argv in (["git", "init", "-q", "."],
+                 ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        subprocess.run(argv, cwd=proj, check=True, capture_output=True)
+    assert task.main(["new", "Going stale"]) == 0
+    (proj / ".gov/rules.md").write_text("# Rules v2\n", encoding="utf-8")
+    capsys.readouterr()
+    assert task.main(["void", "T-0001", "--reason", "probe"]) == 0
+    out = capsys.readouterr().out
+    assert "card mutation is uncommitted — commit it before pushing" in out
+
+
+def test_void_no_reminder_when_git_reports_the_card_clean(tmp_path,
+                                                          monkeypatch,
+                                                          capsys):
+    """The reminder is conditional on git state, not unconditional noise:
+    a card path git does not see as dirty (e.g. ignored) stays quiet."""
+    import subprocess
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    for argv in (["git", "init", "-q", "."],
+                 ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        subprocess.run(argv, cwd=proj, check=True, capture_output=True)
+    (proj / ".gitignore").write_text(".gov/tasks/\n", encoding="utf-8")
+    assert task.main(["new", "Going stale"]) == 0
+    (proj / ".gov/rules.md").write_text("# Rules v2\n", encoding="utf-8")
+    capsys.readouterr()
+    assert task.main(["void", "T-0001", "--reason", "probe"]) == 0
+    assert "uncommitted" not in capsys.readouterr().out

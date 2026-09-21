@@ -21,6 +21,15 @@ that finding. Suppressions are COUNTED and, with --record, written to
 the stats ledger — exemptions growing is a trend someone should see (no
 other tool accounts for its own suppressions).
 
+Path exclusion (issue #348): ``.gov/checks/exclude.json`` names whole
+paths the gate must not judge — vendored upstream trees pinned verbatim
+by project rule, where an in-file marker would edit forbidden bytes and
+a project rule file cannot (rules are additive by design). The config is
+``{"exclude": [{"path": "<glob>", "reason": "<why>"}]}``; every declared
+pattern is surfaced with its match count — SKIP(excluded: ...) — so an
+exclusion is counted, never invisible, and a stale one nags instead of
+silently narrowing the gate.
+
 Verdicts live here, so rule 6 applies in full: every shipped rule needs
 a rejection proof (the file goes red when the violation exists), and the
 engine's own machinery — difference, suppression, severity — is pinned
@@ -47,9 +56,11 @@ PROJECT_DIR = Path(".gov/checks")
 
 try:  # package context (`gov ...`)
     from . import gitutil
+    from .pathmatch import glob_to_regex
     from .verify_conflict_markers import _changed_files, _resolve_auto_base
 except ImportError:  # direct-module execution (self-test scratch dirs)
     import gitutil
+    from pathmatch import glob_to_regex
     from verify_conflict_markers import _changed_files, _resolve_auto_base
 IGNORE_RX = re.compile(r"gov:ignore-check[:\s]+([A-Za-z0-9/_.-]+)")
 QUERY_NODE_RX = re.compile(r"\(([_a-zA-Z][_a-zA-Z0-9]*)")
@@ -58,19 +69,24 @@ SEVERITIES = ("error", "warning")
 RULE_KEYS = {"id", "kind", "severity", "message", "query", "absent_query",
              "node"}
 LEDGER_VERSION = 1
+EXCLUDE_KEYS = {"path", "reason"}
+EXCLUDE_SCOPE_CAP = 500  # scope_files lists at most this many paths (#349)
 
 # Well-known source extensions this installation has NO rules for (#308).
 # The check gate is the default template's only product-code gate; a PHP
 # or Ruby project's first run reads `clean` because NOTHING WAS CHECKED —
 # rule 6's vacuous-gate trap. These extensions are named so the skip is
 # loud: `SKIP(nolang: php (2))` instead of a green that implies coverage.
+# .ets is ArkTS (#343): the shipped TypeScript grammar ERRORs on ArkTS's
+# `struct` declarations, so claiming it would manufacture reds — the
+# honest face is the declared skip, like Kotlin/Swift.
 NOLANG_BY_EXT = {
     ".php": "php", ".rb": "ruby", ".cs": "csharp", ".kt": "kotlin",
     ".kts": "kotlin", ".swift": "swift", ".scala": "scala",
     ".ex": "elixir", ".exs": "elixir", ".lua": "lua", ".dart": "dart",
     ".pl": "perl", ".pm": "perl", ".hs": "haskell", ".ml": "ocaml",
     ".mli": "ocaml", ".zig": "zig", ".groovy": "groovy",
-    ".m": "objective-c", ".mm": "objective-c",
+    ".m": "objective-c", ".mm": "objective-c", ".ets": "arkts",
 }
 _WALK_EXCLUDE = {".git", ".hg", ".svn", ".tox", ".mypy_cache",
                  ".pytest_cache", ".venv", "venv", "__pycache__",
@@ -90,9 +106,14 @@ def _covered_exts() -> set[str]:
     return exts
 
 
-def _nolang_counts(root: Path, files: set[str] | None) -> dict[str, int]:
+def _nolang_counts(root: Path, files: set[str] | None,
+                   excludes: list[tuple[str, "re.Pattern[str]", str]] | None = None,
+                   ) -> dict[str, int]:
     """Nolang source files per language: the judged set when scoped
-    (``files``), else a whole-tree walk (``--all`` / outside a repo)."""
+    (``files``), else a whole-tree walk (``--all`` / outside a repo).
+
+    Excluded paths (#348) are already accounted on the SKIP(excluded)
+    line — counting them here too would name the same file twice."""
     counts: dict[str, int] = {}
     if files is not None:
         candidates = files
@@ -105,6 +126,8 @@ def _nolang_counts(root: Path, files: set[str] | None) -> dict[str, int]:
                 candidates.append(
                     p.relative_to(root).as_posix().replace("\\", "/"))
     for rel in candidates:
+        if excludes and _excluded(rel, excludes):
+            continue
         lang = NOLANG_BY_EXT.get(Path(rel).suffix.lower())
         if lang:
             counts[lang] = counts.get(lang, 0) + 1
@@ -230,6 +253,60 @@ def load_rules(lang: str, include_project: bool = True) -> list[Rule]:
             rules.append(r)
             ids.add(r.id)
     return rules
+
+
+def load_excludes() -> list[tuple[str, "re.Pattern[str]", str]]:
+    """The project's path exclusions: (pattern, compiled, reason).
+
+    ``.gov/checks/exclude.json`` — ``{"exclude": [{"path": "<glob>",
+    "reason": "<why>"}]}``. The glob grammar is the plane's one grammar
+    (pathmatch, D15): ``**`` spans directories, ``*``/``?`` never cross a
+    separator; a slash-less pattern matches a basename, like the parse
+    packs. Malformed config aborts named (rule 5) — a typo that silently
+    excluded nothing would be a green wider than the truth; so would one
+    that excluded everything.
+    """
+    path = PROJECT_DIR / "exclude.json"
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise CheckError(f".gov/checks/exclude.json: not valid JSON: {e}") from e
+    if not isinstance(raw, dict) or set(raw) != {"exclude"} \
+            or not isinstance(raw["exclude"], list):
+        raise CheckError(".gov/checks/exclude.json: must be an object with "
+                         "an 'exclude' array")
+    out: list[tuple[str, "re.Pattern[str]", str]] = []
+    seen: set[str] = set()
+    for i, item in enumerate(raw["exclude"]):
+        if not isinstance(item, dict) or set(item) != EXCLUDE_KEYS:
+            raise CheckError(
+                f".gov/checks/exclude.json: exclude[{i}] must be an object "
+                f"with exactly {', '.join(sorted(EXCLUDE_KEYS))}")
+        pat, reason = item["path"], item["reason"]
+        if not isinstance(pat, str) or not pat.strip():
+            raise CheckError(
+                f".gov/checks/exclude.json: exclude[{i}]: 'path' must be a "
+                "non-empty glob")
+        if not isinstance(reason, str) or not reason.strip():
+            raise CheckError(
+                f".gov/checks/exclude.json: exclude[{i}]: 'reason' must be "
+                "a non-empty string (an exclusion without a why is a park)")
+        if pat in seen:
+            raise CheckError(
+                f".gov/checks/exclude.json: duplicate pattern {pat!r}")
+        seen.add(pat)
+        out.append((pat, glob_to_regex(pat), reason.strip()))
+    return out
+
+
+def _excluded(rel: str, excludes: list[tuple[str, "re.Pattern[str]", str]]
+              ) -> bool:
+    """Does one root-relative posix path match any exclusion pattern?"""
+    parts = rel.split("/")
+    return any(rx.match(rel if "/" in pat else parts[-1])
+               for pat, rx, _r in excludes)
 
 
 _query_cache: dict[tuple[str, str, str, str], tuple] = {}
@@ -359,13 +436,21 @@ def check_tree(src: bytes, tree, comments: list, lang: str,
 
 
 def run_lang(root: Path, lang: str, rules: list[Rule],
-             only: set[str] | None = None) -> list[FileReport]:
+             only: set[str] | None = None,
+             excludes: list[tuple[str, "re.Pattern[str]", str]] | None = None,
+             skips: dict[str, dict[str, object]] | None = None,
+             ) -> list[FileReport]:
     """Check every file of the language's declared set under root.
 
     ``only`` — a set of root-relative posix paths — scopes the run to the
     change scope (the gate's shape): everything outside it is someone
     else's commit, and a fresh adoption must not go red on code it never
-    changed (the advisory-first promise, P0-3)."""
+    changed (the advisory-first promise, P0-3).
+
+    ``excludes`` — the project's path exclusions (#348): a matching file
+    is never parsed and never judged. Every skip is counted per pattern
+    into ``skips`` — an exclusion that quietly narrowed the gate would be
+    a green wider than the truth."""
     from . import parse
     pack = parse.load_pack(lang)
     _pack_cache[lang] = pack
@@ -375,6 +460,15 @@ def run_lang(root: Path, lang: str, rules: list[Rule],
         rel = path.relative_to(root).as_posix() if path.is_absolute() \
             else path.as_posix()
         if only is not None and rel not in only:
+            continue
+        if excludes and _excluded(rel, excludes):
+            if skips is not None:
+                for pat, rx, reason in excludes:
+                    if rx.match(rel if "/" in pat else rel.split("/")[-1]):
+                        slot = skips.setdefault(pat, {"reason": reason,
+                                                      "count": 0})
+                        slot["count"] = int(slot["count"]) + 1
+                        break
             continue
         tree = parser.parse(src)
         comments = _collect_comments(tree.root_node, pack.comment)
@@ -467,6 +561,11 @@ def main(argv: list[str] | None = None) -> int:
         print("gov check: no languages ship rules in this installation — "
               "reinstall govrail", file=sys.stderr)
         return 2
+    try:
+        excludes = load_excludes()
+    except CheckError as e:
+        print(f"gov check: {e}", file=sys.stderr)
+        return 2
     all_rules: list[tuple[str, list[Rule]]] = []
     try:
         for lang in langs:
@@ -516,9 +615,11 @@ def main(argv: list[str] | None = None) -> int:
             scoped = set(changed)
     root = Path.cwd()
     reports: list[FileReport] = []
+    skips: dict[str, dict[str, object]] = {}
     for lang, rules in all_rules:
         try:
-            reports.extend(run_lang(root, lang, rules, only=scoped))
+            reports.extend(run_lang(root, lang, rules, only=scoped,
+                                    excludes=excludes, skips=skips))
         except parse.ParseUnavailable as e:
             print(f"gov check: {e}", file=sys.stderr)
             return 2
@@ -526,7 +627,7 @@ def main(argv: list[str] | None = None) -> int:
     # #308: source files whose language has no rules are NOT checked —
     # say so instead of letting a green verdict imply coverage. The judged
     # scope is the same one the rules ran over.
-    nolang = _nolang_counts(root, scoped)
+    nolang = _nolang_counts(root, scoped, excludes)
 
     active = [f for r in reports for f in r.findings if not f.suppressed]
     suppressed_n = sum(1 for r in reports for f in r.findings if f.suppressed)
@@ -550,6 +651,12 @@ def main(argv: list[str] | None = None) -> int:
     if scoped is not None:
         emit(f"gov check: base={base}" + (f" ({why})" if why else "")
              + f" — {len(scoped)} changed file(s) in scope")
+    # #348: every declared exclusion is surfaced with its match count —
+    # counted, never invisible; a pattern matching 0 files is named too,
+    # so a stale exclusion nags instead of silently narrowing the gate.
+    for pat, _rx, reason in excludes:
+        n = int(skips.get(pat, {}).get("count", 0))  # type: ignore[union-attr]
+        emit(f"gov check: SKIP(excluded: {pat} — {n} file(s) — {reason})")
     if nolang:
         listing = ", ".join(f"{lang} ({n})" for lang, n in sorted(nolang.items()))
         emit(f"gov check: SKIP(nolang: {listing}) — no rules for these "
@@ -557,13 +664,28 @@ def main(argv: list[str] | None = None) -> int:
              "(add .gov/checks/<lang>.json, or wire your own test gate: "
              "gov gate add)")
 
+    ok = not (blocking or (args.strict and (active or nolang)))
+
     if args.json:
+        scope_files = sorted(scoped) if scoped is not None else None
+        scope_truncated = False
+        if scope_files is not None and len(scope_files) > EXCLUDE_SCOPE_CAP:
+            scope_files = scope_files[:EXCLUDE_SCOPE_CAP]
+            scope_truncated = True
         print(json.dumps({
             "v": LEDGER_VERSION,
             "languages": [l for l, _ in all_rules],
             "base": base,
+            "base_why": why if (scoped is not None and args.base == "auto")
+            else ("explicit --base" if scoped is not None else None),
             "scope": None if scoped is None else len(scoped),
+            "scope_files": scope_files,
+            "scope_files_truncated": scope_truncated,
             "skipped_nolang": nolang,
+            "excluded": [{"pattern": pat,
+                          "reason": str(skips.get(pat, {}).get("reason", reason)),
+                          "files": int(skips.get(pat, {}).get("count", 0))}
+                         for pat, _rx, reason in excludes],
             "files": [
                 {"path": r.path,
                  "findings": [{"rule": f.rule_id, "severity": f.severity,
@@ -575,15 +697,17 @@ def main(argv: list[str] | None = None) -> int:
             "summary": {"findings": len(active),
                         "suppressed": suppressed_n,
                         "blocking": len(blocking)},
+            # #349: the verdict the exit code carries, stated in the
+            # payload — a consumer reads one surface and never has to
+            # re-derive blocking from counts.
+            "ok": ok,
         }, indent=2))
 
     if args.record:
         path = _record(reports)
         print(f"gov check: recorded to {path}", file=sys.stderr)
 
-    if blocking or (args.strict and active) or (args.strict and nolang):
-        return 1
-    return 0
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

@@ -25,9 +25,9 @@ AND: entries matching some terms are ranked by terms matched (then by
 where they hit) instead of the query being refused; the strict AND stays
 the default (D18) and an empty --any result still fails loud.
 
-Exit codes: 0 = hits (or partial hits under --any); 1 = no match, or an
-empty corpus (fail loud — never reason from an empty recall); 2 = usage
-error.
+Exit codes: 0 = hits (or partial hits under --any, or a --recent digest
+over a populated corpus); 1 = no match, or an empty corpus (fail loud —
+never reason from an empty recall); 2 = usage error.
 """
 from __future__ import annotations
 
@@ -279,13 +279,59 @@ def _print_miss(entries: list[Entry], terms: list[str],
     return 1
 
 
+DATE_RX = re.compile(r"\d{4}-\d{2}-\d{2}")
+DNUM_RX = re.compile(r"#D(\d+)$")
+
+
+def _recent_key(e: Entry) -> tuple[str, int, str]:
+    """Recency sort key, newest last (the caller reverses).
+
+    The first date in the entry's address (a note or postmortem filename
+    is dated by convention), else the first date anywhere in its text;
+    an undated decision ranks by D-number — the registry assigns numbers
+    in allocation order, so the higher number is the later decision.
+    """
+    m = DATE_RX.search(e.source) or DATE_RX.search(f"{e.title}\n{e.body}")
+    date = m.group(0) if m else ""
+    dm = DNUM_RX.search(e.source)
+    return (date, int(dm.group(1)) if dm else 0, e.source)
+
+
+def _print_recent(entries: list[Entry], n: int) -> int:
+    """The recent digest (#344): the N most recent entries, title plus a
+    one-line summary — the cold-start primer for the recall-first ritual,
+    where the vocabulary to query with does not exist yet."""
+    ranked = sorted(entries, key=_recent_key, reverse=True)[:n]
+    print(f"recall: {len(ranked)} recent entry/ies (newest first)")
+    for e in ranked:
+        print(f"{e.source} — {e.title or '(untitled)'}")
+        for line in e.body.splitlines():
+            text = line.strip()
+            if not text or text.startswith(("#", "|", "Status:",
+                                            "Related:", "Supersede")):
+                continue  # furniture and metadata — summarize the meat
+            print("    " + (text[:100] + " …" if len(text) > 100
+                            else text))
+            break
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("recall")
     parser = argparse.ArgumentParser(
         prog="gov recall",
         description="Retrieve notes, decisions, and postmortems (all terms, ranked by where they hit).",
     )
-    parser.add_argument("query", nargs="+", help="literal terms; all must appear")
+    parser.add_argument("query", nargs="*",
+                        help="literal terms; all must appear. A single "
+                             "quoted phrase is split on whitespace (#346) — "
+                             "'gov recall \"why does X fail\"' searches the "
+                             "same terms as the unquoted form")
+    parser.add_argument("--recent", nargs="?", const=10, default=None,
+                        type=int, metavar="N",
+                        help="no query needed: print the N most recent "
+                             "entries (default 10), title plus a one-line "
+                             "summary — the cold-start primer")
     parser.add_argument("--any", action="store_true",
                         help="rank partial matches (entries containing some "
                              "terms, by terms matched) instead of requiring "
@@ -299,6 +345,20 @@ def main(argv: list[str] | None = None) -> int:
                         help="print the first matched line under each hit — "
                              "the evidence inline, not just the address")
     args = parser.parse_args(argv)
+
+    # #346: one argv carrying spaces is how natural-language queries are
+    # typed — quote marks are shell syntax, not a phrase operator. Split
+    # every argument on whitespace so the quoted and unquoted forms are
+    # the same AND search, instead of the quoted form matching one literal
+    # string that no entry contains.
+    terms = [t for q in args.query for t in q.split()]
+    if args.recent is not None and args.recent < 1:
+        parser.error("--recent needs a positive count")
+    if not terms:
+        if args.recent is None:
+            parser.error("provide query terms (or --recent for the "
+                         "recent-entries digest)")
+        args.any = False  # meaningless in digest mode; keep output honest
 
     corpus = _corpus()
     # What was searched, every invocation (#148): context on stderr so the
@@ -316,43 +376,46 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    if args.recent is not None:
+        return _print_recent(entries, args.recent)
+
     if args.any:
         scored: list[tuple[int, int, str, str, Entry]] = []
         for e in entries:
             matched = [(t, p) for t, p in
                        ((t, _presence(e, t, args.fuzzy))
-                        for t in args.query) if p]
+                        for t in terms) if p]
             if matched:
                 where = ", ".join(f"{t} in {WHERE[p]}" for t, p in matched)
                 scored.append((len(matched), max(p for _, p in matched),
                                e.source, where, e))
         if not scored:
-            return _print_miss(entries, args.query, args.fuzzy)
+            return _print_miss(entries, terms, args.fuzzy)
         # Full AND matches first, then more terms beat fewer; ties: where
         # they hit, then current authority over frozen evidence, then path
         # (F4).
         scored.sort(key=lambda s: (-s[0], -s[1], "/archived/" in s[2], s[2]))
         for k, _best, source, where, e in scored:
-            print(f"{source} — matched {k}/{len(args.query)} terms ({where})")
+            print(f"{source} — matched {k}/{len(terms)} terms ({where})")
             if args.snippet:
                 line = _snippet(e, [t for t, _p in
                                     ((t, _presence(e, t, args.fuzzy))
-                                     for t in args.query)
+                                     for t in terms)
                                     if _p])
                 if line:
                     print(f"    {line}")
         print(f"recall: {len(scored)} partial hit(s) for "
-              f"{' '.join(args.query)!r} (--any: ranked by terms matched)")
+              f"{' '.join(terms)!r} (--any: ranked by terms matched)")
         return 0
 
     hits: list[tuple[int, str, str]] = []
     for e in entries:
-        scored = _score(e, args.query, args.fuzzy)
+        scored = _score(e, terms, args.fuzzy)
         if scored:
             rank, where = scored
             hits.append((rank, e.source, where))
     if not hits:
-        return _print_miss(entries, args.query, args.fuzzy)
+        return _print_miss(entries, terms, args.fuzzy)
 
     # Equal ranks: current authority (implemented/) outranks frozen
     # evidence (archived/), then path order (F4).
@@ -361,10 +424,10 @@ def main(argv: list[str] | None = None) -> int:
     for rank, source, where in hits:
         print(f"{source} — matched in {where}")
         if args.snippet and (e := by_source.get(source)):
-            line = _snippet(e, args.query)
+            line = _snippet(e, terms)
             if line:
                 print(f"    {line}")
-    print(f"recall: {len(hits)} hit(s) for {' '.join(args.query)!r}")
+    print(f"recall: {len(hits)} hit(s) for {' '.join(terms)!r}")
     return 0
 
 

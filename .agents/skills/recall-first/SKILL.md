@@ -14,12 +14,18 @@ rationale, query the memory planes.
 
 1. Distill one to three terms from the task's domain words — a component
    name, a mechanism, a decision keyword. Synonyms are not followed; pick
-   the term the repository itself would use.
+   the term the repository itself would use. A true cold start has no
+   vocabulary yet: `gov recall --recent [N]` prints the newest entries
+   (title + one line) to prime the corpus.
 2. Run:
 
    ```sh
    gov recall <term> [<term>...]
    ```
+
+   A quoted phrase is split on whitespace — the AND is over the words,
+   never the literal string, so `gov recall "why does X fail"` searches
+   the same terms as the unquoted form.
 
    All terms must appear; hits rank title > section heading > body, so
    the top lines are usually the answer. Every run states the corpus it

@@ -309,3 +309,26 @@ def test_write_warns_when_a_side_is_untracked(tmp_path, monkeypatch, capsys):
     assert vtp.main(["--write", "guide"]) == 0
     err = capsys.readouterr().err
     assert "not committed yet" in err and "re-run --write" in err
+
+
+
+
+def test_write_stamps_untracked_sentinel_not_empty_scalar(tmp_path,
+                                                          monkeypatch):
+    """#345: a side with no commit yet carries the literal 'untracked' —
+    the same sentinel the CLI prints and the header describes. A bare
+    empty scalar read like corruption and was ungreppable."""
+    monkeypatch.chdir(tmp_path)
+    docs = _pair(tmp_path)
+    import subprocess
+    for argv in (["git", "init", "-q", "."],
+                 ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        subprocess.run(argv, cwd=tmp_path, check=True, capture_output=True)
+    assert vtp.main(["--write", "foo"]) == 0
+    rec = (docs / "foo.i18n.yaml").read_text(encoding="utf-8")
+    assert "en_commit: untracked" in rec
+    assert "zh_commit: untracked" in rec
+    assert "en_commit: \n" not in rec and "zh_commit: \n" not in rec
+    # informational only: the gate still reads the record and stays green
+    assert vtp.main([]) == 0

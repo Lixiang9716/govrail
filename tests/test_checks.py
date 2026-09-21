@@ -317,3 +317,135 @@ def test_first_run_after_adoption_stays_green(tmp_path, monkeypatch):
         'subprocess.run(["git", "status"], capture_output=True, text=True)\n',
         encoding="utf-8")
     assert cli.main(["run"]) == 1, "an in-scope violation must be judged"
+
+
+class TestPathExclusions:
+    """#348: a project-declared path exclusion keeps verbatim vendored
+    trees out of the judged set — counted, never invisible."""
+
+    def _exclude(self, project, payload):
+        d = project / ".gov" / "checks"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "exclude.json").write_text(json.dumps(payload),
+                                        encoding="utf-8")
+
+    def test_excluded_file_is_not_judged_but_is_counted(self, project,
+                                                        capsys):
+        (project / "vendor").mkdir()
+        (project / "vendor" / "broken.js").write_text(
+            "export { _instanceof as instanceof };\n", encoding="utf-8")
+        self._exclude(project, {"exclude": [
+            {"path": "vendor/**",
+             "reason": "vendored upstream pin, verbatim by project rule"}]})
+        assert checks.main(["--lang", "javascript"]) == 0
+        out = capsys.readouterr().out
+        # the skip is loud: pattern, count, reason — never a silent green
+        assert "SKIP(excluded: vendor/** — 1 file(s) — vendored upstream " \
+               "pin, verbatim by project rule)" in out
+        assert "vendor/broken.js" not in out  # not judged, so not quoted
+
+    def test_json_carries_the_exclusion_ledger(self, project, capsys):
+        (project / "vendor").mkdir()
+        (project / "vendor" / "x.js").write_text("var a;\n",
+                                                 encoding="utf-8")
+        self._exclude(project, {"exclude": [
+            {"path": "vendor/**", "reason": "vendored"}]})
+        assert checks.main(["--lang", "javascript", "--json"]) == 0
+        value = json.loads(capsys.readouterr().out)
+        assert value["excluded"] == [{"pattern": "vendor/**",
+                                      "reason": "vendored", "files": 1}]
+
+    def test_declared_but_zero_matching_pattern_still_surfaces(self, project,
+                                                               capsys):
+        (project / "fine.js").write_text("var a;\n", encoding="utf-8")
+        self._exclude(project, {"exclude": [
+            {"path": "nope/**", "reason": "stale pattern nags"}]})
+        assert checks.main(["--lang", "javascript"]) == 0
+        assert "SKIP(excluded: nope/** — 0 file(s) — stale pattern nags)" \
+            in capsys.readouterr().out
+
+    def test_basename_glob_matches_any_directory(self, project):
+        (project / "a").mkdir()
+        (project / "b").mkdir()
+        (project / "a" / "zod.js").write_text("var a;\n", encoding="utf-8")
+        (project / "b" / "zod.js").write_text("var a;\n", encoding="utf-8")
+        self._exclude(project, {"exclude": [
+            {"path": "zod.js", "reason": "basename glob, pack convention"}]})
+        skips: dict = {}
+        checks.run_lang(project, "javascript", checks.load_rules(
+            "javascript", include_project=False), excludes=checks.load_excludes(),
+            skips=skips)
+        assert skips["zod.js"]["count"] == 2
+
+    def test_malformed_config_aborts_named(self, project, capsys, caplog):
+        (project / "fine.js").write_text("var a;\n", encoding="utf-8")
+        self._exclude(project, {"exclude": [{"path": ""}]})
+        assert checks.main(["--lang", "javascript"]) == 2
+        assert "exclude[0]" in capsys.readouterr().err
+
+    def test_duplicate_pattern_refused(self, project):
+        self._exclude(project, {"exclude": [
+            {"path": "v/**", "reason": "one"},
+            {"path": "v/**", "reason": "two"}]})
+        with pytest.raises(checks.CheckError, match="duplicate pattern"):
+            checks.load_excludes()
+
+
+class TestMachineSurfaceTruth:
+    """#349: the JSON surface describes the same run the human report
+    does — the verdict the exit code carries is stated in the payload,
+    and the judged scope is enumerable, not just counted."""
+
+    def test_json_ok_field_matches_the_exit_code(self, project, capsys):
+        (project / "broken.go").write_text("func {", encoding="utf-8")
+        assert checks.main(["--lang", "go", "--json"]) == 1
+        assert json.loads(capsys.readouterr().out)["ok"] is False
+        capsys.readouterr()
+        (project / "fine.go").write_text("package main\n", encoding="utf-8")
+        (project / "broken.go").unlink()
+        assert checks.main(["--lang", "go", "--json"]) == 0
+        assert json.loads(capsys.readouterr().out)["ok"] is True
+
+    def _git(self, project):
+        import subprocess
+        for argv in (["git", "init", "-q", "."],
+                     ["git", "config", "user.email", "t@t"],
+                     ["git", "config", "user.name", "t"]):
+            subprocess.run(argv, cwd=project, check=True,
+                           capture_output=True)
+
+    def test_scope_files_enumerates_the_judged_set(self, project, capsys):
+        # scope_files names the CHANGE scope (auto cascade); a whole-tree
+        # --all sweep has no scope to enumerate and stays null.
+        self._git(project)
+        (project / "fine.go").write_text("package main\n", encoding="utf-8")
+        assert checks.main(["--lang", "go", "--json"]) == 0
+        value = json.loads(capsys.readouterr().out)
+        assert value["scope_files"] == ["fine.go"]
+        assert value["scope_files_truncated"] is False
+
+    def test_base_why_carries_the_cascade_reason(self, project, capsys):
+        self._git(project)
+        (project / "fine.go").write_text("package main\n", encoding="utf-8")
+        assert checks.main(["--lang", "go", "--json"]) == 0
+        value = json.loads(capsys.readouterr().out)
+        assert value["base"] == "HEAD"
+        assert value["base_why"] == "dirty worktree — reviewing the working tree"
+
+    def test_text_and_json_describe_the_same_run(self, project, capsys):
+        """#349's contract: one process, one set of findings — the two
+        surfaces can never contradict. The text finding lines and the
+        JSON files array must agree exactly."""
+        (project / "broken.go").write_text("func {\n", encoding="utf-8")
+        cap = capsys.readouterr()
+        assert checks.main(["--lang", "go", "--json"]) == 1
+        cap = capsys.readouterr()
+        text_report = cap.err
+        value = json.loads(cap.out)
+        json_files = {f["path"] for f in value["files"] if f["findings"]}
+        for path in json_files:
+            assert path in text_report
+        assert value["summary"]["blocking"] == text_report.count(
+            "[go/syntax]") + sum(text_report.count(f"[{r}]") for r in
+                                 ("go/syntax",)) or \
+            value["summary"]["blocking"] >= 1

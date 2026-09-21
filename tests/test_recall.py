@@ -168,3 +168,76 @@ def test_snippet_prints_the_matched_line(tmp_path, monkeypatch, capsys):
     # the miss path is untouched by --snippet
     capsys.readouterr()
     assert recall.main(["--snippet", "quantum-entangle"]) == 1
+
+
+def test_single_quoted_phrase_searches_its_words(tmp_path, monkeypatch,
+                                                 capsys):
+    """#346: quote marks are shell syntax, not a phrase operator — one
+    argv carrying spaces must search the same terms as separate args,
+    or the most natural invocation always misses."""
+    monkeypatch.chdir(tmp_path)
+    _memory(tmp_path)
+    # the two words live in DIFFERENT entries, so the word-AND misses and
+    # the per-term line names both terms (the old literal-phrase read
+    # showed one undiagnosable term instead)
+    assert recall.main(["runner outage"]) == 1
+    out = capsys.readouterr().out
+    assert "per-term hits: runner: 1 / outage: 1" in out
+    # exact equivalence with the separate-argument form
+    capsys.readouterr()
+    assert recall.main(["runner", "outage"]) == 1
+    assert capsys.readouterr().out == out
+
+
+def test_phrase_split_hits_cross_line(tmp_path, monkeypatch, capsys):
+    """The words need not sit adjacent — 'pairing' (title) and 'drift'
+    (body) are one entry's match under the word-AND."""
+    monkeypatch.chdir(tmp_path)
+    _memory(tmp_path)
+    assert recall.main(["pairing drift"]) == 0
+    out = capsys.readouterr().out
+    assert "2026-01-02-pairing.md" in out
+
+
+def test_recent_digest_needs_no_query(tmp_path, monkeypatch, capsys):
+    """#344: the cold-start primer — newest entries, title + one line."""
+    monkeypatch.chdir(tmp_path)
+    _memory(tmp_path)
+    assert recall.main(["--recent"]) == 0
+    out = capsys.readouterr().out
+    assert "recent entry/ies" in out
+    assert "2026-01-02-pairing.md" in out
+    assert "README" not in out  # the postmortem contract is not an entry
+    # each hit carries a one-line summary; Status:/heading furniture is
+    # skipped in favor of the first substantive line
+    pairing_block = out.split("2026-01-02-pairing.md")[1]
+    first_body = pairing_block.splitlines()[1].strip()
+    assert first_body.startswith("drift between languages")
+
+
+def test_recent_orders_newest_first_and_caps(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _memory(tmp_path)
+    assert recall.main(["--recent", "2"]) == 0
+    out = capsys.readouterr().out
+    lines = [l for l in out.splitlines()
+             if l.startswith((".agents", "docs/"))]
+    assert len(lines) == 2
+    assert "2026-01-03-outage.md" in lines[0]     # newest first
+    assert "2026-01-02-pairing.md" in lines[1]
+
+
+def test_recent_zero_refused(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.chdir(tmp_path)
+    _memory(tmp_path)
+    with pytest.raises(SystemExit):
+        recall.main(["--recent", "0"])
+
+
+def test_bare_recall_is_a_usage_error_not_a_crash(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.chdir(tmp_path)
+    _memory(tmp_path)
+    with pytest.raises(SystemExit):
+        recall.main([])

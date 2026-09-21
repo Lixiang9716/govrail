@@ -844,3 +844,40 @@ def test_plane_refusal_is_version_aware(tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "initialized with govrail 0.1.2" in err
     assert "you are running" in err
+
+
+def test_failure_summary_quotes_stderr_diagnostic_not_first_stdout_line(
+        capsys):
+    """#341: a gate whose stdout carries per-item status lines and whose
+    blocking diagnostic goes to stderr gets its PROBLEM quoted in the
+    summary — quoting the combined first line named a voided card's
+    story instead of the real cause."""
+    gs = [
+        gates.Gate(id="task", command=[
+            sys.executable, "-c",
+            "print('task: voided T-0001 long story — Work complete'); "
+            "import sys; "
+            "print('task: T-0008: receipt run is not all-green', "
+            "file=sys.stderr); raise SystemExit(1)"]),
+    ]
+    assert gates.run_gates(gs, None, 1, False) == 1
+    out = capsys.readouterr().out
+    summary = out.split("--- summary: 1 blocking failure(s) ---", 1)[1]
+    assert "T-0008: receipt run is not all-green" in summary
+    assert "voided T-0001" not in summary
+
+
+def test_failure_summary_falls_back_to_stdout_when_stderr_silent(capsys):
+    """The check-gate shape: findings on stdout, stderr reserved for
+    fatal config errors. A findings failure quotes the first finding."""
+    gs = [
+        gates.Gate(id="check", command=[
+            sys.executable, "-c",
+            "print('f.js:1: [javascript/syntax] file does not parse'); "
+            "print('gov check: 1 finding(s) (1 blocking), 0 suppressed'); "
+            "raise SystemExit(1)"]),
+    ]
+    assert gates.run_gates(gs, None, 1, False) == 1
+    out = capsys.readouterr().out
+    summary = out.split("--- summary: 1 blocking failure(s) ---", 1)[1]
+    assert "check: f.js:1: [javascript/syntax]" in summary

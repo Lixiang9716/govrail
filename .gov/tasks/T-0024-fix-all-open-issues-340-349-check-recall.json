@@ -1,0 +1,28 @@
+{
+  "title": "fix all open issues #340-#349 (check/recall/runner/pairing/task + dsh-mobile tools)",
+  "created": "2026-09-21T01:48:34+00:00",
+  "rules": {
+    "hash": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "files": {
+      ".gov/rules.md": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976",
+      "gates.json": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
+    }
+  },
+  "checklist": [
+    "#349 reproduce and fix gov check --json vs text verdict mismatch",
+    "#348+#347 check-gate path exclusion (.gov/checks/exclude.json, SKIP surfaced)",
+    "#346 recall: split single whitespace-containing argv into terms",
+    "#344a recall --recent digest (no-query recent-notes mode)",
+    "#344b verify gov run --json satisfies the ask; close or extend",
+    "#345a pairing --write writes 'untracked' sentinel not empty scalar",
+    "#345b task void/close prints commit reminder when card mutation is uncommitted",
+    "#341 runner failure summary quotes the diagnostic, not the first status line",
+    "#343 decide plane-side .ets coverage (test tree-sitter-typescript on ArkTS)",
+    "govrail: agent notes + flag registry + tests + gov run green",
+    "dsh-mobile: #340 strip_code EOL fix, #342 INDENT labeling/doc/closure-exclusion, #343 .ets EXTS",
+    "PRs pushed, CI green, issues closed with references"
+  ],
+  "status": "open",
+  "receipt": null,
+  "id": "T-0024"
+}
