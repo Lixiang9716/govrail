@@ -142,7 +142,10 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   card JSON is the one move that is never OK); `gov task show <id>`
   renders a card whole — checklist, void reason, receipt — which is why
   `task check` can stay one line per card (`--verbose` keeps the reasons
-  in the gate output).
+  in the gate output). `close` refuses while items are unticked: tick
+  what the work satisfies, or void the card if the checklist no longer
+  describes it. Claims are keyed by the card's own identity, so two
+  worktrees' same-numbered cards lease independently.
 
 **Memory and history**
 - `gov recall` — before proposing anything (see the recall-first skill).

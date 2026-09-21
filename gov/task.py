@@ -326,6 +326,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     problems: list[str] = []
     warnings: list[str] = []
     counts = {"open": 0, "stale": 0, "done": 0, "voided": 0}
+    counts_unticked: dict[str, int] = {}
     for cid, path, card in cards:
         status = card.get("status")
         pinned = card.get("rules", {}).get("hash", "<missing>")
@@ -351,6 +352,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             warnings.extend(_marker_warnings(cid, items))
             unticked = [i for i, it in enumerate(items, 1)
                         if not _is_ticked(str(it))]
+            if unticked:
+                counts_unticked[cid] = len(unticked)
             if strict and unticked:
                 problems.append(
                     f"{cid}: {len(unticked)} unticked checklist item(s) "
@@ -368,7 +371,16 @@ def cmd_check(args: argparse.Namespace) -> int:
                 print(f"open  {cid} {title} ({brief_line(combined)})")
         else:
             problems.append(f"{cid}: unknown status {status!r}")
-    print(f"task: {len(cards)} card(s) — {counts['open']} open, "
+    # #358: "open" alone hid the state the checklist exists to carry —
+    # the default report names how much of the open work is still
+    # unticked (advisory: an in-flight card is allowed to have them;
+    # --strict is where a repo opts into teeth).
+    unticked_total = sum(counts_unticked.values())
+    open_note = f"{counts['open']} open"
+    if unticked_total:
+        open_note += (f" ({unticked_total} unticked item(s); --strict "
+                      "blocks on them)")
+    print(f"task: {len(cards)} card(s) — {open_note}, "
           f"{counts['stale']} stale, {counts['done']} done, "
           f"{counts['voided']} voided")
     # #334: a marker the reader does not count is worse than an unticked
@@ -513,7 +525,7 @@ def cmd_void(args: argparse.Namespace) -> int:
         "reason": args.reason,
     }
     atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
-    _clear_task_lease(card["id"],
+    _clear_task_lease(card,
                       holder=locks._holder_id(getattr(args, "agent", None)),
                       force=True)
     print(f"task: voided {card['id']} — {args.reason}")
@@ -552,13 +564,29 @@ def cmd_close(args: argparse.Namespace) -> int:
               "adopted rules (gov task check names the stale cards)",
               file=sys.stderr)
         return 1
+    # #358: the checklist is the contract the card exists to carry, so a
+    # close with items still unticked refuses — the exits are tick (the
+    # work is done; `gov task tick` writes the canonical marker) or void
+    # (the checklist no longer describes the work). Both exist, so this
+    # is a gate with a door, not the bricked-state shape #329 removed.
+    unticked = [i for i, it in enumerate(card.get("checklist", []), 1)
+                if not _is_ticked(str(it))]
+    if unticked:
+        shown = ", ".join(str(i) for i in unticked[:8]) + (
+            f" …and {len(unticked) - 8} more" if len(unticked) > 8 else "")
+        print(f"task: refusing to close {card['id']} — {len(unticked)} "
+              f"unticked checklist item(s) ({shown}): tick the items the "
+              f"work satisfies (gov task tick {card['id']} <n>; gov task "
+              "show lists them), or void the card if the checklist no "
+              "longer describes the work (rule 9)", file=sys.stderr)
+        return 1
     # A live lease naming someone else IS in-flight work: closing here
     # would silently delete the worker's claim out from under it. Only
     # the holder (or an explicit --force, a knowing steal) may close a
     # claimed card. The old "after close there is no in-flight work"
     # defense assumed the closer was the worker — nothing did.
     closer = locks._holder_id(getattr(args, "agent", None))
-    claim = _claim_of(card["id"], _common_dir_quiet())
+    claim = _claim_of(card, _common_dir_quiet())
     if claim and claim["claimed_by"] != closer and not args.force:
         print(f"task: {card['id']} is claimed by "
               f"'{claim['claimed_by']}' until {claim['expires_at']} — "
@@ -604,7 +632,7 @@ def cmd_close(args: argparse.Namespace) -> int:
     }
     card["status"] = "done"
     atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
-    _clear_task_lease(card["id"], holder=locks._holder_id(getattr(args, "agent", None)),
+    _clear_task_lease(card, holder=locks._holder_id(getattr(args, "agent", None)),
                       force=args.force)
     print(f"task: closed {card['id']} with an all-green "
           f"{args.mode} run ({len(records)} gates)")
@@ -633,24 +661,43 @@ def _common_dir_quiet() -> Path | None:
     return p.resolve()
 
 
-def _claim_of(cid: str, common: Path | None) -> dict | None:
+def _lease_resource(card: dict) -> str:
+    """The lease key for ONE card (#332).
+
+    Card ids are per-worktree high-water marks, so two workers' `T-0003`
+    cards are different cards that used to fight over one lease key
+    (`task/T-0003`) while sharing the lock root through the common git
+    dir. The key carries the card's own identity instead: the id plus the
+    card's `created` stamp, which every command can recompute from the
+    card file itself (the issue's hash(title+created) shape, readable,
+    so a lease file names its card at a glance).
+    """
+    created = "".join(ch for ch in str(card.get("created", ""))
+                      if ch.isalnum())
+    cid = str(card.get("id", "?"))
+    return f"task/{cid}-{created}" if created else f"task/{cid}"
+
+
+def _claim_of(card: dict, common: Path | None) -> dict | None:
     """The live claim on a card, or None when unclaimed/expired.
 
     Same freshness classification the lease layer itself uses: a lease
     past its expires_at reads as unclaimed (it may be taken over). The
-    card JSON is never consulted — the lease file is the only claim
-    state (D43: the card carries results, never claim bookkeeping).
+    card JSON is never consulted for claim state — the lease file is the
+    only claim state (D43: the card carries results, never claim
+    bookkeeping); the card is consulted only to derive the key (#332).
     """
     if common is None:
         return None
-    data = locks._read_lease(locks._lease_path(common, f"task/{cid}"))
+    data = locks._read_lease(
+        locks._lease_path(common, _lease_resource(card)))
     if not locks._is_fresh(data, datetime.now(timezone.utc)):
         return None
     return {"claimed_by": data.get("holder"),
             "expires_at": data.get("expires_at")}
 
 
-def _clear_task_lease(cid: str, holder: str | None = None,
+def _clear_task_lease(card: dict, holder: str | None = None,
                       force: bool = False) -> None:
     """Best-effort: clear the closed card's own task lease.
 
@@ -667,15 +714,16 @@ def _clear_task_lease(cid: str, holder: str | None = None,
     common = _common_dir_quiet()
     if common is None:
         return
-    resource = f"task/{cid}"
+    resource = _lease_resource(card)
     lease = locks._lease_path(common, resource)
     data = locks._read_lease(lease)
     if data is None:
         return
     named = data.get("holder")
     if not force and holder is not None and named != holder:
-        print(f"task: {cid} was claimed by '{named}' while closing — "
-              "their lease is left in place", file=sys.stderr)
+        print(f"task: {card.get('id', '?')} was claimed by '{named}' "
+              "while closing — their lease is left in place",
+              file=sys.stderr)
         return
     # Under the guard flock, not a bare unlink: the unconditional-delete
     # version raced a concurrent taker-over exactly the way the guard's
@@ -701,8 +749,9 @@ def cmd_claim(args: argparse.Namespace) -> int:
               "only an open card can be claimed", file=sys.stderr)
         return 2
     cid = card["id"]
+    resource = _lease_resource(card)   # #332: card identity, not the bare id
     holder = locks._holder_id(args.agent)
-    rc = locks.acquire(f"task/{cid}", holder, args.ttl, args.wait,
+    rc = locks.acquire(resource, holder, args.ttl, args.wait,
                        tool="task claim")
     if rc != 0:
         return rc
@@ -712,32 +761,39 @@ def cmd_claim(args: argparse.Namespace) -> int:
     # took instead of squatting on a done card.
     _path_now, card_now = _resolve(_load_cards(), args.id)
     if card_now.get("status") != "open":
-        locks.release(f"task/{cid}", holder, tool="task claim")
+        locks.release(resource, holder, tool="task claim")
         print(f"task: {card_now['id']} closed while the claim was being "
               "taken — the fresh lease is released", file=sys.stderr)
         return 2
     data = locks._read_lease(
-        locks._lease_path(_common_dir_quiet(), f"task/{cid}"))
+        locks._lease_path(_common_dir_quiet(), resource))
     if isinstance(data, dict):
         print(f"task: {cid} claimed by '{data.get('holder')}' "
-              f"until {data.get('expires_at')} (lease 'task/{cid}'; the "
+              f"until {data.get('expires_at')} (lease '{resource}'; the "
               "card JSON is untouched)", file=sys.stderr)
     else:
-        print(f"task: {cid} claimed (lease 'task/{cid}')", file=sys.stderr)
+        print(f"task: {cid} claimed (lease '{resource}')", file=sys.stderr)
     return 0
 
 
 def cmd_task_release(args: argparse.Namespace) -> int:
-    """Release a card lease — holder-verified, never on another's behalf."""
+    """Release a card lease — holder-verified, never on another's behalf.
+
+    The lease key is the CARD's identity (#332), so the card must resolve
+    first: an id alone names several cards once parallel workers minted
+    it, and releasing under the wrong one would free a lease nobody
+    holds while the real holder kept squatting.
+    """
     locks._refuse_hostile_env("task release")
-    return locks.release(f"task/{args.id}", locks._holder_id(args.agent),
-                         tool="task release")
+    path, card = _resolve(_load_cards(), args.id)
+    return locks.release(_lease_resource(card),
+                         locks._holder_id(args.agent), tool="task release")
 
 
 def cmd_list(args: argparse.Namespace) -> int:
     cards = _load_cards()
     common = _common_dir_quiet()
-    claim_by_id = {cid: _claim_of(cid, common) for cid, _p, _c in cards}
+    claim_by_id = {cid: _claim_of(c, common) for cid, _p, c in cards}
     if args.json:
         # stdout carries exactly one JSON value, even when empty —
         # the same purity contract `gov run --json` is held to.
