@@ -155,7 +155,7 @@ def test_bare_task_fails_loud_naming_choices(tmp_path, monkeypatch, capsys):
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert ("a subcommand is required "
-            "(new|check|close|claim|release|list|void|tick|show)") in err
+            "(new|check|close|claim|release|list|void|tick|show|repin)") in err
 
 
 # --- claim semantics: leases on cards (D52 applied; card JSON untouched) ------
@@ -906,3 +906,59 @@ def test_lease_key_is_the_card_identity_not_the_bare_id(tmp_path, monkeypatch,
     assert task._lease_resource(a) != task._lease_resource(b)
     assert task._lease_resource(a).startswith("task/T-0003-")
     assert task._lease_resource(b).startswith("task/T-0003-")
+
+
+def test_repin_advances_a_stale_brief_and_records_it(tmp_path, monkeypatch,
+                                                    capsys):
+    """#368: wiring a gate (the sanctioned change) stales every open
+    card's pin at once, and neither close nor void is the honest exit for
+    a brief that did not change. Re-pin is the recorded act that says so."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({"gates": []}),
+                                     encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    assert task.main(["new", "unchanged brief", "--check", "step"]) == 0
+    old_pin = json.loads(next((proj / ".gov/tasks").glob("T-0001-*.json"))
+                         .read_text(encoding="utf-8"))["rules"]["hash"]
+    # the sanctioned constitution change: a new gate lands
+    (proj / "gates.json").write_text(json.dumps(
+        {"gates": [{"id": "noop", "command": ["true"]}]}), encoding="utf-8")
+    _vp.baseline(proj)
+    capsys.readouterr()
+    assert task.main(["check"]) == 1                     # STALE blocks
+    err = capsys.readouterr().err
+    assert "gov task re-pin T-0001 --reason" in err, (
+        "the stale report must name the remedy (#368)")
+    assert task.main(["close", "T-0001"]) == 1           # close refuses
+    assert "gov task re-pin T-0001 --reason" in capsys.readouterr().err
+
+    with pytest.raises(SystemExit):                      # --reason required
+        task.main(["repin", "T-0001"])
+    assert task.main(["repin", "T-0001", "--reason",
+                      "wired the noop gate; the brief is unchanged"]) == 0
+    out = capsys.readouterr().out
+    assert f"re-pinned T-0001 rules@{old_pin[:12]} ->" in out
+    card = json.loads(next((proj / ".gov/tasks").glob("T-0001-*.json"))
+                      .read_text(encoding="utf-8"))
+    repin = card["repins"][-1]
+    assert repin["from"] == old_pin and repin["to"] == card["rules"]["hash"]
+    assert repin["reason"].startswith("wired the noop gate")
+    assert repin["by"] and repin["ts"]
+    assert task.main(["check"]) == 0                     # current again
+    # re-pinning a current card is a no-op, not an error
+    capsys.readouterr()
+    assert task.main(["repin", "T-0001", "--reason", "again"]) == 0
+    assert "nothing to re-pin" in capsys.readouterr().out
+
+
+def test_repin_refuses_non_open_and_needs_reason(tmp_path, monkeypatch,
+                                                 capsys):
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, status="voided", checklist=[])
+    assert task.main(["repin", "T-0001", "--reason", "x"]) == 2
+    assert "not open" in capsys.readouterr().err
+    with pytest.raises(SystemExit):                     # --reason is required
+        task.main(["repin", "T-0001"])

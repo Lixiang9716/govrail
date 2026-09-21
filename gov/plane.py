@@ -372,6 +372,17 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         _copy(TEMPLATES.joinpath("gates.json"), project / "gates.json")
         created.append("gates.json")
 
+    # #367: rules.md calls this file the home of the naming conventions
+    # and gates.json lists it in two gates' `paths` — but nothing created
+    # it, so the reference was false for every fresh adopter, and writing
+    # the file by hand in a sealed repo cost a recorded re-baseline for
+    # content that equals the defaults it overrides. Written here, it is
+    # present from init onward (and adopted by `gov update --apply`).
+    pairing_cfg = gov_dir / "pairing.json"
+    if not pairing_cfg.exists():
+        _copy(TEMPLATES.joinpath("pairing.json"), pairing_cfg)
+        created.append(".gov/pairing.json")
+
     notes_readme = project / ".agents" / "notes" / "README.md"
     if not notes_readme.exists():
         _copy(TEMPLATES.joinpath("notes-README.md"), notes_readme)
@@ -511,8 +522,11 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         # to baseline and reads a red failure as its first gov verdict.
         # A potential counterpart anywhere in the tree, or a declared
         # pairing config, is what makes the baseline advice survivable.
+        # #367: the EVIDENCE of pairs, not the config's existence — init
+        # now writes .gov/pairing.json for everyone, so treating that file
+        # as a signal made every monolingual project read as paired and
+        # get baselining advice that fails on day one (#315's branch).
         has_pairs = any(project.rglob("*.zh.md")) \
-            or (project / ".gov" / "pairing.json").exists() \
             or any(project.glob("*.i18n.yaml"))
         print("next steps:")
         # #309: wiring the first PRODUCT gate is the step that makes the
@@ -571,6 +585,13 @@ def _inventory(created: set[str]) -> list[tuple[str, Any]]:
         (".gov/rules.md", TEMPLATES.joinpath("rules.md")),
         (".agents/notes/README.md", TEMPLATES.joinpath("notes-README.md")),
         (".gov/rejections/README.md", TEMPLATES.joinpath("rejections-README.md")),
+        # #367: rules.md points at this file as the home of the naming
+        # conventions; gates.json lists it in two gates' `paths`. It used
+        # to be referenced-but-never-created, and creating it by hand in a
+        # sealed repo cost a re-baseline — with the defaults inside, an
+        # explicit file changes nothing behaviorally and makes the
+        # reference true.
+        (".gov/pairing.json", TEMPLATES.joinpath("pairing.json")),
         (".gov/hooks/pre-push", TEMPLATES.joinpath("pre-push")),
         (".gov/hooks/pre-commit", TEMPLATES.joinpath("pre-commit")),
         ("docs/decisions.md", TEMPLATES.joinpath("decisions-table.md")),

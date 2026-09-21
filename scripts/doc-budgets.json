@@ -1,24 +1,24 @@
 {
-  "limits": {
-    "README.md": 19000,
-    "README.zh.md": 9200,
-    "AGENTS.md": 800,
-    "CONTRIBUTING.md": 6800,
-    "CONTRIBUTING.zh.md": 3700,
-    "docs/architecture.md": 23500,
-    "docs/architecture.zh.md": 11000,
-    "docs/truth-sources.md": 5800,
-    "docs/truth-sources.zh.md": 3700,
-    "docs/tiers.md": 1500,
-    "docs/tiers.zh.md": 800,
-    "docs/postmortem/README.md": 1500,
-    "docs/postmortem/README.zh.md": 700,
-    ".gov/rules.md": 7200,
-    ".agents/notes/README.md": 2900,
-    ".agents/skills/govrail/SKILL.md": 11000,
-    ".agents/skills/recall-first/SKILL.md": 3500,
-    ".agents/skills/pre-push-checks/SKILL.md": 2400,
-    ".agents/skills/code-review/SKILL.md": 3000,
-    ".agents/skills/archive-agent-notes/SKILL.md": 2400
-  }
+ "limits": {
+  "README.md": 19000,
+  "README.zh.md": 9200,
+  "AGENTS.md": 800,
+  "CONTRIBUTING.md": 6800,
+  "CONTRIBUTING.zh.md": 3700,
+  "docs/architecture.md": 23500,
+  "docs/architecture.zh.md": 11000,
+  "docs/truth-sources.md": 5800,
+  "docs/truth-sources.zh.md": 3700,
+  "docs/tiers.md": 1500,
+  "docs/tiers.zh.md": 800,
+  "docs/postmortem/README.md": 1500,
+  "docs/postmortem/README.zh.md": 700,
+  ".gov/rules.md": 7200,
+  ".agents/notes/README.md": 2900,
+  ".agents/skills/govrail/SKILL.md": 11100,
+  ".agents/skills/recall-first/SKILL.md": 3500,
+  ".agents/skills/pre-push-checks/SKILL.md": 2400,
+  ".agents/skills/code-review/SKILL.md": 3000,
+  ".agents/skills/archive-agent-notes/SKILL.md": 2400
+ }
 }

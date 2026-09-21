@@ -130,6 +130,7 @@ gov task check                 # after a rules adoption: name the stale cards
                                #  (one line per card; --verbose keeps void reasons)
 gov task tick T-0001 1         # tick checklist item 1 (canonical "[x] "); hand-editing card JSON is never OK
 gov task show T-0001           # render a card whole: checklist, void reason, receipt
+gov task repin T-0001 --reason "wired a gate; brief unchanged"  # advance a stale rules pin
 gov task claim T-0001 --agent w1 --ttl 20m  # lease an open card for one worker
                                             # (two workers cannot take one; busy → exit 3)
 gov task release T-0001 --agent w1          # release the card lease you hold
@@ -172,7 +173,7 @@ commands:
   recall           retrieve notes, decisions, and postmortems (all terms, ranked)
   change-scope     report touched surfaces (e.g. --base <ref>)
   surprise         the surprise ledger (record/list): expectation vs reality, counted per signature; rule 11 — the third occurrence of a signature escalates into a process improvement
-  task             task cards for subagent briefs (new/check/tick/show/close/claim/release/list/void; rules@hash pin + checklist + green-run receipt; tick is how the checklist gets ticked, claim/release lease a card so two workers cannot take one)
+  task             task cards for subagent briefs (new/check/tick/show/repin/close/claim/release/list/void; rules@hash pin + checklist + green-run receipt; tick is how the checklist gets ticked, repin advances a stale pin after a constitution change, claim/release lease a card so two workers cannot take one)
   preset           typed adoption bundles (list/show/apply): a project type's gates, skills, and manifest hints — additive, never overwriting (D53)
   update           one deliberate migration step: adopt missing/moved templates, merge newly shipped gates, refresh the CI pin, re-seal the plane (dry run by default; --apply executes; the seal needs --confirm-unattended or a TTY)
 ```

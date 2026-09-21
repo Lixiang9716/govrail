@@ -763,3 +763,30 @@ def test_init_output_tells_the_operator_to_commit(tmp_path, capsys):
     assert plane.init(tmp_path) == 0
     out = capsys.readouterr().out
     assert "commit the generated governance files now" in out
+
+
+def test_init_writes_the_pairing_config_rules_md_points_at(tmp_path):
+    """#367: rules.md calls `.gov/pairing.json` the home of the naming
+    conventions and gates.json lists it in two gates' `paths` — but
+    nothing created it, so the reference was false for every fresh
+    adopter, and creating it by hand in a sealed repo cost a recorded
+    re-baseline for content that equals the defaults it overrides."""
+    import json as _json
+    from gov import verify_translation_pairing as vtp
+    assert plane.init(tmp_path) == 0
+    cfg = tmp_path / ".gov" / "pairing.json"
+    assert cfg.is_file(), "rules.md points at this file; init must write it"
+    written = _json.loads(cfg.read_text(encoding="utf-8"))
+    assert written == vtp.DEFAULT_CONFIG, (
+        "the written file must BE the defaults — an explicit config that "
+        "changed behavior would be a silent re-typing of the plane")
+
+
+def test_adopt_writes_the_pairing_config_where_it_is_missing(tmp_path,
+                                                            capsys):
+    assert plane.init(tmp_path) == 0
+    (tmp_path / ".gov" / "pairing.json").unlink()
+    assert plane.init(tmp_path, adopt=[".gov/pairing.json"]) == 0
+    out = capsys.readouterr().out
+    assert ".gov/pairing.json" in out
+    assert (tmp_path / ".gov" / "pairing.json").is_file()

@@ -109,6 +109,7 @@ gov task new "标题" --check "验收项"  # 任务卡：一行 rules@<hash> 钉
 gov task check                 # 规则采纳后点名过期卡片（一卡一行；--verbose 保留作废理由）
 gov task tick T-0001 1         # 勾选清单第 1 项（规范写法 "[x] "）；手改卡片 JSON 永远是禁区
 gov task show T-0001           # 完整渲染一张卡：清单、作废理由、回执
+gov task repin T-0001 --reason "新接了门禁，简报未变"  # 推进过期的 rules 钉（简报未变时）
 gov task claim T-0001 --agent w1 --ttl 20m  # 把开着的卡租给一个 worker（两人不能同领；
                                             #  busy → exit 3 点名持有者）
 gov task release T-0001 --agent w1          # 释放自己持有的卡片租约
