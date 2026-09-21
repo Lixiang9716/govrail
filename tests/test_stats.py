@@ -565,3 +565,46 @@ def _all_nodes(root):
         n = stack.pop()
         yield n
         stack.extend(n.children)
+
+
+class TestUnavailableGrammar:
+    """A grammar wheel this interpreter cannot load (the Windows ABI case)
+    skips ITS language, loudly and by name — never a dead command, and
+    never a silent zero."""
+
+    def _break(self, monkeypatch, lang="ada"):
+        from gov import parse as parse_mod
+        real = parse_mod.load_pack
+
+        def fake(name):
+            if name == lang:
+                raise parse_mod.ParseUnavailable(
+                    f"language pack {name!r}: grammar boom (OverflowError)")
+            return real(name)
+        monkeypatch.setattr(parse_mod, "load_pack", fake)
+        return parse_mod
+
+    def test_stats_skips_it_by_name_and_keeps_sweeping(self, tmp_path,
+                                                       monkeypatch, capsys):
+        self._break(monkeypatch)
+        monkeypatch.chdir(tmp_path)
+        assert stats.main(["--json"]) == 0
+        err = capsys.readouterr().err
+        assert "SKIP(unavailable grammar: ada)" in err
+        assert "OverflowError" in err          # the cause travels with it
+
+    def test_explicit_lang_still_fails_loud(self, tmp_path, monkeypatch,
+                                            capsys):
+        self._break(monkeypatch)
+        monkeypatch.chdir(tmp_path)
+        assert stats.main(["--lang", "ada"]) == 2
+        assert "language pack 'ada'" in capsys.readouterr().err
+
+    def test_parse_report_names_it_instead_of_no_match(self, tmp_path,
+                                                       monkeypatch):
+        self._break(monkeypatch)
+        (tmp_path / "x.adb").write_text("procedure P is\nbegin\nnull;\nend P;\n",
+                                        encoding="utf-8")
+        reports, skipped = stats.parse_report([tmp_path / "x.adb"])
+        assert not reports
+        assert skipped and "language pack 'ada'" in skipped[0]["reason"], skipped

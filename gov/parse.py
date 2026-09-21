@@ -162,10 +162,19 @@ def load_pack(name: str) -> LangPack:
             raise ParseUnavailable(
                 f"grammar module {raw['grammar']!r} has no language() factory")
     from tree_sitter import Language  # core binding; present iff grammars are
-    language = Language(lang_fn())
-    kind_ids = {}
-    for i in range(language.node_kind_count):
-        kind_ids[language.node_kind_for_id(i)] = i
+    try:
+        language = Language(lang_fn())
+        kind_ids = {}
+        for i in range(language.node_kind_count):
+            kind_ids[language.node_kind_for_id(i)] = i
+    except Exception as e:  # noqa: BLE001 — a wheel this interpreter cannot
+        # load (an ABI the platform build disagrees with, a broken binary)
+        # must be NAMED: the plane's answer to "this grammar is unusable
+        # here" is a declared skip of that language, never a bare traceback
+        # out of a command (rule 5's naming side).
+        raise ParseUnavailable(
+            f"language pack {name!r}: grammar {raw['grammar']!r} cannot be "
+            f"loaded by this interpreter ({type(e).__name__}: {e})") from e
     for key in ("nesting", "functions", "classes", "comment", "string"):
         bad = [k for k in raw[key] if k not in kind_ids]
         if bad:
