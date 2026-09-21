@@ -95,7 +95,9 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   what a change will cost; rule 1's smallest-sufficient-set starts here.
 - `gov check` — the syntax-class static checkers, by hand. The `check`
   gate runs them scoped; invoke directly to re-judge one tree on demand
-  (`--strict` makes warnings block).
+  (`--strict` makes warnings block). Vendored trees the lite grammar
+  cannot judge are declared in `.gov/checks/exclude.json` (glob + reason)
+  — every exclusion surfaces as a counted SKIP, never invisible.
 - `gov self-test` — every governance gate proves it can reject (rule
   6). Run it whenever touching gates.json, a checker, or a rejection
   case; a gate whose rejection proof is red is vacuous, not green.
@@ -136,6 +138,9 @@ push (the pre-push hook re-runs the scoped DAG automatically).
 
 **Memory and history**
 - `gov recall` — before proposing anything (see the recall-first skill).
+  A cold start has no vocabulary: `gov recall --recent [N]` primes the
+  corpus with the newest entries. A quoted phrase searches the same terms
+  as separate arguments (the AND is over words, not the literal string).
 - `gov surprise record "<expectation>" --reality "<what happened>"` —
   rule 11's teeth: record expectation-vs-reality the session you notice
   it; the ledger counts recurrences per signature and the `surprises`

@@ -557,13 +557,32 @@ def _kill_tree(proc: Any) -> None:
             pass
 
 
-def _run_one(gate: Gate, live: set | None = None) -> tuple[Gate, str, str, bool, int]:
-    """Run one gate; return (gate, outcome, detail, blocking_failed, duration_ms).
+def _first_line(text: str) -> str:
+    """The first non-blank line, trimmed — the summary's quoting unit."""
+    for line in text.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def _run_one(gate: Gate, live: set | None = None
+             ) -> tuple[Gate, str, str, bool, int, str]:
+    """Run one gate; return (gate, outcome, detail, blocking_failed,
+    duration_ms, summary_line).
 
     A passing gate's output is kept as detail too: exit 0 with something
     to say (a warning, an advisory) must stay visible — passing never
     silences a gate (D20 amends D2's "passes are silent").
-    """
+
+    ``summary_line`` — the one line the failure summary quotes (#341).
+    Gates split two ways about where their blocking diagnostic lives:
+    the task gate prints per-card status lines to stdout and its problems
+    to stderr, the check gate prints findings to stdout and keeps stderr
+    for fatal config errors. The plane's own convention (D26) puts the
+    human report on stderr, so stderr wins when it said anything and the
+    gate's stdout leads otherwise — quoting the combined first line made
+    the summary name whichever status line happened to print first, and
+    a voided card's story is not a diagnostic."""
     exe = gate.command[0]
     started = time.monotonic()
     # Resolve once and run the resolved path: on Windows a bare name like
@@ -579,7 +598,8 @@ def _run_one(gate: Gate, live: set | None = None) -> tuple[Gate, str, str, bool,
         command = [*os.environ["GOV_BIN"].split(), *gate.command[1:]]
         resolved = shutil.which(command[0]) or command[0]
     if resolved is None:
-        return gate, "MISSING", f"command not found: {exe}", True, 0
+        return gate, "MISSING", f"command not found: {exe}", True, 0, \
+            f"command not found: {exe}"
     timeout_ms = gate.timeout_ms or DEFAULT_TIMEOUT_MS
     try:
         proc = subprocess.Popen(
@@ -598,7 +618,8 @@ def _run_one(gate: Gate, live: set | None = None) -> tuple[Gate, str, str, bool,
     except OSError as exc:
         # Exec-format (no shebang), permission, ... — a gate that cannot
         # start is a gate outcome (MISSING), never a runner traceback.
-        return gate, "MISSING", f"cannot execute {exe}: {exc}", True, 0
+        return gate, "MISSING", f"cannot execute {exe}: {exc}", True, 0, \
+            f"cannot execute {exe}: {exc}"
     if live is not None:
         live.add(proc)
     timed_out = False
@@ -628,14 +649,16 @@ def _run_one(gate: Gate, live: set | None = None) -> tuple[Gate, str, str, bool,
             detail += " — captured output:\n" + output[:2000]
             if len(output) > 2000:
                 detail += "\n... (truncated at 2000 characters)"
-        return gate, "TIMEOUT", detail, True, duration_ms
+        return gate, "TIMEOUT", detail, True, duration_ms, \
+            (_first_line(output) or f"exceeded {timeout_ms}ms")
     if proc.returncode == 0:
-        return gate, "PASS", output, False, duration_ms
+        return gate, "PASS", output, False, duration_ms, ""
     # #109 failure-first: a failing gate's evidence is never clipped at
     # capture time — the full output flows to the report and the JSON
     # record, so "why did it fail" is answered by one run. Passing gates
     # keep their display-side budget instead (D20 tail-3).
-    return gate, "FAIL", output, True, duration_ms
+    return gate, "FAIL", output, True, duration_ms, \
+        (_first_line(err) if (err or "").strip() else _first_line(out))
 
 
 def _changed_files(base: str) -> list[str] | None:
@@ -723,6 +746,7 @@ def run_gates(
 
     outcomes: dict[str, str] = {}
     details: dict[str, str] = {}
+    summaries: dict[str, str] = {}
     blocking: dict[str, bool] = {}
     durations: dict[str, int] = {}
     skipped_set: set[str] = set()
@@ -782,9 +806,11 @@ def run_gates(
             done, _ = wait(pending, return_when=FIRST_COMPLETED)
             for fut in done:
                 pending.pop(fut, None)
-                g, outcome, detail, is_blocking, duration_ms = fut.result()
+                g, outcome, detail, is_blocking, duration_ms, summary = \
+                    fut.result()
                 outcomes[g.id] = outcome
                 details[g.id] = detail
+                summaries[g.id] = summary
                 durations[g.id] = duration_ms
                 blocking[g.id] = is_blocking and not g.allow_failure
                 scope_n = None
@@ -844,7 +870,11 @@ def run_gates(
     if failed:
         emit(f"--- summary: {len(failed)} blocking failure(s) ---")
         for gid in failed:
-            first = details[gid].strip().splitlines()[0] if details[gid].strip() else ""
+            # #341: the quote is the gate's diagnostic line (stderr first,
+            # then stdout — see _run_one), never just its first status
+            # line: a voided card's story line used to stand in for the
+            # real blocking cause two hundred lines down.
+            first = summaries.get(gid) or ""
             # #109: the failure line itself names the rerun command — the
             # reader should not have to remember the flag exists. The
             # gate's own output printed once in the body above (#317);

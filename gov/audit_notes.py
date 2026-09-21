@@ -91,7 +91,7 @@ FLAGS: dict[str, set[str]] = {
     "parse": {"--json", "--lang"},
     "doctor": {"--json"},
     "whatsnew": {"--since"},
-    "recall": {"--any", "--snippet", "--fuzzy"},
+    "recall": {"--any", "--snippet", "--fuzzy", "--recent"},
     "audit-notes": {"--json"},
     "change-scope": {"--base"},
     "surprise": {"--reality", "--sig", "--surface", "--json"},

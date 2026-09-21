@@ -87,7 +87,8 @@ def run_pre_commit() -> int:
         # --staged. A gate configured for the stage that lacks the flag
         # fails its own run — visible below, not silently skipped.
         gate = _dc_replace(g, command=[*g.command, "--staged"])
-        _g, outcome, detail, is_blocking, _duration = gates_mod._run_one(gate)
+        _g, outcome, detail, is_blocking, _duration, _summary = \
+            gates_mod._run_one(gate)
         blocking = is_blocking and not g.allow_failure
         tag = " (advisory; allowFailure)" if is_blocking and g.allow_failure else ""
         print(f"{outcome} {g.id}{tag}", flush=True)

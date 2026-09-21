@@ -301,6 +301,20 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _uncommitted_reminder(card_path: Path) -> None:
+    """#345: void/close mutate a tracked card file; if that mutation is
+    still uncommitted, say so — the void-before-push ritual lands the
+    mutation AFTER the last content commit, and a pushed tree carrying a
+    stale card is exactly the silent regression rule 9 exists for."""
+    proc = subprocess.run(
+        ["git", "status", "--porcelain", "--", str(card_path)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env=locks._scrubbed_env())
+    if proc.returncode == 0 and proc.stdout.strip():
+        print("task: card mutation is uncommitted — commit it before "
+              "pushing so the pushed tree carries the exit")
+
+
 def cmd_void(args: argparse.Namespace) -> int:
     """Retire a card without the gate receipt (#322): the exit rule 9
     promises ("or explicitly defer it") and the tool never had.
@@ -344,6 +358,7 @@ def cmd_void(args: argparse.Namespace) -> int:
     print(f"task: voided {card['id']} — {args.reason}")
     print(f"  recorded by {card['void']['by']} at {card['void']['ts']} "
           "(the card file stays; its history is auditable)")
+    _uncommitted_reminder(path)
     return 0
 
 
@@ -432,6 +447,7 @@ def cmd_close(args: argparse.Namespace) -> int:
                       force=args.force)
     print(f"task: closed {card['id']} with an all-green "
           f"{args.mode} run ({len(records)} gates)")
+    _uncommitted_reminder(path)
     return 0
 
 
