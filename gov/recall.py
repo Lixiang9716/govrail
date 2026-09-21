@@ -119,6 +119,7 @@ class Entry:
     title: str
     headings: list[str]
     body: str
+    superseded_by: str = ""   # #364: the optional forward pointer, if any
 
 
 @dataclass
@@ -142,6 +143,14 @@ class Corpus:
                 f"(implemented {self.implemented}, archived {self.archived}), "
                 f"{decisions}, postmortems {self.postmortems} "
                 f"({POSTMORTEM.as_posix()}/)")
+
+
+def _superseded_by(text: str) -> str:
+    """The note this one names as its replacement ('' when none, #364)."""
+    for line in text.splitlines()[:8]:
+        if line.startswith("Superseded by:"):
+            return line[len("Superseded by:"):].strip()
+    return ""
 
 
 def _title_of(text: str) -> str:
@@ -169,7 +178,8 @@ def _corpus() -> Corpus:
         files = sorted(root.rglob("*.md"))
         for p in files:
             text = p.read_text(encoding="utf-8-sig")
-            out.append(Entry(p.as_posix(), _title_of(text), _headings_of(text), text))
+            out.append(Entry(p.as_posix(), _title_of(text), _headings_of(text),
+                             text, _superseded_by(text)))
         if lifecycle == "implemented":
             implemented = len(files)
         else:
@@ -304,7 +314,9 @@ def _print_recent(entries: list[Entry], n: int) -> int:
     ranked = sorted(entries, key=_recent_key, reverse=True)[:n]
     print(f"recall: {len(ranked)} recent entry/ies (newest first)")
     for e in ranked:
-        print(f"{e.source} — {e.title or '(untitled)'}")
+        mark = (f" (superseded by {e.superseded_by})"
+                if e.superseded_by else "")
+        print(f"{e.source} — {e.title or '(untitled)'}{mark}")
         for line in e.body.splitlines():
             text = line.strip()
             if not text or text.startswith(("#", "|", "Status:",
@@ -396,7 +408,9 @@ def main(argv: list[str] | None = None) -> int:
         # (F4).
         scored.sort(key=lambda s: (-s[0], -s[1], "/archived/" in s[2], s[2]))
         for k, _best, source, where, e in scored:
-            print(f"{source} — matched {k}/{len(terms)} terms ({where})")
+            mark = (f" (superseded by {e.superseded_by})"
+                    if e.superseded_by else "")
+            print(f"{source} — matched {k}/{len(terms)} terms ({where}){mark}")
             if args.snippet:
                 line = _snippet(e, [t for t, _p in
                                     ((t, _presence(e, t, args.fuzzy))
@@ -419,10 +433,18 @@ def main(argv: list[str] | None = None) -> int:
 
     # Equal ranks: current authority (implemented/) outranks frozen
     # evidence (archived/), then path order (F4).
-    hits.sort(key=lambda h: (-h[0], "/archived/" in h[1], h[1]))
+    # Equal ranks: current authority (implemented/, and not superseded)
+    # outranks frozen or retired evidence (F4; #364 adds the forward
+    # pointer to that ordering — a note that says it was replaced must
+    # not outrank the note that replaced it).
     by_source = {e.source: e for e in entries}
+    hits.sort(key=lambda h: (-h[0], "/archived/" in h[1],
+                             bool(by_source[h[1]].superseded_by), h[1]))
     for rank, source, where in hits:
-        print(f"{source} — matched in {where}")
+        e = by_source.get(source)
+        mark = (f" (superseded by {e.superseded_by})"
+                if e is not None and e.superseded_by else "")
+        print(f"{source} — matched in {where}{mark}")
         if args.snippet and (e := by_source.get(source)):
             line = _snippet(e, terms)
             if line:

@@ -47,6 +47,19 @@ The body carries three required sections, in this order:
 sections (`## Testing`, `## Related`) are allowed and not enforced. `gov note verify`
 rejects a note missing any required section.
 
+`Status:` has exactly one value (`implemented`) — the lifecycle is the
+directory. A note a LATER note replaces keeps that status and adds an optional
+forward pointer:
+
+```
+Superseded by: 2026-09-21-the-note-that-replaces-it.md
+```
+
+The new note still links back (rule 4); this line makes the pair symmetric, so
+a reader landing on the old note first sees it is retired. `gov note verify`
+accepts it (empty is a violation) and prints the pair; `gov recall` marks such
+notes and ranks them below current ones.
+
 ## When to write one
 
 Every non-trivial change adds or updates at least one note in the same PR. A

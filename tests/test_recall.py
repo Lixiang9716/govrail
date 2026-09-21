@@ -241,3 +241,32 @@ def test_bare_recall_is_a_usage_error_not_a_crash(tmp_path, monkeypatch):
     _memory(tmp_path)
     with pytest.raises(SystemExit):
         recall.main([])
+
+
+def test_superseded_notes_are_marked_and_rank_below_current(tmp_path,
+                                                            monkeypatch,
+                                                            capsys):
+    """#364: the forward pointer is optional and additive; recall must
+    make it visible — and a note that says it was replaced must not
+    outrank the note that replaced it."""
+    monkeypatch.chdir(tmp_path)
+    _memory(tmp_path)
+    notes = tmp_path / ".agents" / "notes" / "implemented" / "architecture"
+    (notes / "2026-01-01-old-runner.md").write_text(
+        "# Agent Note: the runner shapes\n\nStatus: implemented\n"
+        "Superseded by: 2026-01-02-new-runner.md\n\n"
+        "## Problem\nthe old way.\n\n## Decision\nold shape.\n\n"
+        "## Alternatives considered\nnone.\n", encoding="utf-8")
+    (notes / "2026-01-02-new-runner.md").write_text(
+        "# Agent Note: the runner shapes, again\n\nStatus: implemented\n"
+        "Supersedes 2026-01-01-old-runner.md (rule 4's back-link).\n\n"
+        "## Problem\nthe old way.\n\n## Decision\nnew shape.\n\n"
+        "## Alternatives considered\nkeeping it.\n", encoding="utf-8")
+    assert recall.main(["shapes"]) == 0
+    out = capsys.readouterr().out
+    old_line = [l for l in out.splitlines() if "old-runner" in l][0]
+    new_line = [l for l in out.splitlines() if "new-runner" in l][0]
+    assert "(superseded by 2026-01-02-new-runner.md)" in old_line
+    assert "superseded" not in new_line
+    assert out.index(new_line) < out.index(old_line), (
+        "the replacement outranks the note it replaced at equal rank")

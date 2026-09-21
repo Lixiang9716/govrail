@@ -65,6 +65,15 @@ def _resolve_auto_base() -> tuple[str, str]:
     3. clean, no upstream  -> HEAD~1        (review the last commit)
     4. single commit       -> the empty tree (everything is the change)
     """
+    # #363: the pre-push hook declares the push's scope in
+    # GOV_CHANGE_BASE — "this run is about THESE commits". Honoring it
+    # here is what keeps a push scoped to what it carries: without it,
+    # a dirty shared checkout's working tree (including untracked files
+    # no push can carry) decides what the gates judge.
+    import os
+    declared = os.environ.get("GOV_CHANGE_BASE", "").strip()
+    if declared:
+        return declared, "GOV_CHANGE_BASE — the push's own scope (#363)"
     status = gitutil.git("status", "--porcelain")
     if status.returncode == 0 and status.stdout.strip():
         return "HEAD", "dirty worktree — reviewing the working tree"

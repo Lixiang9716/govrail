@@ -157,3 +157,65 @@ def test_real_git_deletion_push_is_relayed_verbatim(tmp_path, monkeypatch):
     assert wire[-1].split("|")[0] == "(delete)", wire
     assert set(wire[-1].split("|")[1]) == {"0"}, \
         "deletion local oid must be all zeros"
+
+
+# ── #363: a new branch is gated against what it CARRIES ──────────────
+
+def _hooked_with_origin(hooked):
+    """The fixture's repo plus a real origin and a real fork point."""
+    sp = subprocess
+    tmp_path = hooked[0]
+    for argv in (["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"],
+                 ["git", "commit", "--allow-empty", "-qm", "base"]):
+        sp.run(argv, cwd=tmp_path, check=True, capture_output=True)
+    remote = tmp_path.parent / f"{tmp_path.name}-origin.git"
+    sp.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    sp.run(["git", "remote", "add", "origin", str(remote)], cwd=tmp_path,
+           check=True)
+    sp.run(["git", "push", "-q", "--no-verify", "origin",
+            "HEAD:refs/heads/main"], cwd=tmp_path, check=True)
+    sp.run(["git", "fetch", "-q", "origin"], cwd=tmp_path, check=True)
+    sp.run(["git", "remote", "set-head", "origin", "main"], cwd=tmp_path,
+           check=True)
+    fork = sp.run(["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True,
+                  capture_output=True, text=True).stdout.strip()
+    sp.run(["git", "commit", "--allow-empty", "-qm", "the branch's work"],
+           cwd=tmp_path, check=True, capture_output=True)
+    tip = sp.run(["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True,
+                 capture_output=True, text=True).stdout.strip()
+    log = hooked[1]
+    log.write_text("", encoding="utf-8")   # the setup push is not the subject
+    return tmp_path, log, hooked[2], fork, tip
+
+
+def test_new_branch_scopes_to_the_fork_point(hooked):
+    """#363: the full matrix on a new branch means `gov run` with no base,
+    which on a dirty shared checkout reviews the whole working tree —
+    untracked files a push cannot carry included. With a shared ancestor
+    the hook scopes to the fork point: exactly the commits being pushed."""
+    tmp_path, log, checkout, fork, tip = _hooked_with_origin(hooked)
+    r = _push((tmp_path, log, checkout),
+              [f"{checkout} {tip} refs/heads/feature {ZERO}"])
+    assert r.returncode == 0, r.stderr
+    assert _calls(log) == [f"run --base {fork}"], (
+        "a new branch with a fork point must be reviewed against it")
+    assert "scoping to the fork point" in r.stderr
+
+
+def test_push_scope_is_exported_to_the_gates(hooked, monkeypatch, tmp_path):
+    """The hook declares the push's scope in GOV_CHANGE_BASE so
+    change-scoped TOOLS can honor it (#363) — a project gate reading the
+    env judges the push range instead of the working tree."""
+    tmp_path, log, checkout, fork, tip = _hooked_with_origin(hooked)
+    stub = tmp_path / "gov-env-stub.sh"
+    stub.write_text(
+        "#!/bin/sh\n"
+        'echo "GOV_CHANGE_BASE=${GOV_CHANGE_BASE:-unset} $@" >> '
+        f"{log}\n", encoding="utf-8")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("GOV_BIN", str(stub))
+    r = _push((tmp_path, log, checkout),
+              [f"{checkout} {tip} refs/heads/feature {ZERO}"])
+    assert r.returncode == 0, r.stderr
+    assert _calls(log) == [f"GOV_CHANGE_BASE={fork} run --base {fork}"]

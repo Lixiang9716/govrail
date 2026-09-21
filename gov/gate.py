@@ -122,6 +122,21 @@ def cmd_add(args: argparse.Namespace) -> int:
     if wanted:
         doc["modes"] = modes
 
+    if args.dry_run:
+        # #366: reporting the exact wiring command in a PR body, and
+        # confirming it, must not drift a sealed gates.json. Everything
+        # above validated the same pieces the real run validates; this
+        # stops short of the write and the verification run.
+        print("gate add: dry run — gates.json is untouched, nothing ran")
+        print(f"  entry: {json.dumps(gate, ensure_ascii=False)}")
+        memberships = [m for m in dict.fromkeys(wanted) if m != "none"]
+        print("  modes: " + (", ".join(memberships) if memberships
+                             else "(none — the gate runs only via "
+                                  "--gate/--every-gate)"))
+        print(f"  verify with: {' '.join(_gov_invocation())} run --gate "
+              f"{args.id}")
+        return 0
+
     text = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
     # Rule 6 in spirit: the merged config must pass the runner's own
     # schema loader BEFORE it lands — never write a gates.json the next
@@ -176,7 +191,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="cmd", metavar="<subcommand>")
     p_add = sub.add_parser(
-        "add", help="add a gate to gates.json (validated, verified)")
+        "add", help="add a gate to gates.json (validated, verified)",
+        # #366: the grammar was documented only in a source comment, so
+        # `--help` did not say where the command goes — and agents and CI
+        # wrappers enumerate help output, not source.
+        usage="gov gate add <id> [options] -- <command...>",
+        epilog="The gate's own argv goes after a standalone '--' (or after "
+               "--command):\n"
+               "  gov gate add tests --paths 'tests/**' -- pytest -q\n"
+               "  gov gate add lint --mode quick -- ruff check .\n"
+               "Options before the separator configure the gate; everything "
+               "after it is the argv the gate runs, verbatim. "
+               "--dry-run validates and prints without writing.")
     p_add.add_argument("id", help="gate id (lowercase; identity in the DAG)")
     p_add.add_argument("--paths", action="append", default=[], metavar="GLOB",
                        help="scope the gate to files matching this glob "
@@ -194,6 +220,11 @@ def build_parser() -> argparse.ArgumentParser:
                        help="advisory: failures are reported, never block")
     p_add.add_argument("--timeout", type=int, default=None, metavar="MS",
                        help="kill the gate after this many milliseconds")
+    p_add.add_argument("--dry-run", action="store_true",
+                       help="validate and PRINT the gate entry, the mode "
+                            "changes and the verification argv — write "
+                            "nothing, run nothing (nothing touches a "
+                            "sealed gates.json)")
     return parser
 
 
@@ -205,6 +236,12 @@ def main(argv: list[str] | None = None) -> int:
     # options that follow the positional id.
     if "--" in argv:
         split = argv.index("--")
+        argv, command = argv[:split], argv[split + 1:]
+    elif "--command" in argv:
+        # #366: a caller that builds argv programmatically cannot always
+        # emit a bare '--' positionally; the named separator is the same
+        # grammar with an explicit spelling.
+        split = argv.index("--command")
         argv, command = argv[:split], argv[split + 1:]
     else:
         command = []
