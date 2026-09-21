@@ -375,3 +375,26 @@ def test_strict_attribution_needs_a_token_not_a_substring(tmp_path,
     rc = verify_note_presence.main(["--strict"])
     assert rc == 1, "the near-miss must not attribute the real path"
     assert "src/auth/login.py" in capsys.readouterr().out
+
+
+def test_push_scope_is_honored_only_in_its_own_repository(tmp_path, monkeypatch,
+                                                          capsys):
+    """#363 follow-up: the hook's GOV_CHANGE_BASE is inherited by every
+    subprocess a gate spawns. A scratch repo (a self-test fixture, a
+    nested checkout) must NOT be judged against a ref it never had — the
+    first cut leaked exactly that way and made the plane's own self-test
+    fail on "bad object"."""
+    import subprocess as sp
+    sp.run(["git", "init", "-q", "."], cwd=tmp_path, check=True,
+           capture_output=True)   # a real repository the scope is not for
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GOV_CHANGE_BASE", "deadbeef")
+    monkeypatch.setenv("GOV_CHANGE_ROOT", str(tmp_path.parent / "elsewhere"))
+    base, why = vnp._resolve_auto_base()
+    assert base != "deadbeef" and "GOV_CHANGE_BASE" not in why, (
+        "a scope declared for another repository must be ignored")
+
+    monkeypatch.setenv("GOV_CHANGE_ROOT", str(tmp_path))
+    base, why = vnp._resolve_auto_base()
+    assert base == "deadbeef" and "GOV_CHANGE_BASE" in why, (
+        "in its own repository the declared scope is what this run is about")

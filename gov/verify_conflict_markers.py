@@ -65,13 +65,20 @@ def _resolve_auto_base() -> tuple[str, str]:
     3. clean, no upstream  -> HEAD~1        (review the last commit)
     4. single commit       -> the empty tree (everything is the change)
     """
-    # #363: the pre-push hook declares the push's scope in
-    # GOV_CHANGE_BASE — "this run is about THESE commits". Honoring it
-    # here is what keeps a push scoped to what it carries: without it,
-    # a dirty shared checkout's working tree (including untracked files
-    # no push can carry) decides what the gates judge.
     import os
     declared = os.environ.get("GOV_CHANGE_BASE", "").strip()
+    if declared:
+        # ...but only in the repository it was declared for: the env is
+        # inherited by every subprocess a gate spawns, and a scratch repo
+        # (a self-test's fixture, a nested checkout) must not be judged
+        # against a ref it never had — the first cut leaked exactly that
+        # way and made gov note presence fail on "bad object".
+        root = os.environ.get("GOV_CHANGE_ROOT", "").strip()
+        if root:
+            top = gitutil.git("rev-parse", "--show-toplevel")
+            here = top.stdout.strip() if top.returncode == 0 else ""
+            if here != root:
+                declared = ""
     if declared:
         return declared, "GOV_CHANGE_BASE — the push's own scope (#363)"
     status = gitutil.git("status", "--porcelain")

@@ -48,6 +48,10 @@ case "$(git rev-parse --show-object-format 2>/dev/null | tr -d '[:space:]')" in
 esac
 
 checkout_ref=$(git symbolic-ref --quiet HEAD 2>/dev/null)
+# The scope a gate honors is only valid in THIS repository: the env is
+# inherited by every subprocess a gate spawns, and a scratch repo inside
+# a self-test would otherwise be judged against a ref it never had.
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 base=""
 bases=0
 full=0
@@ -128,6 +132,6 @@ else
     # own size/logging gates that read it) which range this run is about;
     # without it they fall back to their own cascade, which on a dirty
     # tree means the working tree. See the pre-push-checks skill.
-    GOV_CHANGE_BASE="$base" \
+    GOV_CHANGE_BASE="$base" GOV_CHANGE_ROOT="$repo_root" \
         gov_cmd run --base "$base"
 fi

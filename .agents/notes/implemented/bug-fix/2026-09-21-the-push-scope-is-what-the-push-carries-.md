@@ -34,9 +34,15 @@ sharp edge sharp.
   `gov run --base <fork>`, saying so on stderr. No shared ancestor
   (a genuinely new history) still takes the full matrix.
 - **The hook declares that scope to the gates**: `GOV_CHANGE_BASE` is
-  exported for the run, and the change-scoped tools (`gov check`,
-  `note presence`, `conflict-markers`) use it in place of their own
-  cascade when it is set. A project's own gate can read the same
+  exported for the run, with `GOV_CHANGE_ROOT` naming the repository it
+  is valid in, and the change-scoped tools (`gov check`, `note presence`,
+  `conflict-markers`) use it in place of their own cascade when it is
+  set — **only where it applies**. The guard is not decoration: the
+  first cut honored the ref everywhere, so the env leaked into every
+  subprocess a gate spawns and the plane's own self-test fixtures failed
+  on "bad object <ref>" in a scratch repo that never had it. A declared
+  scope with no root (a hand-set env) is honored as written; with a root,
+  it applies only in that repository. A project's own gate can read the same
   variable, which is what lets a repo-local size/logging tool judge the
   push instead of the checkout (the adopter's tools are the ones that
   still scan untracked; the contract now exists for them to honor).
