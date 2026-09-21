@@ -43,7 +43,7 @@ SUBS = {
     "lease": {"acquire", "release", "list"},
     "verify": {"pairing", "rubric", "conflict-markers", "doc-sync"},
     "task": {"new", "check", "close", "claim", "release", "list",
-             "void", "tick", "show"},
+             "void", "tick", "show", "repin"},
     "preset": {"list", "show", "apply"},
     "receipt": {"verify", "show"},
     "hooks": {"pre-commit"},

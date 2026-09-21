@@ -365,7 +365,9 @@ def cmd_check(args: argparse.Namespace) -> int:
                 problems.append(
                     f"{cid}: pins rules@{pinned[:12]} but the project is at "
                     f"rules@{combined[:12]} — the brief is stale after a "
-                    f"governance adoption ({path})")
+                    f"governance adoption ({path}); if the same brief still "
+                    f"describes the work, advance it: gov task re-pin {cid} "
+                    "--reason <why>; otherwise close or void it")
                 print(f"STALE {cid} {title}")
             else:
                 print(f"open  {cid} {title} ({brief_line(combined)})")
@@ -488,6 +490,54 @@ def _uncommitted_reminder(card_path: Path) -> None:
               "pushing so the pushed tree carries the exit")
 
 
+def cmd_repin(args: argparse.Namespace) -> int:
+    """Advance a stale card's rules pin (#368): "same brief, new
+    constitution".
+
+    Wiring a gate — the sanctioned path `gov gate add` walks — changes
+    `gates.json`, which recomputes the combined `rules@` hash every card
+    pins. Every OPEN card goes stale at once, and the task gate blocks on
+    stale pins by design; without this command the exits were close (dead
+    for the #339 shapes), void (terminal, and it can refuse), or reverting
+    the legitimate change. Neither direction was honest.
+
+    Re-pinning is a RECORDED act, like void: it asserts the human
+    judgment the gate cannot make — "I read what changed and this brief
+    still describes the same work" — and the card keeps the from/to pair,
+    the actor, the instant and the reason.
+    """
+    if not args.reason.strip():
+        print("task: re-pin needs --reason (what changed, and why the "
+              "brief still holds)", file=sys.stderr)
+        return 2
+    combined, _files = rules_hash()
+    cards = _load_cards()
+    path, card = _resolve(cards, args.id)
+    if card.get("status") != "open":
+        print(f"task: {card['id']} is {card.get('status')!r}, not open — "
+              "only an in-flight brief has a pin to advance",
+              file=sys.stderr)
+        return 2
+    pinned = card.get("rules", {}).get("hash")
+    if pinned == combined:
+        print(f"task: {card['id']} already pins rules@{combined[:12]} — "
+              "nothing to re-pin")
+        return 0
+    card.setdefault("repins", []).append({
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "by": locks._holder_id(getattr(args, "agent", None)),
+        "from": pinned,
+        "to": combined,
+        "reason": args.reason.strip(),
+    })
+    card["rules"]["hash"] = combined
+    atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
+    print(f"task: re-pinned {card['id']} rules@{str(pinned)[:12]} -> "
+          f"rules@{combined[:12]} — {args.reason.strip()}")
+    _uncommitted_reminder(path)
+    return 0
+
+
 def cmd_void(args: argparse.Namespace) -> int:
     """Retire a card without the gate receipt (#322): the exit rule 9
     promises ("or explicitly defer it") and the tool never had.
@@ -560,8 +610,10 @@ def cmd_close(args: argparse.Namespace) -> int:
     pinned = card.get("rules", {}).get("hash")
     if pinned != combined:
         print(f"task: {card['id']} pins rules@{str(pinned)[:12]} but the "
-              f"project is at rules@{combined[:12]} — re-brief against the "
-              "adopted rules (gov task check names the stale cards)",
+              f"project is at rules@{combined[:12]} — if this brief still "
+              f"describes the work, advance it (gov task re-pin "
+              f"{card['id']} --reason <why>); otherwise re-brief against "
+              "the adopted rules (gov task check names the stale cards)",
               file=sys.stderr)
         return 1
     # #358: the checklist is the contract the card exists to carry, so a
@@ -917,6 +969,18 @@ def main(argv: list[str] | None = None) -> int:
                                 "then the OS user)")
     p_release.set_defaults(func=cmd_task_release)
 
+    p_repin = sub.add_parser("repin", help="advance a stale card's rules "
+                             "pin (#368): the constitution moved, the brief "
+                             "is unchanged — a recorded act")
+    p_repin.add_argument("id", help="card id, id prefix, or card-file slug")
+    p_repin.add_argument("--reason", required=True, metavar="TEXT",
+                         help="what changed, and why the same brief still "
+                              "describes the work (required; recorded)")
+    p_repin.add_argument("--agent", metavar="ID",
+                         help="actor identity (default: $GOV_CALLER, then "
+                              "the OS user)")
+    p_repin.set_defaults(func=cmd_repin)
+
     p_void = sub.add_parser("void", help="retire a card without a gate "
                             "receipt — recorded, terminal (rule 9's "
                             "'explicitly defer it' exit, #322)")
@@ -932,7 +996,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
         parser.error("a subcommand is required "
-                     "(new|check|close|claim|release|list|void|tick|show)")
+                     "(new|check|close|claim|release|list|void|tick|"
+                     "show|repin)")
     return args.func(args)
 
 

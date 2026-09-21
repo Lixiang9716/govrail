@@ -149,7 +149,9 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   `task check` can stay one line per card (`--verbose` keeps the reasons
   in the gate output). `close` refuses while items are unticked: tick
   what the work satisfies, or void the card if the checklist no longer
-  describes it. Claims are keyed by the card's own identity, so two
+  describes it. `gov task repin <id> --reason <why>` advances a stale
+  pin when the constitution moved but the brief did not (a recorded act,
+  not a re-brief). Claims are keyed by the card's own identity, so two
   worktrees' same-numbered cards lease independently.
 
 **Memory and history**

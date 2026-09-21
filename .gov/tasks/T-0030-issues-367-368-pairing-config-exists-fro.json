@@ -1,0 +1,20 @@
+{
+  "title": "issues #367 #368: pairing config exists from init; task re-pin is the stale-pin exit",
+  "created": "2026-09-21T16:32:56+00:00",
+  "rules": {
+    "hash": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "files": {
+      ".gov/rules.md": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976",
+      "gates.json": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
+    }
+  },
+  "checklist": [
+    "init writes .gov/pairing.json == DEFAULT_CONFIG; --adopt lands it; next-steps keys on evidence",
+    "gov task repin <id> --reason advances an open stale card, records from/to/by/reason; both stale reports name it",
+    "discovery surfaces: help lists, README pair, router skill, docs-consistency registry",
+    "full suite + gov run green; PR merged; #367/#368 commented and closed"
+  ],
+  "status": "open",
+  "receipt": null,
+  "id": "T-0030"
+}
