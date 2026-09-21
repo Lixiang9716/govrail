@@ -1,0 +1,52 @@
+{
+  "classes": [
+    "class_declaration",
+    "protocol_declaration"
+  ],
+  "comment": [
+    "comment",
+    "multiline_comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_declaration",
+    "init_declaration",
+    "deinit_declaration",
+    "protocol_function_declaration",
+    "lambda_literal"
+  ],
+  "globs": [
+    "*.swift"
+  ],
+  "grammar": "tree_sitter_swift",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "repeat_while_statement",
+    "switch_statement",
+    "do_statement",
+    "guard_statement"
+  ],
+  "string": [
+    "line_string_literal",
+    "multi_line_string_literal",
+    "raw_string_literal"
+  ]
+}

@@ -310,3 +310,140 @@ def test_parse_missing_path_is_named(tmp_path, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "no such file or directory" in captured.err
     assert "gov parse: skipped" not in captured.out
+
+
+class TestSwiftKnownAnswer:
+    """#335: Swift ships a grammar now — the numbers must mean what they
+    claim, counted by hand from the source (if→for→while = 3)."""
+
+    def _write(self, tmp_path):
+        (tmp_path / "Counter.swift").write_text(
+            "import Foundation\n"
+            "\n"
+            "struct Counter {\n"
+            "    var n: Int = 0\n"
+            "    func bump(by step: Int) -> Int {\n"
+            "        if n > 0 {\n"                    # 1
+            "            for i in 0..<step {\n"       # 2
+            "                while n > 1 {\n"         # 3
+            "                    n -= 1\n"
+            "                }\n"
+            "            }\n"
+            "        }\n"
+            "        switch n {\n"
+            "        case 0: return 0\n"
+            "        default: return n\n"
+            "        }\n"
+            "        return n\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "func free(x: Int) -> Int {\n"
+            "    if x > 0 {\n"                        # 1
+            "        return x\n"
+            "    }\n"
+            "    return -x\n"
+            "}\n",
+            encoding="utf-8")
+        return tmp_path
+
+    def test_swift_depths_match_a_human_count(self, tmp_path):
+        self._write(tmp_path)
+        pack = parse.load_pack("swift")
+        agg = stats.compute(tmp_path, [pack])
+        depth = _lang(agg, "swift")["depth"]
+        by_name = {o["name"]: o["depth"] for o in depth["outliers"]}
+        assert by_name["bump"] == 3, "if→for→while, switch is not nested"
+        assert by_name["free"] == 1, "a lone if"
+        assert depth["max"] == 3
+
+    def test_swift_function_spans_and_lines(self, tmp_path):
+        self._write(tmp_path)
+        # the load is the pack-validation proof; parse_report walks packs
+        parse.load_pack("swift")
+        reports, skipped = stats.parse_report([tmp_path / "Counter.swift"])
+        assert not skipped, skipped
+        entry = reports[0]
+        assert entry["language"] == "swift"
+        assert entry["lines"]["total"] == 26
+        spans = {f["name"]: (f["start"], f["end"]) for f in entry["functions"]}
+        assert spans["bump"] == (5, 18)
+        assert spans["free"] == (21, 26), "signature line through its closing brace"
+        assert entry["parse_errors"] == 0
+
+
+class TestKotlinKnownAnswer:
+    def _write(self, tmp_path):
+        (tmp_path / "Counter.kt").write_text(
+            "package demo\n"
+            "\n"
+            "class Counter(val start: Int) {\n"
+            "    fun bump(step: Int): Int {\n"
+            "        if (start > 0) {\n"             # 1
+            "            for (i in 0..step) {\n"      # 2
+            "                while (start > i) {\n"   # 3
+            "                    log(i)\n"
+            "                }\n"
+            "            }\n"
+            "        }\n"
+            "        when (start) {\n"
+            "            0 -> return 0\n"
+            "            else -> return start\n"
+            "        }\n"
+            "        return start\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8")
+        return tmp_path
+
+    def test_kotlin_depths_match_a_human_count(self, tmp_path):
+        self._write(tmp_path)
+        pack = parse.load_pack("kotlin")
+        agg = stats.compute(tmp_path, [pack])
+        depth = _lang(agg, "kotlin")["depth"]
+        by_name = {o["name"]: o["depth"] for o in depth["outliers"]}
+        assert by_name["bump"] == 3, "if→for→while; when is a sibling level"
+        assert depth["max"] == 3
+
+    def test_kotlin_function_spans(self, tmp_path):
+        self._write(tmp_path)
+        parse.load_pack("kotlin")
+        reports, skipped = stats.parse_report([tmp_path / "Counter.kt"])
+        assert not skipped, skipped
+        entry = reports[0]
+        assert entry["language"] == "kotlin"
+        spans = {f["name"]: (f["start"], f["end"])
+                 for f in entry["functions"]}
+        assert spans["bump"] == (4, 17)
+        assert entry["parse_errors"] == 0
+
+
+class TestPackIntegrity:
+    def test_every_installed_pack_loads_and_declares_its_axes(self):
+        """A pack is DATA validated at load; this walks every installed
+        one so a shipped pack cannot rot between releases (a wrong node
+        kind refuses to load — the check that catches it runs here)."""
+        names = parse.available()
+        assert names, "no packs installed"
+        for name in names:
+            pack = parse.load_pack(name)          # validates kinds (rule 5)
+            assert pack.globs, name
+            assert pack.functions, name
+            assert pack.nesting, name
+            assert pack.comment, name
+            assert pack.string, name
+
+    def test_parse_covers_a_pack_without_check_rules(self, tmp_path):
+        """#335's decoupling: `gov parse` walks every installed PACK
+        (`gov stats`' set), not the rules-bearing set the check gate
+        judges — Swift and Kotlin ship grammar-first, rules only when
+        they can be honest."""
+        from gov import checks
+        (tmp_path / "x.swift").write_text(
+            "func f() { return }\n", encoding="utf-8")
+        reports, skipped = stats.parse_report([tmp_path / "x.swift"])
+        assert not skipped, skipped
+        assert reports[0]["language"] == "swift"
+        assert "swift" in parse.available()
+        # the two sets are deliberately different axes
+        assert "swift" not in checks.available_langs()
