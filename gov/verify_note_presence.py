@@ -199,7 +199,18 @@ def _resolve_auto_base() -> tuple[str, str]:
         if root:
             top = gitutil.git("rev-parse", "--show-toplevel")
             here = top.stdout.strip() if top.returncode == 0 else ""
-            if here != root:
+            # Paths travel between a POSIX sh hook and this process, so
+            # the comparison is normalized: git prints forward slashes
+            # and Windows filesystems ignore case (the first Windows run
+            # of this guard compared C:/... with C:\... and refused a
+            # scope that was its own).
+            try:
+                same = bool(here) and (
+                    os.path.normcase(str(Path(here).resolve()))
+                    == os.path.normcase(str(Path(root).resolve())))
+            except OSError:
+                same = False
+            if not same:
                 declared = ""
     if declared:
         return declared, "GOV_CHANGE_BASE — the push's own scope (#363)"
