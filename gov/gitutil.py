@@ -138,8 +138,14 @@ def empty_tree() -> str:
     return constant
 
 
-def changed_files(base: str | None = None) -> tuple[list[str], str | None]:
-    """Tracked diff against ``base`` plus untracked files; (files, error).
+WORKING_TREE_BASES = ("HEAD",)
+
+
+def changed_files(base: str | None = None, *,
+                  include_untracked: bool | None = None
+                  ) -> tuple[list[str], str | None]:
+    """Tracked diff against ``base`` plus (working-tree scopes only)
+    untracked files; (files, error).
 
     A zero-commit repository has no ``HEAD``: the diff runs against the
     empty tree instead, so STAGED files are listed. Skipping the diff (the
@@ -148,13 +154,30 @@ def changed_files(base: str | None = None) -> tuple[list[str], str | None]:
     so a zero-commit repo with staged content scanned 0 files and passed.
     Handled here so every caller shares the semantics instead of
     re-deriving the HEAD probe.
+
+    **#363 — untracked files belong to the WORKING TREE, not to a commit
+    range.** ``git diff <range>`` carries committed content only, and a
+    push (or any ranged review) cannot carry a file that is in no commit;
+    sweeping them in anyway let someone else's untracked scratch file
+    block a push it was not part of. The untracked listing therefore joins
+    the set only when the scope IS the working tree: ``base`` is ``HEAD``
+    (the dirty-worktree cascade), ``base`` is None (untracked-only
+    listings), or the repository has no commit yet (everything is
+    uncommitted). A ranged base — ``upstream...HEAD``, a fork point, a
+    remote sha — lists what the range carries and nothing else.
+    ``include_untracked`` overrides the rule for a caller that knows
+    better.
     """
+    if include_untracked is None:
+        include_untracked = (base is None or base in WORKING_TREE_BASES
+                             or not has_head())
     files: set[str] = set()
     commands: list[list[str]] = []
     if base is not None:
         commands.append(
             ["diff", "--name-only", "-z", base if has_head() else empty_tree()])
-    commands.append(["ls-files", "--others", "--exclude-standard", "-z"])
+    if include_untracked:
+        commands.append(["ls-files", "--others", "--exclude-standard", "-z"])
     for args in commands:
         proc = git(*args)
         if proc.returncode != 0:

@@ -184,3 +184,32 @@ def test_empty_tree_survives_a_locale_encoded_diagnostic(tmp_path, monkeypatch):
         assert gitutil.empty_tree() == "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
     finally:
         gitutil.empty_tree.cache_clear()
+
+
+def test_ranged_base_excludes_untracked_working_tree_keeps_them(tmp_path,
+                                                                monkeypatch):
+    """#363: an untracked file is part of the WORKING TREE, not of any
+    commit range — a push (or a ranged review) cannot carry a file that
+    is in no commit, so it must not be able to block one."""
+    monkeypatch.chdir(tmp_path)
+    _repo(tmp_path)
+    (tmp_path / "tracked.md").write_text("v1\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "base")
+    (tmp_path / "tracked.md").write_text("v1.5\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "second")   # HEAD~1 needs two commits
+    (tmp_path / "scratch.txt").write_text("someone else's probe\n",
+                                          encoding="utf-8")
+    (tmp_path / "tracked.md").write_text("v2\n", encoding="utf-8")
+
+    ranged, err = gitutil.changed_files("HEAD~1")
+    assert err is None
+    assert "tracked.md" in ranged
+    assert "scratch.txt" not in ranged, (
+        "a commit range carries committed content only")
+
+    worktree, err = gitutil.changed_files("HEAD")
+    assert err is None
+    assert "scratch.txt" in worktree, (
+        "the working-tree scope still reviews untracked files")

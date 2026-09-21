@@ -4,6 +4,13 @@
 # the push range from stdin selects gates by their `paths`; CI owns the
 # full matrix. Bypass for one push: `git push --no-verify`.
 #
+# #363: if a gate goes red on a file this push does NOT carry — someone
+# else's untracked scratch file in the same checkout — the honest moves
+# are: make the tree clean (commit, stash or remove it), or push the
+# commit from a detached worktree (`git worktree add --detach /tmp/x
+# <sha>` then push from there). `--no-verify` is the last resort, not the
+# fix: it skips every gate for that push.
+#
 # The hook unsets GIT_DIR & friends before running gov: they leak the
 # hook's repository into every subprocess, and gov's own tooling (and
 # self-test's scratch repositories) must resolve repositories by cwd,
@@ -41,10 +48,23 @@ case "$(git rev-parse --show-object-format 2>/dev/null | tr -d '[:space:]')" in
 esac
 
 checkout_ref=$(git symbolic-ref --quiet HEAD 2>/dev/null)
+# The scope a gate honors is only valid in THIS repository: the env is
+# inherited by every subprocess a gate spawns, and a scratch repo inside
+# a self-test would otherwise be judged against a ref it never had.
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 base=""
 bases=0
 full=0
+# What this push carries, remembered INSIDE the loop: `read` at EOF
+# assigns empty strings to every variable it names, so the final failed
+# iteration wipes local_sha after the loop — the values the #363 branch
+# needs must be captured while they are still live.
+updates=0
+pushed_sha=""
 while read -r local_ref local_sha remote_ref remote_sha; do
+    # The EOF iteration (and any blank line) arrives with every field
+    # empty; it must not be mistaken for a ref named "".
+    [ -z "$local_ref" ] && continue
     # W3: the worktree only represents the CHECKED-OUT branch — a push
     # of any other ref cannot be summarized by a worktree diff and
     # forces the full matrix. (Deletions were skipped above: they gate
@@ -60,6 +80,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # compared against $local_ref and no deletion was ever skipped;
     # round-9 template review, verified live against a real push).
     [ "$local_sha" = "$zero" ] && continue
+    updates=$((updates + 1))
+    pushed_sha="$local_sha"
     if [ "$remote_sha" = "$zero" ]; then
         full=1   # new remote branch: everything is the change
     elif [ "$remote_sha" != "$base" ]; then
@@ -76,12 +98,40 @@ if [ "$full" = 0 ] && [ "$bases" = 0 ]; then
     # least content.
     exit 0
 fi
-if [ "$full" = 1 ] || [ "$bases" -gt 1 ]; then
-    # Several push ranges — or a brand-new branch among them — cannot be
-    # summarized by ONE base ref: scoping to the first range would let a
-    # second branch's diff skip its gates, turning "smallest sufficient
-    # set" into an insufficient set. Full matrix: always sufficient.
+if [ "$full" = 1 ] && [ "$bases" = 0 ] && [ "$updates" = 1 ] \
+        && [ -n "$pushed_sha" ]; then
+    # #363: a brand-new branch used to fall through to the full matrix,
+    # which runs `gov run` with no base — and a dirty worktree then makes
+    # that mean "review the whole working tree", sweeping in untracked
+    # files that are in no commit and that this push cannot carry. A
+    # foreign scratch file could block a push it was not part of.
+    # Scope to the fork point instead: the commits being pushed are
+    # exactly what a new branch adds, and `--base <fork>` reviews them.
+    fork=""
+    for ref in "@{upstream}" "origin/HEAD"; do
+        fork=$(git merge-base "$pushed_sha" "$ref" 2>/dev/null) || fork=""
+        [ -n "$fork" ] && break
+    done
+    if [ -n "$fork" ]; then
+        echo "pre-push: new branch — scoping to the fork point $fork" >&2
+        GOV_CHANGE_BASE="$fork"             gov_cmd run --base "$fork"
+    else
+        echo "pre-push: new branch with no shared ancestor (no @{upstream}, \
+no origin/HEAD) — running the full matrix" >&2
+        gov_cmd run
+    fi
+elif [ "$full" = 1 ] || [ "$bases" -gt 1 ]; then
+    # Several push ranges — or a brand-new branch with nothing to merge
+    # with — cannot be summarized by ONE base ref: scoping to the first
+    # range would let a second branch's diff skip its gates, turning
+    # "smallest sufficient set" into an insufficient set. Full matrix:
+    # always sufficient.
     gov_cmd run
 else
-    gov_cmd run --base "$base"
+    # GOV_CHANGE_BASE tells change-scoped TOOLS (gov check, a project's
+    # own size/logging gates that read it) which range this run is about;
+    # without it they fall back to their own cascade, which on a dirty
+    # tree means the working tree. See the pre-push-checks skill.
+    GOV_CHANGE_BASE="$base" GOV_CHANGE_ROOT="$repo_root" \
+        gov_cmd run --base "$base"
 fi

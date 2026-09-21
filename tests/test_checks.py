@@ -464,3 +464,36 @@ def test_help_documents_the_suppression_mechanism(capsys):
     assert "row span" in flat
     assert "counted" in flat and "stats.jsonl" in flat
     assert ".gov/checks/exclude.json" in flat
+
+
+class TestShippedPythonEncodingRule:
+    """#366's push surfaced a FALSE POSITIVE in this shipped rule: the
+    plane's own `atomicio.write_text` always encodes UTF-8 (its signature
+    takes no `encoding=`), yet every adopter using the helper was nagged.
+    Both directions are pinned here — the exemption must not become a
+    hole that lets locale-dependent writes through."""
+
+    def _run(self, tmp_path, source):
+        (tmp_path / "m.py").write_text(source, encoding="utf-8")
+        rules = checks.load_rules("python", include_project=False)
+        reports = checks.run_lang(tmp_path, "python", rules)
+        return [f for r in reports for f in r.findings
+                if f.rule_id == "python/pathlib-text-encoding"
+                and not f.suppressed]
+
+    def test_plane_utf8_writer_is_exempt(self, tmp_path):
+        hits = self._run(tmp_path,
+                         "from gov import atomicio\n"
+                         "atomicio.write_text(p, text)\n")
+        assert hits == [], "the plane's UTF-8-explicit writer is not the bug class"
+
+    def test_locale_dependent_writes_are_still_flagged(self, tmp_path):
+        hits = self._run(tmp_path,
+                         "path.write_text(text)\n"
+                         "self.helper.write_text(text)\n")
+        assert len(hits) == 2, [f.line() for f in hits]
+
+    def test_explicit_encoding_stays_discharged(self, tmp_path):
+        hits = self._run(tmp_path,
+                         "path.write_text(text, encoding='utf-8')\n")
+        assert hits == []

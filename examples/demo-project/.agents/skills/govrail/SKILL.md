@@ -84,7 +84,9 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   into gates.json (validated against the runner's schema, merged
   atomically, then one verification `gov run --gate <id>`). Use for
   every test/lint/build wiring; hand-edited gates.json is the
-  exception, not the path. In a governed repo the seal speaks after
+  exception, not the path. `--dry-run` previews the entry, its mode
+  memberships and the verification argv without writing — the way to
+  quote a wiring in a PR without drifting a sealed gates.json. In a governed repo the seal speaks after
   the edit — accept it with `gov verify-plane --write`.
 - `gov run --every-gate` — the full matrix. CI owns this; use it when
   several push ranges make one base ref insufficient (the hook does

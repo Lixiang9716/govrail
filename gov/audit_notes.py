@@ -110,7 +110,7 @@ FLAGS: dict[str, set[str]] = {
     "hooks": set(),  # the pre-commit subcommand is flagless
     "verify-plane": {"--write", "--confirm-unattended", "--reason"},
     "gate": {"--paths", "--stage", "--description", "--mode",
-             "--allow-failure", "--timeout"},  # #309: on the `add` subcommand
+             "--allow-failure", "--timeout", "--dry-run"},  # #309: on the `add` subcommand
 }
 
 

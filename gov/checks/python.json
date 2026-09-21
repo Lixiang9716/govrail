@@ -33,8 +33,8 @@
       "id": "python/pathlib-text-encoding",
       "kind": "query",
       "severity": "warning",
-      "message": "read_text()/write_text() decode with the HOST locale codec unless encoding= is passed (#172's class); pass encoding='utf-8' explicitly",
-      "query": "((call\n   function: (attribute attribute: (identifier) @meth))\n @gov-node\n (#match? @meth \"^(read_text|write_text)$\"))",
+      "message": "read_text()/write_text() decode with the HOST locale codec unless encoding= is passed (#172's class); pass encoding='utf-8' explicitly (atomicio.write_text/read_text are the plane's own UTF-8-explicit writers and are exempt)",
+      "query": "((call\n   function: (attribute attribute: (identifier) @meth) @fn)\n @gov-node\n (#match? @meth \"^(read_text|write_text)$\")\n (#not-match? @fn \"^atomicio\\\\.\"))",
       "absent_query": [
         "(keyword_argument name: (identifier) @k (#eq? @k \"encoding\"))"
       ]

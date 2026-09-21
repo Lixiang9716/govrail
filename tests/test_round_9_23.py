@@ -185,3 +185,26 @@ def test_17_table_format_and_refusal(tmp_path, monkeypatch, capsys):
     from gov import recall
     assert recall.main(["tabs"]) == 0
     assert "DESIGN.md#D1" in capsys.readouterr().out
+
+
+def test_superseded_by_marker(tmp_path, monkeypatch, capsys):
+    """#364: the forward pointer is accepted, named, and an EMPTY one is
+    a violation — a started-and-abandoned ritual reads as done."""
+    from gov import verify_notes as vn
+    monkeypatch.chdir(tmp_path)
+    root = tmp_path / ".agents" / "notes" / "implemented" / "bug-fix"
+    root.mkdir(parents=True)
+    body = ("# Agent Note: x\n\nStatus: implemented{extra}\n\n"
+            "## Problem\n" + "word " * 30 + "\n\n## Decision\n" + "word " * 30
+            + "\n\n## Alternatives considered\n" + "word " * 30 + "\n")
+    note = root / "2026-01-01-x.md"
+    note.write_text(body.format(extra=""), encoding="utf-8")
+    assert vn.main([]) == 0
+    capsys.readouterr()
+    note.write_text(body.format(extra="\nSuperseded by: 2026-01-02-y.md"),
+                    encoding="utf-8")
+    assert vn.main([]) == 0
+    assert "note: " in capsys.readouterr().out          # named, not hidden
+    note.write_text(body.format(extra="\nSuperseded by:"), encoding="utf-8")
+    assert vn.main([]) == 1
+    assert "names nothing" in capsys.readouterr().out

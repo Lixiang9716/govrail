@@ -66,6 +66,22 @@ def _thin_section_advisories(path: Path) -> list[str]:
     return out
 
 
+def superseded_by(path: Path) -> str:
+    """The note this one names as its replacement ('' when none).
+
+    #364: the optional forward pointer. `gov recall` marks such notes
+    and ranks them below current ones; `verify_notes` prints the pair.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8-sig").splitlines()[:8]
+    except (OSError, UnicodeDecodeError):
+        return ""
+    for line in lines:
+        if line.startswith("Superseded by:"):
+            return line[len("Superseded by:"):].strip()
+    return ""
+
+
 def check_note(path: Path) -> list[str]:
     errors: list[str] = []
     text = path.read_text(encoding="utf-8-sig")
@@ -78,6 +94,18 @@ def check_note(path: Path) -> list[str]:
     for line in header:
         if line.startswith("Status:"):
             status = line[len("Status:"):].strip()
+            break
+    # #364: `Superseded by: <note>` is OPTIONAL and additive — rule 4
+    # requires the NEW note to link back, and nothing made the old note
+    # point forward, so a reader (or gov recall) could act on retired
+    # guidance with no signal. An EMPTY marker is worse than none: it
+    # reads as "someone started the ritual and stopped".
+    for line in header:
+        if line.startswith("Superseded by:"):
+            if not line[len("Superseded by:"):].strip():
+                errors.append(
+                    "'Superseded by:' is present but names nothing — write "
+                    "the note that replaces this one, or drop the line")
             break
     if status != "implemented":
         # The lifecycle is the directory (implemented/ vs archived/), never
@@ -205,6 +233,13 @@ def main(argv: list[str] | None = None) -> int:
     advisories: list[str] = []
     for note in notes:
         advisories.extend(_thin_section_advisories(note))
+    # #364 informational half: a superseded note is still valid here (the
+    # lifecycle is the directory); naming the pointer keeps the pair
+    # visible in the gate that reads every note anyway.
+    for note in notes + loose:
+        target = superseded_by(note)
+        if target:
+            print(f"note: {note} is superseded by {target}")
     for line in advisories:
         print(f"advisory: {line}")
     verdict = f"verify_notes: {len(notes)} note(s) ok"

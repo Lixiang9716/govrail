@@ -65,6 +65,33 @@ def _resolve_auto_base() -> tuple[str, str]:
     3. clean, no upstream  -> HEAD~1        (review the last commit)
     4. single commit       -> the empty tree (everything is the change)
     """
+    import os
+    declared = os.environ.get("GOV_CHANGE_BASE", "").strip()
+    if declared:
+        # ...but only in the repository it was declared for: the env is
+        # inherited by every subprocess a gate spawns, and a scratch repo
+        # (a self-test's fixture, a nested checkout) must not be judged
+        # against a ref it never had — the first cut leaked exactly that
+        # way and made gov note presence fail on "bad object".
+        root = os.environ.get("GOV_CHANGE_ROOT", "").strip()
+        if root:
+            top = gitutil.git("rev-parse", "--show-toplevel")
+            here = top.stdout.strip() if top.returncode == 0 else ""
+            # Paths travel between a POSIX sh hook and this process, so
+            # the comparison is normalized: git prints forward slashes
+            # and Windows filesystems ignore case (the first Windows run
+            # of this guard compared C:/... with C:\... and refused a
+            # scope that was its own).
+            try:
+                same = bool(here) and (
+                    os.path.normcase(str(Path(here).resolve()))
+                    == os.path.normcase(str(Path(root).resolve())))
+            except OSError:
+                same = False
+            if not same:
+                declared = ""
+    if declared:
+        return declared, "GOV_CHANGE_BASE — the push's own scope (#363)"
     status = gitutil.git("status", "--porcelain")
     if status.returncode == 0 and status.stdout.strip():
         return "HEAD", "dirty worktree — reviewing the working tree"

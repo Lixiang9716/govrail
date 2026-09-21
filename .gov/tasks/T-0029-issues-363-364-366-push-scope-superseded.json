@@ -1,0 +1,20 @@
+{
+  "title": "issues #363 #364 #366: push scope, superseded marker, gate add preview",
+  "created": "2026-09-21T16:03:44+00:00",
+  "rules": {
+    "hash": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "files": {
+      ".gov/rules.md": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976",
+      "gates.json": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
+    }
+  },
+  "checklist": [
+    "ranged bases drop untracked; new branch scopes to its fork point; GOV_CHANGE_BASE declared and honored",
+    "Superseded by marker accepted + printed; recall marks and ranks it below current notes",
+    "gate add --dry-run writes/runs nothing; help documents its grammar; --command separator",
+    "full suite + gov run green; PR merged; three issues commented and closed"
+  ],
+  "status": "open",
+  "receipt": null,
+  "id": "T-0029"
+}
