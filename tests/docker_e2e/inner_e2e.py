@@ -3194,7 +3194,15 @@ def stats_empty_tree(base):
     rule = v["python"]["rule"]
     assert rule["grammar"] == "tree_sitter_python"
     assert "code_line" in rule and "nesting" in rule
-    assert len(v) == 8, sorted(v)
+    # Ten shipped packs (#335): the set is pinned by NAME, not only by
+    # length — a pack that silently vanished and one that silently
+    # arrived are both regressions this scenario exists to catch.
+    assert set(v) == {"c", "cpp", "go", "java", "javascript", "kotlin",
+                      "python", "rust", "swift", "typescript"}, sorted(v)
+    # the two grammar-first packs carry their axes too (their rule echo
+    # proves the pack loaded, not merely that a row exists)
+    assert v["swift"]["rule"]["grammar"] == "tree_sitter_swift"
+    assert v["kotlin"]["rule"]["grammar"] == "tree_sitter_kotlin"
 
 
 def agent_lifecycle_receipt(base):
