@@ -106,7 +106,9 @@ gov note audit                # implemented 笔记的新鲜度信号
 gov note audit --json          # 机器可读：{findings: [{file, signal}], ...}
 gov change-scope --base <ref>  # 最小充分集（.gov/surfaces.json 可映射路径）
 gov task new "标题" --check "验收项"  # 任务卡：一行 rules@<hash> 钉住子代理简报
-gov task check                 # 规则采纳后点名过期卡片
+gov task check                 # 规则采纳后点名过期卡片（一卡一行；--verbose 保留作废理由）
+gov task tick T-0001 1         # 勾选清单第 1 项（规范写法 "[x] "）；手改卡片 JSON 永远是禁区
+gov task show T-0001           # 完整渲染一张卡：清单、作废理由、回执
 gov task claim T-0001 --agent w1 --ttl 20m  # 把开着的卡租给一个 worker（两人不能同领；
                                             #  busy → exit 3 点名持有者）
 gov task release T-0001 --agent w1          # 释放自己持有的卡片租约

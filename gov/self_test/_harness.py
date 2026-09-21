@@ -225,12 +225,12 @@ def _ledger_output(root: Path) -> str:
         os.chdir(root)
         try:
             with contextlib.redirect_stdout(buf):
-                _coverage_report()
+                _coverage_report(explain=True)   # the detailed ledger (#337)
         finally:
             os.chdir(cwd)
     else:
         with contextlib.redirect_stdout(buf):
-            _coverage_report()
+            _coverage_report(explain=True)
     return buf.getvalue()
 
 
@@ -370,12 +370,21 @@ def _probe_env_only_failure() -> None:
 _DIAGNOSTIC_PROBES = (_probe_env_only_failure, _probe_always_fails)
 
 
-def _coverage_report() -> None:
+def _coverage_report(explain: bool = False) -> None:
     """Wish 4/D30: rule 6's ledger — which gates have rejection cases.
 
     A project case declares the gate it proves with a '# gate: <id>'
-    comment in its first lines. Gates without any case are named; this is
-    a reminder, not a failure (coverage ramps up).
+    comment in its first lines; this is a reminder, not a failure
+    (coverage ramps up).
+
+    #337: the default reports coverage as the FACT it is — counts, no
+    imperative. A project that has deliberately not authored project
+    cases saw the same per-gate ``NONE — rule 6`` list and the "write
+    one" remedy on every green run, and a paragraph that never changes
+    teaches the reader to skip the line that matters the one time it
+    does. ``explain`` (``gov self-test --explain``) restores the full
+    ledger, remedy included; the shipped rejection proofs the same run
+    executes are unaffected either way.
     """
     import json as _json
 
@@ -399,7 +408,17 @@ def _coverage_report() -> None:
         n = covered.get(gid, 0)
         lines.append(f"{gid}({n})" if n else f"{gid}(NONE — rule 6)")
     stray = [g for g in covered if g not in gate_ids]
-    print(f"coverage (gate x project rejection cases): {' '.join(lines)}")
+    with_case = sum(1 for gid in gate_ids if covered.get(gid))
+    if explain:
+        print(f"coverage (gate x project rejection cases): "
+              f"{' '.join(lines)}")
+    else:
+        note = (f"{with_case}/{len(gate_ids)} gate(s) carry a project "
+                "rejection case")
+        if with_case < len(gate_ids) and not undeclared:
+            note += (" (the shipped proofs still run; "
+                     "`gov self-test --explain` lists the rest)")
+        print(f"coverage (gate x project rejection cases): {note}")
     if undeclared:
         # #18/D32: a case that just RAN and PASSed but declares no gate —
         # name it; never nag about writing a case that exists.
@@ -413,7 +432,7 @@ def _coverage_report() -> None:
         print("  fix: add '# gate: <id>' within the first 5 lines to link "
               "the case to the gate it proves (a line inside the module "
               "docstring counts; keep the shebang on line 1)")
-    if any("(NONE" in l for l in lines) and not undeclared:
+    if explain and any("(NONE" in l for l in lines) and not undeclared:
         print("  write one: .gov/rejections/case-<gate-id>.sh, shebang on "
               "line 1, '# gate: <id>' within the first five lines")
     if stray:

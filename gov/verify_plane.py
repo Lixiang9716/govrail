@@ -162,6 +162,61 @@ def recent_rebaselines(root: Path | None = None,
     return out
 
 
+NOTICE_MARK = "rebaseline-notice"
+
+
+def announce_rebaselines(tool: str, root: Path | None = None) -> None:
+    """The re-baseline NOTE, printed once per observed record (#337).
+
+    The note exists to raise the cost of a rogue re-seal — it is worth
+    reading on the run that follows a new one, and it is wallpaper on the
+    hundred runs after that, where it teaches the reader to skip the line
+    that matters. The last announced record's timestamp lives in
+    ``.gov/history/`` (runtime state, ensure-ignored); ``gov verify-plane``
+    stays the full-detail surface and the tracked ``.gov/rituals.jsonl``
+    stays the audit trail, so nothing is hidden — only repeated less.
+    """
+    root = root or Path.cwd()
+    try:
+        rebaselines = recent_rebaselines(root)
+    except Exception:  # noqa: BLE001 — visibility must never block a run
+        return
+    if not rebaselines:
+        return
+    latest = rebaselines[-1]
+    key = str(latest.get("ts", ""))
+    try:
+        from .anchor import history_path
+        mark = history_path(NOTICE_MARK)
+    except ImportError:
+        mark = None
+    # "not yet announced" must not look like "cannot read the mark": the
+    # first announcement has no mark file yet, and conflating the two made
+    # the note repeat forever (caught by the test above).
+    seen = ""
+    if mark is not None:
+        try:
+            seen = mark.read_text(encoding="utf-8").strip()
+        except OSError:
+            seen = ""
+    if key and seen == key:
+        return
+    who = latest.get("caller", "?")
+    how = "UNATTENDED" if latest.get("unattended") else "interactive"
+    print(f"{tool}: NOTE — the constitution was re-baselined "
+          f"{len(rebaselines)} time(s) in the last "
+          f"{REBASELINE_WINDOW_DAYS} day(s); latest by {who} ({how})"
+          + (f" — reason: {latest['reason']}" if latest.get("reason")
+             else " — no reason recorded"),
+          file=sys.stderr)
+    if mark is not None and key:
+        try:
+            mark.parent.mkdir(parents=True, exist_ok=True)
+            mark.write_text(key + "\n", encoding="utf-8")
+        except OSError:
+            pass  # an unrecordable notice repeats; that is the safe side
+
+
 def _seal_in_history(root: Path) -> bool:
     """True when git history contains the seal file — the adoption record
     an attacker cannot rewrite without rewriting history itself."""

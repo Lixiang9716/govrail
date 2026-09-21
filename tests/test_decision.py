@@ -465,3 +465,24 @@ def test_next_refuses_nonpositive_count(tmp_path, monkeypatch, capsys):
         assert decision.main(["next", "--count", bad]) == 2
         err = capsys.readouterr().err
         assert f"--count must be >= 1 (got {bad})" in err
+
+
+def test_decision_lock_is_ensure_ignored(tmp_path, monkeypatch):
+    """#353: the lock file STAYS (unlinking it is the classic race), so it
+    must be ignored — otherwise it sits in `git status` forever in every
+    governed checkout and a habitual `git add -A` tracks a zero-byte
+    artifact (the treatment .gov/tasks/.new.lock got in #325)."""
+    monkeypatch.chdir(tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
+    draft = _draft(tmp_path, "two", "- **选项**: a\n- **被否**: b")
+    assert decision.main(["add", "--from", draft]) == 0
+    assert (docs / ".decision.lock").exists()
+    lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "docs/.decision.lock" in lines
+    # idempotent: a second add does not append the line again
+    draft2 = _draft(tmp_path, "three", "- **选项**: a\n- **被否**: b")
+    assert decision.main(["add", "--from", draft2]) == 0
+    lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert lines.count("docs/.decision.lock") == 1

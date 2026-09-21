@@ -389,19 +389,38 @@ def acquire(resource: str, holder: str, ttl: float,
             wait: float | None, tool: str = "gov acquire") -> int:
     common = _common_dir(tool)
     _announce_root("acquire", common)
-    # #313: leases live in THIS checkout's git common dir — two clones of
-    # the same repository never see each other's leases. When that shape
-    # is likely (linked worktrees, or a shared-object checkout), say the
-    # boundary out loud at the moment it matters instead of in a README.
+    # #313/#336: leases live in THIS checkout's git common dir. In a
+    # linked worktree that directory is SHARED with every sibling
+    # worktree, so the old blanket "this checkout only" was false exactly
+    # where it mattered. The note is derived from the git dirs instead of
+    # asserted: same dir and same common dir means an independent
+    # checkout (only a separate CLONE is independent); differing means a
+    # linked worktree, which contends with its siblings.
     wt = subprocess.run(
         ["git", "worktree", "list"], capture_output=True, text=True,
         encoding="utf-8", errors="replace", env=_scrubbed_env(),
     )
     if wt.returncode == 0 and len(wt.stdout.splitlines()) > 1:
-        print("acquire: note — a lease coordinates THIS checkout only "
-              "(the lock lives in this clone's git dir); another clone of "
-              "the same repository acquires the same resource independently",
-              file=sys.stderr)
+        git_dir = subprocess.run(
+            ["git", "rev-parse", "--git-dir"], capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
+            env=_scrubbed_env(),
+        )
+        linked = (git_dir.returncode == 0 and git_dir.stdout.strip()
+                  and Path(git_dir.stdout.strip()).resolve()
+                  != common.resolve())
+        if linked:
+            print("acquire: note — this run is in a LINKED WORKTREE: the "
+                  "lock lives in the shared git dir, so every worktree of "
+                  "this repository contends for the same lease; only a "
+                  "separate CLONE acquires independently",
+                  file=sys.stderr)
+        else:
+            print("acquire: note — a lease coordinates every checkout "
+                  "sharing this git dir (linked worktrees included); only "
+                  "a separate clone of the repository acquires the same "
+                  "resource independently",
+                  file=sys.stderr)
     _sweep_strays(common, ttl)
     path = _lease_path(common, resource)
     path.parent.mkdir(parents=True, exist_ok=True)

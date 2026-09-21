@@ -152,6 +152,22 @@ def _load_config() -> tuple[dict[str, list[str]], str | None]:
             "trivial": data.get("trivial", [])}, None
 
 
+# Data captures and binaries a change may carry as EVIDENCE (#356): a
+# logcat dump, a screenshot or an APK listing is not a decision, and
+# counting each as a "non-trivial file" inflates the number a reader uses
+# to judge how much prose the change owes. They are reported separately
+# and exemptable outright via the manifest's note_presence_exempt.
+ARTIFACT_EXTS = (
+    ".txt", ".log", ".csv", ".tsv", ".har", ".png", ".jpg", ".jpeg",
+    ".gif", ".webp", ".mp4", ".mov", ".webm", ".zip", ".tar", ".tgz",
+    ".gz", ".apk", ".ipa", ".bin", ".img", ".pdf",
+)
+
+
+def _is_artifact(path: str) -> bool:
+    return Path(path).suffix.lower() in ARTIFACT_EXTS
+
+
 def _is_exempt(path: str, globs: list[str]) -> bool:
     return any(_glob_regex(g).match(path) for g in globs)
 
@@ -312,10 +328,19 @@ def _run(argv: list[str] | None = None) -> int:
               f"changed with no note naming them under {NOTES_DIR}/ "
               f"(strict attribution: {CONFIG})")
     else:
-        listing = ", ".join(non_trivial[:5]) + (" …and "
-                  f"{len(non_trivial) - 5} more" if len(non_trivial) > 5 else "")
-        print(f"{PROG}: {len(non_trivial)} non-trivial file(s) "
+        source = [f for f in non_trivial if not _is_artifact(f)]
+        artifacts = len(non_trivial) - len(source)
+        listing = ", ".join(source[:5]) + (" …and "
+                  f"{len(source) - 5} more" if len(source) > 5 else "")
+        counts = f"{len(source)} non-trivial file(s)"
+        if artifacts:
+            counts += f" and {artifacts} data/artifact file(s)"
+        print(f"{PROG}: {counts} "
               f"({listing}) changed with no note under {NOTES_DIR}/")
+        if artifacts and not source:
+            print("  the change is data/evidence only — if that is the whole "
+                  "story, exempt the surface with note_presence_exempt in "
+                  f"{MANIFEST} instead of writing a note about it")
         # #149: say which absence this is. The warning means "no note anywhere
         # in the diff" — the weaker reading ("a note exists, just not for these
         # specific paths") cannot occur in the default mode: any note file in

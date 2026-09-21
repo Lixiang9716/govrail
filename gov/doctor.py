@@ -28,6 +28,7 @@ import argparse
 import json
 import shutil
 import sys
+from pathlib import Path
 
 from . import __version__
 
@@ -129,6 +130,28 @@ def _check_hook(checks: list[dict]) -> None:
             else:
                 checks.append({"name": f"hook:{rel}", "state": "problem",
                                "detail": f"{rel} is not executable — chmod +x it"})
+    # #331: the EXECUTED hook and the tracked template are two copies of
+    # one intent. Adoption refreshes `.gov/hooks/<name>`; the wired copy
+    # is untracked and was never compared, so an upgraded plane kept
+    # running the old hook body — deprecation noise today, dead command
+    # spellings the day the aliases go. Byte equality is the whole check.
+    for name in ("pre-push", "pre-commit"):
+        wired = Path(hooks_dir) / name
+        tracked = Path(".gov") / "hooks" / name
+        if not (wired.is_file() and tracked.is_file()):
+            continue
+        try:
+            drift = wired.read_bytes() != tracked.read_bytes()
+        except OSError:
+            continue
+        if drift:
+            checks.append({
+                "name": f"hook-sync:{name}", "state": "note",
+                "detail": f"the executed {wired} differs from "
+                          f"{tracked.as_posix()} — this checkout runs an "
+                          "older hook body than the plane tracks (#331); "
+                          f"fix: cp {tracked.as_posix()} {wired} "
+                          "(or `gov update --apply`, which re-wires it)"})
 
 
 def _check_version_drift(checks: list[dict]) -> None:

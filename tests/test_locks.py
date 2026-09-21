@@ -509,3 +509,26 @@ def test_unreadable_lease_blocks_waiter_without_spinning(tmp_path):
     r = _gov(tmp_path, "acquire", "r", "--agent", "w", "--ttl", "300", "--wait", "1")
     assert r.returncode == 3, (r.stdout, r.stderr)
     assert "<unreadable lease>" in r.stderr, r.stderr
+
+
+def test_acquire_note_is_derived_for_linked_worktrees(tmp_path):
+    """#336: in a linked worktree the lock root is the SHARED git dir, so
+    the old 'coordinates THIS checkout only' note was false exactly where
+    it mattered. The wording now follows the git dirs."""
+    main = tmp_path / "main"
+    main.mkdir()
+    _git_repo(main)
+    (main / "f").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=main, check=True,
+                   capture_output=True, env=SCRUBBED)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm",
+                    "base"], cwd=main, check=True, capture_output=True,
+                   env=SCRUBBED)
+    wt = tmp_path / "linked"
+    subprocess.run(["git", "worktree", "add", "-q", str(wt), "-b", "side"],
+                   cwd=main, check=True, capture_output=True, env=SCRUBBED)
+    got = _gov(wt, "acquire", "r", "--agent", "a", "--ttl", "300")
+    assert got.returncode == 0, (got.stdout, got.stderr)
+    assert "LINKED WORKTREE" in got.stderr
+    assert "only a separate CLONE acquires independently" in got.stderr
+    assert "coordinates THIS checkout only" not in got.stderr

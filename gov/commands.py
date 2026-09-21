@@ -114,9 +114,10 @@ COMMANDS = {
     "recall": "retrieve notes, decisions, and postmortems (all terms, ranked)",
     "change-scope": "report touched surfaces (e.g. --base <ref>)",
     "surprise": "the surprise ledger (record/list): expectation vs reality, counted per signature; rule 11 — the third occurrence of a signature escalates into a process improvement",
-    "task": "task cards for subagent briefs (new/check/close/claim/release/"
-            "list; rules@hash pin + checklist + green-run receipt; claim/"
-            "release lease a card so two workers cannot take one)",
+    "task": "task cards for subagent briefs (new/check/tick/show/close/"
+            "claim/release/list/void; rules@hash pin + checklist + "
+            "green-run receipt; tick is how the checklist gets ticked, "
+            "claim/release lease a card so two workers cannot take one)",
     "preset": "typed adoption bundles (list/show/apply): a project type's "
               "gates, skills, and manifest hints — additive, never "
               "overwriting (D53)",

@@ -881,3 +881,19 @@ def test_failure_summary_falls_back_to_stdout_when_stderr_silent(capsys):
     out = capsys.readouterr().out
     summary = out.split("--- summary: 1 blocking failure(s) ---", 1)[1]
     assert "check: f.js:1: [javascript/syntax]" in summary
+
+
+def test_summary_line_names_the_selecting_mechanism(capsys):
+    """#355: `8 gates: 8 pass` under --base vs `12 gates: 12 pass` bare are
+    both right and read as a contradiction; the bracket says which
+    mechanism counted."""
+    gs = [gates.Gate(id="a", command=PASS), gates.Gate(id="b", command=PASS)]
+    assert gates.run_gates(gs, ["a"], 1, False, selected_by="mode:quick") == 0
+    out = capsys.readouterr().out
+    assert "1 gates: 1 pass  [mode: quick]" in out
+    assert gates.run_gates(gs, ["a"], 1, False, selected_by="base:HEAD~1",
+                           scoped_out=["b"]) == 0
+    out = capsys.readouterr().out
+    assert "path-scoped vs HEAD~1, 1 gate(s) out of scope" in out
+    assert gates.run_gates(gs, None, 1, False, selected_by="every-gate") == 0
+    assert "[every enabled gate]" in capsys.readouterr().out

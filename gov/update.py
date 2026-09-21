@@ -121,6 +121,43 @@ def _update_left_pristine_drift(root: Path, adoptable: set[str]) -> bool:
     return True
 
 
+def _rewire_executed_hooks(root: Path) -> int:
+    """#331: adoption refreshes ``.gov/hooks/<name>``; the EXECUTED copy
+    (``core.hooksPath`` or the common dir's ``hooks/``) was never
+    re-wired, so an upgraded plane kept running the old hook body —
+    deprecation warnings today, dead command spellings the day the
+    aliases go, and gates.json's stages/allowFailure contract bypassed
+    the whole time. Same bytes as the tracked copy, same mode; a file
+    that is NOT a gov hook (no ``# govrail:`` marker) is left alone.
+    """
+    resolved = gitutil.hooks_dir()
+    if resolved is None:
+        return 0
+    dest_dir = Path(resolved)
+    rewired = 0
+    for name in ("pre-push", "pre-commit"):
+        src = root / ".gov" / "hooks" / name
+        if not src.is_file():
+            continue
+        dest = dest_dir / name
+        data = src.read_bytes()
+        if dest.is_file():
+            try:
+                if dest.read_bytes() == data:
+                    continue
+                foreign = "# govrail:" not in dest.read_text(
+                    encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if foreign:
+                continue  # someone replaced it — their hook, not ours
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        atomicio.write_bytes(dest, data)
+        dest.chmod(0o755)
+        rewired += 1
+    return rewired
+
+
 def _hook_drift_notes(root: Path) -> list[str]:
     """#324: installed gov hooks from an EARLIER plane keep invoking
     retired spellings — after the D57 renames, an unrefreshed pre-commit
@@ -151,7 +188,7 @@ def _hook_drift_notes(root: Path) -> list[str]:
             notes.append(
                 f"hook drift: your installed {name} differs from this "
                 "version's template — an older hook keeps calling retired "
-                "command spellings; refresh with `gov init --hooks"
+                "command spellings; `--apply` re-wires it (or run `gov init --hooks"
                 + (" --pre-commit" if name == "pre-commit" else "") + "`")
     return notes
 
@@ -292,6 +329,14 @@ def main(argv: list[str] | None = None) -> int:
             if rc != 0:
                 return rc
         steps_done += 1
+        # #331: the tracked hook templates were just refreshed — re-wire
+        # the copies git actually executes, so the checkout runs what the
+        # plane tracks (one source, both copies).
+        rewired = _rewire_executed_hooks(root)
+        if rewired:
+            print(f"gov update: re-wired {rewired} executed hook copy(ies)",
+                  file=sys.stderr)
+        steps_done += 1
         if (root / "gates.json").is_file():
             rc = plane_mod.adopt_new_gates(root, manifest_path, "gates.json")
             if rc != 0:
@@ -335,7 +380,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         rc = locks_mod._guarded(common, "plane/update", _migrate)
     except (OSError, RuntimeError) as e:
-        print(f"gov update: FAILED after {steps_done}/6 step(s) — the "
+        print(f"gov update: FAILED after {steps_done}/7 step(s) — the "
               "plane may be half-migrated with a stale seal. Recover: "
               "`git restore . && git clean -fd`, then re-run. "
               f"Cause: {e}", file=sys.stderr)

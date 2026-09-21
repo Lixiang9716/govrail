@@ -110,3 +110,58 @@ def test_gate_escalates_and_satisfies(tmp_path):
                            encoding="utf-8", errors="replace")
     assert green.returncode == 0
     assert "1 escalated with linked improvement" in green.stdout
+
+
+def test_escalation_owed_then_discharged(tmp_path, monkeypatch, capsys):
+    """#354: the marker must distinguish owed from discharged — the one
+    state an operator acts on, and the one the count-only surface could
+    not show."""
+    for i in range(3):
+        assert _run(["record", "the release strip covers nothing",
+                     "--reality", f"it strips the banner ({i})",
+                     "--sig", "release-strip"], tmp_path, monkeypatch) == 0
+    capsys.readouterr()
+    assert _run(["list"], tmp_path, monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "ESCALATION OWED" in out
+    assert "process note citing surprise:release-strip" in out
+    # ship the process note the message asks for
+    notes = tmp_path / ".agents" / "notes" / "implemented" / "process"
+    notes.mkdir(parents=True)
+    (notes / "2026-01-01-release-strip.md").write_text(
+        "# Agent Note: the release strip is a process defect\n\n"
+        "Status: implemented\n\nSupersedes surprise:release-strip findings.\n",
+        encoding="utf-8")
+    capsys.readouterr()
+    assert _run(["list"], tmp_path, monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "ESCALATION DISCHARGED" in out
+    assert "2026-01-01-release-strip.md" in out
+
+
+def test_similar_hint_requires_two_shared_content_terms(tmp_path, monkeypatch,
+                                                        capsys):
+    """#356: an unrelated signature must not be named as 'similar' — the
+    hint is the have-I-seen-this-before lookup, and one that always finds
+    something teaches the reader to ignore it."""
+    assert _run(["record", "gov task close stamps an all-green receipt",
+                 "--reality", "the task gate then rejects it",
+                 "--sig", "task-close-stamps"], tmp_path, monkeypatch) == 0
+    capsys.readouterr()
+    assert _run(["record", "the release strip covers the banner",
+                 "--reality", "the strip is compiled away",
+                 "--sig", "release-strip"], tmp_path, monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "similar earlier" not in out, out
+
+
+def test_similar_hint_surfaces_a_real_match(tmp_path, monkeypatch, capsys):
+    assert _run(["record", "the lease root is per checkout",
+                 "--reality", "linked worktrees share the lock root",
+                 "--sig", "lease-root"], tmp_path, monkeypatch) == 0
+    capsys.readouterr()
+    assert _run(["record", "the lease root note names clones",
+                 "--reality", "worktrees share the lock directory too",
+                 "--sig", "lease-root-second"], tmp_path, monkeypatch) == 0
+    out = capsys.readouterr().out
+    assert "similar earlier" in out and "lease-root" in out

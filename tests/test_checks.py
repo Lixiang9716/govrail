@@ -449,3 +449,18 @@ class TestMachineSurfaceTruth:
             "[go/syntax]") + sum(text_report.count(f"[{r}]") for r in
                                  ("go/syntax",)) or \
             value["summary"]["blocking"] >= 1
+
+
+def test_help_documents_the_suppression_mechanism(capsys):
+    """#333: 'counted, never invisible' named a mechanism the help never
+    explained — the marker syntax, its placement, and where the count
+    surfaces."""
+    import pytest as _pytest
+    with _pytest.raises(SystemExit):
+        checks.main(["--help"])
+    # argparse hard-wraps the epilog: compare against the reflowed text
+    flat = " ".join(capsys.readouterr().out.split())
+    assert "gov:ignore-check <rule-id>" in flat
+    assert "row span" in flat
+    assert "counted" in flat and "stats.jsonl" in flat
+    assert ".gov/checks/exclude.json" in flat

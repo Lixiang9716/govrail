@@ -159,14 +159,72 @@ def _slugify(title: str) -> str:
     return slug[:40] or "task"
 
 
-def _resolve(cards: list[tuple[str, Path, dict]], prefix: str) -> tuple[Path, dict]:
-    """Resolve an id (or unique id prefix) to one card, or fail loud."""
-    hits = [(p, c) for cid, p, c in cards if cid == prefix or cid.startswith(prefix)]
+TICK_PREFIX = "[x] "
+# A done-marker the gate does not read (#334): `[X]`, `[✓]`, `[y]` … —
+# a hand edit that LOOKS ticked while `task check` still counts it open.
+NONCANONICAL_TICK_RX = re.compile(r"^\[([^x ])\] ")
+
+
+def _is_ticked(item: str) -> bool:
+    return item.startswith(TICK_PREFIX)
+
+
+def _marker_warnings(cid: str, items: list) -> list[str]:
+    """Non-canonical done-markers found in a checklist (#334).
+
+    Returns problem strings: a marker the reader does not count is the
+    one state worse than unticked — it reads as progress and is not.
+    """
+    out = []
+    for i, item in enumerate(items, 1):
+        m = NONCANONICAL_TICK_RX.match(str(item))
+        if m:
+            out.append(
+                f"{cid}: checklist item {i} carries a non-canonical done "
+                f"marker '[{m.group(1)}] ' — only '[x] ' counts; use "
+                f"`gov task tick {cid} {i}`")
+    return out
+
+
+def _matches(cid: str, path: Path, term: str) -> bool:
+    """Does one card answer to ``term`` (#352)?
+
+    Three handles: the id, an id prefix, and the card-file stem — the
+    slug `gov task new` prints (`task: wrote .gov/tasks/T-0013-<slug>.json`).
+    A full filename (with or without .json) is normalized to its stem by
+    ``_resolve`` before matching.
+    """
+    slug = path.stem
+    return (cid == term or cid.startswith(term)
+            or slug == term or slug.startswith(term))
+
+
+def _resolve(cards: list[tuple[str, Path, dict]], prefix: str
+             ) -> tuple[Path, dict]:
+    """Resolve an id (or unique id prefix, or card-file slug) to one card.
+
+    #352: parallel workers mint colliding ids (per-worktree counters), so
+    one `T-0013` can name several cards. Two narrowings keep the common
+    case workable: the filename slug is a legal handle (it is what
+    `gov task new` prints, and it is unique even when the id is not), and
+    when several cards match but exactly ONE is still in flight
+    (status ``open``), that one wins — every other match being terminal
+    is precisely the shape parallel merges leave behind. Anything still
+    ambiguous aborts naming each candidate's file, because the ids alone
+    are identical and name nothing.
+    """
+    term = Path(str(prefix)).name
+    if term.endswith(".json"):
+        term = term[:-5]
+    hits = [(p, c) for cid, p, c in cards if _matches(cid, p, term)]
     if not hits:
         print(f"task: no card matches '{prefix}'", file=sys.stderr)
         raise SystemExit(2)
     if len(hits) > 1:
-        names = ", ".join(c["id"] for _, c in hits)
+        open_cards = [(p, c) for p, c in hits if c.get("status") == "open"]
+        if len(open_cards) == 1:
+            return open_cards[0]
+        names = ", ".join(f"{c['id']} ({p.name})" for p, c in hits)
         print(f"task: '{prefix}' is ambiguous ({names})", file=sys.stderr)
         raise SystemExit(2)
     return hits[0]
@@ -263,27 +321,44 @@ def cmd_check(args: argparse.Namespace) -> int:
     if not cards:
         print("task: no cards in .gov/tasks/")
         return 0
+    verbose = bool(getattr(args, "verbose", False))
+    strict = bool(getattr(args, "strict", False))
     problems: list[str] = []
+    warnings: list[str] = []
+    counts = {"open": 0, "stale": 0, "done": 0, "voided": 0}
     for cid, path, card in cards:
         status = card.get("status")
         pinned = card.get("rules", {}).get("hash", "<missing>")
         title = card.get("title", "")
+        items = card.get("checklist", [])
         if status == "done":
             problems.extend(_check_receipt(cid, card))
+            counts["done"] += 1
             print(f"done  {cid} {title}")
         elif status == "voided":
+            counts["voided"] += 1
+            line = f"voided {cid} {title}"
+            # #357: the void reason IS the audit trail (adopters record
+            # the whole exit story) and grows with the retirement ledger
+            # — one line per card by default, the full text behind
+            # --verbose or `gov task show`.
             reason = card.get("void", {}).get("reason", "")
-            print(f"voided {cid} {title}"
-                  + (f" — {reason}" if reason else ""))
+            if verbose and reason:
+                line += f" — {reason}"
+            print(line)
         elif status == "open":
-            unchecked = ([item for item in card.get("checklist", [])]
-                         if getattr(args, "strict", False) else [])
-            if unchecked:
+            counts["open"] += 1
+            warnings.extend(_marker_warnings(cid, items))
+            unticked = [i for i, it in enumerate(items, 1)
+                        if not _is_ticked(str(it))]
+            if strict and unticked:
                 problems.append(
-                    f"{cid}: {len(unchecked)} unchecked checklist item(s) — "
-                    "close the card or check them off (rule 9)")
-                print(f"OPEN  {cid} {title} ({len(unchecked)} unchecked)")
+                    f"{cid}: {len(unticked)} unticked checklist item(s) "
+                    f"({', '.join(str(i) for i in unticked)}) — tick them "
+                    "(gov task tick) or close the card (rule 9)")
+                print(f"OPEN  {cid} {title} ({len(unticked)} unticked)")
             elif pinned != combined:
+                counts["stale"] += 1
                 problems.append(
                     f"{cid}: pins rules@{pinned[:12]} but the project is at "
                     f"rules@{combined[:12]} — the brief is stale after a "
@@ -293,11 +368,97 @@ def cmd_check(args: argparse.Namespace) -> int:
                 print(f"open  {cid} {title} ({brief_line(combined)})")
         else:
             problems.append(f"{cid}: unknown status {status!r}")
+    print(f"task: {len(cards)} card(s) — {counts['open']} open, "
+          f"{counts['stale']} stale, {counts['done']} done, "
+          f"{counts['voided']} voided")
+    # #334: a marker the reader does not count is worse than an unticked
+    # item — it LOOKS like progress. Warn by default (visible, not
+    # blocking); --strict makes it a problem like the rest.
+    if warnings:
+        if strict:
+            problems.extend(warnings)
+        else:
+            print()
+            for w in warnings:
+                print(f"task: {w} (warning)", file=sys.stderr)
     if problems:
         print()
         for p in problems:
             print(f"task: {p}", file=sys.stderr)
         return 1
+    return 0
+
+
+def cmd_tick(args: argparse.Namespace) -> int:
+    """Tick one checklist item (#334) — the sanctioned way to record
+    progress, where hand-editing .gov/tasks/<id>.json used to be the only
+    one (and the one move the router skill forbids). The marker is
+    canonical and boring: ``[x] `` and nothing else, so `task check` reads
+    it and `--strict` counts only the items still unticked."""
+    if args.item < 1:
+        print("task: item numbers start at 1 (gov task show lists them)",
+              file=sys.stderr)
+        return 2
+    cards = _load_cards()
+    path, card = _resolve(cards, args.id)
+    if card.get("status") != "open":
+        print(f"task: {card['id']} is {card.get('status')!r}, not open — "
+              "ticking records progress on in-flight work", file=sys.stderr)
+        return 2
+    items = card.get("checklist", [])
+    if not items:
+        print(f"task: {card['id']} carries no checklist", file=sys.stderr)
+        return 2
+    if args.item > len(items):
+        print(f"task: {card['id']} has {len(items)} item(s) — "
+              f"{args.item} is out of range (gov task show {card['id']})",
+              file=sys.stderr)
+        return 2
+    text = str(items[args.item - 1])
+    if _is_ticked(text):
+        print(f"task: {card['id']} item {args.item} is already ticked")
+        return 0
+    items[args.item - 1] = TICK_PREFIX + text
+    atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
+    remaining = [i for i, it in enumerate(items, 1)
+                 if not _is_ticked(str(it))]
+    print(f"task: ticked {card['id']} item {args.item} — {text}")
+    if remaining:
+        print(f"  {len(remaining)} unticked: "
+              + ", ".join(str(i) for i in remaining))
+    else:
+        print(f"  all {len(items)} item(s) ticked — close with "
+              f"`gov task close {card['id']}`")
+    _uncommitted_reminder(path)
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    """Render one card in full (#334): checklist state, void reason,
+    receipt summary — the surface that lets `task check` stay one line
+    per card (#357)."""
+    cards = _load_cards()
+    path, card = _resolve(cards, args.id)
+    print(f"{card.get('id', '?')} — {card.get('title', '')}  "
+          f"[{card.get('status', '?')}]")
+    print(f"  card:  {path.as_posix()}")
+    print(f"  rules: {(card.get('rules', {}).get('hash') or '?')[:12]}")
+    items = card.get("checklist", [])
+    for i, item in enumerate(items, 1):
+        text = str(item)
+        mark = "x" if _is_ticked(text) else " "
+        print(f"  [{mark}] {i}. {text[len(TICK_PREFIX):] if _is_ticked(text) else text}")
+    if not items:
+        print("  (no checklist)")
+    void = card.get("void")
+    if isinstance(void, dict):
+        print(f"  voided: {void.get('reason', '')} "
+              f"({void.get('by', '?')} {void.get('ts', '?')})")
+    receipt = card.get("receipt")
+    if isinstance(receipt, dict):
+        print(f"  receipt: mode={receipt.get('mode', '?')} "
+              f"green={receipt.get('green', '?')} "
+              f"ts={receipt.get('ts', '?')}")
     return 0
 
 
@@ -627,9 +788,27 @@ def main(argv: list[str] | None = None) -> int:
     p_check = sub.add_parser("check", help="name stale cards and verify "
                              "receipts (gate-scoped to .gov/tasks/**)")
     p_check.add_argument("--strict", action="store_true",
-                         help="open cards with unchecked checklist items "
-                              "block (rule 9)")
+                         help="open cards with unticked checklist items "
+                              "and non-canonical done-markers block (rule 9)")
+    p_check.add_argument("--verbose", action="store_true",
+                         help="print each retired card's full void reason "
+                              "(#357: the default stays one line per card; "
+                              "`gov task show <id>` renders one card whole)")
     p_check.set_defaults(func=cmd_check)
+
+    p_tick = sub.add_parser("tick", help="tick a checklist item on an open "
+                            "card (#334) — the sanctioned alternative to "
+                            "hand-editing .gov/tasks/<id>.json")
+    p_tick.add_argument("id", help="card id, id prefix, or card-file slug")
+    p_tick.add_argument("item", type=int, metavar="N",
+                        help="1-based checklist item number (gov task show "
+                             "lists them)")
+    p_tick.set_defaults(func=cmd_tick)
+
+    p_show = sub.add_parser("show", help="render one card in full: "
+                            "checklist state, void reason, receipt summary")
+    p_show.add_argument("id", help="card id, id prefix, or card-file slug")
+    p_show.set_defaults(func=cmd_show)
 
     p_close = sub.add_parser("close", help="run the gate DAG now and close "
                              "the card with a green-run receipt")
@@ -697,7 +876,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:
         parser.error("a subcommand is required "
-                     "(new|check|close|claim|release|list|void)")
+                     "(new|check|close|claim|release|list|void|tick|show)")
     return args.func(args)
 
 

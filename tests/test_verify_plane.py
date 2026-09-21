@@ -233,3 +233,38 @@ def test_rebaseline_names_the_consent_ledger(tmp_path, monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "consent recorded in" in out and "rituals.jsonl" in out
+
+
+def test_rebaseline_note_prints_once_per_record(tmp_path, monkeypatch, capsys):
+    """#337: a note on every invocation stops being a note — it is worth
+    reading on the run after a new re-baseline and wallpaper forever
+    after. One announcement per record; the ledger keeps the audit trail
+    and `gov verify-plane` the detail."""
+    from gov import verify_plane as vp
+    monkeypatch.chdir(tmp_path)
+    gov = tmp_path / ".gov"
+    gov.mkdir()
+    ledger = gov / "rituals.jsonl"
+    import json as _json
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    ledger.write_text(_json.dumps({
+        "ritual": "seal-rebaseline", "ts": now, "caller": "someone",
+        "unattended": True, "reason": "reviewed change",
+    }) + "\n", encoding="utf-8")
+    vp.announce_rebaselines("gov run")
+    first = capsys.readouterr().err
+    assert "re-baselined" in first and "someone" in first
+    vp.announce_rebaselines("gov run")
+    assert capsys.readouterr().err == "", "the note must not repeat"
+    # a NEW record re-arms the notice (distinct ts — the record's identity)
+    from datetime import timedelta
+    later = (datetime.now(timezone.utc)
+             + timedelta(seconds=5)).isoformat(timespec="seconds")
+    ledger.write_text(ledger.read_text(encoding="utf-8") + _json.dumps({
+        "ritual": "seal-rebaseline", "ts": later, "caller": "someone-else",
+        "unattended": True, "reason": "second reviewed change",
+    }) + "\n", encoding="utf-8")
+    vp.announce_rebaselines("gov run")
+    again = capsys.readouterr().err
+    assert "re-baselined" in again and "someone-else" in again
