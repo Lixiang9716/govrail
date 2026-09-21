@@ -156,6 +156,16 @@ def test_custom_gates_survive_the_merge(tmp_path):
 
 
 
+import os as _os
+
+
+POSIX_EXEC = pytest.mark.skipif(
+    _os.name == "nt",
+    reason="no POSIX mode bits on Windows: the exec-bit assertion "
+           "tests a POSIX contract (init/update chmod 0o755 there)")
+
+
+@POSIX_EXEC
 def test_rewire_executed_hooks_copies_bytes_and_keeps_mode(tmp_path,
                                                             monkeypatch):
     """#331: adoption refreshed .gov/hooks/<name> while the executed copy
@@ -182,6 +192,29 @@ def test_rewire_executed_hooks_copies_bytes_and_keeps_mode(tmp_path,
     assert (hooks / "pre-commit").stat().st_mode & 0o111  # still executable
     # a second run is a no-op (bytes already equal)
     assert update_mod._rewire_executed_hooks(tmp_path) == 0
+
+
+def test_rewire_executed_hooks_copies_bytes_on_every_platform(tmp_path,
+                                                              monkeypatch):
+    """The bytes contract is platform-free (the exec BIT is not, above):
+    a shim on Windows has no 0o755 to preserve, but it must be the
+    tracked revision, not the stale one."""
+    from gov import update as update_mod
+    _repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    hooks = tmp_path / ".git" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    tracked = tmp_path / ".gov" / "hooks"
+    tracked.mkdir(parents=True)
+    (tracked / "pre-commit").write_text(
+        "#!/bin/sh\n# govrail: current\nrun_gov hooks pre-commit\n",
+        encoding="utf-8")
+    (hooks / "pre-commit").write_text(
+        "#!/bin/sh\n# govrail: old\nrun_gov verify-pairing --staged\n",
+        encoding="utf-8")
+    assert update_mod._rewire_executed_hooks(tmp_path) == 1
+    assert (hooks / "pre-commit").read_bytes() == \
+        (tracked / "pre-commit").read_bytes()
 
 
 def test_rewire_leaves_a_foreign_hook_alone(tmp_path, monkeypatch):
