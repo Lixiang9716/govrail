@@ -3,6 +3,18 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.48.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- **agent-hooks:** capture what the platform actually sends
+- **parse:** ship every tree-sitter grammar — 41 packs, a declared factory, snippet fixtures
+- **parse:** Swift and Kotlin grammars join the parse layer; gov parse walks the pack set
+- **surface:** issue batch [#340](https://github.com/Lixiang9716/govrail/issues/340)-[#349](https://github.com/Lixiang9716/govrail/issues/349) — check-gate exclusions, truth-telling machine surfaces, recall QoL
+- **surface:** issue batch 2 — task cards got hands, notices stop repeating, runtime artifacts stay out of git status
+- **task:** one green predicate for receipts; bricked done cards get exits
+- **task:** the checklist is a contract again, and a lease names its card
+- the pairing config exists from init ([#367](https://github.com/Lixiang9716/govrail/issues/367)); a stale pin can be advanced on purpose
+- the push scope is what the push carries; notes can point forward; gate add can be previewed
+
 ## 0.47.1 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - **task:** card ids are addresses — high-water allocation, never recycled
