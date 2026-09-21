@@ -1,0 +1,52 @@
+{
+  "classes": [
+    "class",
+    "module",
+    "singleton_class"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "method",
+    "singleton_method",
+    "lambda"
+  ],
+  "globs": [
+    "*.rb",
+    "Rakefile",
+    "Gemfile"
+  ],
+  "grammar": "tree_sitter_ruby",
+  "nesting": [
+    "if",
+    "unless",
+    "while",
+    "until",
+    "for",
+    "case",
+    "begin",
+    "rescue"
+  ],
+  "string": [
+    "string",
+    "heredoc_body"
+  ]
+}

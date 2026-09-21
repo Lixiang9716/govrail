@@ -1,0 +1,38 @@
+{
+  "classes": [],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_expression"
+  ],
+  "globs": [
+    "*.nix"
+  ],
+  "grammar": "tree_sitter_nix",
+  "nesting": [
+    "if_expression",
+    "let_expression",
+    "with_expression"
+  ],
+  "string": [
+    "string_expression"
+  ]
+}

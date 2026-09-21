@@ -1,0 +1,50 @@
+{
+  "classes": [
+    "class_declaration",
+    "interface_declaration"
+  ],
+  "comment": [
+    "line_comment",
+    "block_comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "method_declaration",
+    "constructor_declaration",
+    "function_definition",
+    "lambda_expression"
+  ],
+  "globs": [
+    "*.groovy",
+    "*.gradle"
+  ],
+  "grammar": "tree_sitter_groovy",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "do_statement",
+    "switch_expression",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string_literal"
+  ]
+}

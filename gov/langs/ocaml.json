@@ -1,0 +1,48 @@
+{
+  "classes": [
+    "class_definition",
+    "module_definition"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "factory": "language_ocaml",
+  "functions": [
+    "value_definition",
+    "function",
+    "method_definition",
+    "class_function"
+  ],
+  "globs": [
+    "*.ml"
+  ],
+  "grammar": "tree_sitter_ocaml",
+  "nesting": [
+    "if_expression",
+    "for_expression",
+    "while_expression",
+    "match_expression",
+    "try_expression"
+  ],
+  "string": [
+    "string",
+    "quoted_string"
+  ]
+}

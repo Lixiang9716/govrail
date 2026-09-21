@@ -1,0 +1,44 @@
+{
+  "classes": [
+    "class",
+    "data_type",
+    "module"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function"
+  ],
+  "globs": [
+    "*.hs"
+  ],
+  "grammar": "tree_sitter_haskell",
+  "nesting": [
+    "if",
+    "case",
+    "let_in",
+    "do",
+    "multi_way_if"
+  ],
+  "string": [
+    "string"
+  ]
+}

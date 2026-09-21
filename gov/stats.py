@@ -264,10 +264,24 @@ def main(argv: list[str] | None = None) -> int:
               "part of the govrail dependency set; reinstall with "
               "`pip install govrail`", file=sys.stderr)
         return 2
-    try:
-        packs = [parse.load_pack(n) for n in names]
-    except parse.ParseUnavailable as e:
-        print(f"gov stats: {e}", file=sys.stderr)
+    # A grammar this interpreter cannot load (a wheel its platform
+    # disagrees with) skips ITS language, loudly — the rest of the sweep
+    # is unaffected. An explicit --lang that cannot load still fails the
+    # command: that request named one language, and answering with a
+    # green zero would be the silent lie (rule 5).
+    packs = []
+    for n in names:
+        try:
+            packs.append(parse.load_pack(n))
+        except parse.ParseUnavailable as e:
+            if args.langs:
+                print(f"gov stats: {e}", file=sys.stderr)
+                return 2
+            print(f"gov stats: SKIP(unavailable grammar: {n}) — {e}",
+                  file=sys.stderr)
+    if not packs:
+        print("gov stats: no language pack could be loaded on this "
+              "platform — reinstall govrail", file=sys.stderr)
         return 2
 
     root = Path.cwd()
@@ -306,12 +320,24 @@ def main(argv: list[str] | None = None) -> int:
 
 # ── #265: `gov parse` — the parse layer as a first-class primitive ──
 
-def _pack_for(path: Path, names: list[str]):
-    """The language pack whose globs match this file, or None."""
+def _pack_for(path: Path, names: list[str],
+              unavailable: list[dict] | None = None):
+    """The language pack whose globs match this file, or None.
+
+    ``unavailable`` collects the packs that could not be loaded at all,
+    each NAMED with its reason — "no grammar for this file" and "the
+    grammar for this file is unusable in this interpreter" are different
+    answers, and a size gate must be able to tell them apart (#270's
+    honesty rule, one level down)."""
     import fnmatch
     from . import parse
     for name in names:
-        pack = parse.load_pack(name)
+        try:
+            pack = parse.load_pack(name)
+        except parse.ParseUnavailable as e:
+            if unavailable is not None:
+                unavailable.append({"path": path.as_posix(), "reason": str(e)})
+            continue
         if any(fnmatch.fnmatch(path.as_posix(), pat) or
                fnmatch.fnmatch(path.name, pat) for pat in pack.globs):
             return name, pack
@@ -382,7 +408,11 @@ def parse_report(paths: list[Path],
             claimed: set[Path] = set()
             excludes: set[str] = set()
             for name in names:
-                pack = parse.load_pack(name)
+                try:
+                    pack = parse.load_pack(name)
+                except parse.ParseUnavailable as e:
+                    skipped.append({"path": name, "reason": str(e)})
+                    continue
                 excludes.update(pack.exclude)
                 for path, src_bytes in parse.iter_files(target, pack):
                     claimed.add(path)
@@ -402,10 +432,16 @@ def parse_report(paths: list[Path],
             skipped.append({"path": target.as_posix(),
                             "reason": "no such file"})
             continue
-        name, pack = _pack_for(target, names)
+        unavailable: list[dict] = []
+        name, pack = _pack_for(target, names, unavailable)
         if pack is None:
-            skipped.append({"path": target.as_posix(),
-                            "reason": "no shipped grammar matches"})
+            if unavailable:
+                skipped.extend(unavailable)   # the grammar exists but would
+                                              # not load here: named, not a
+                                              # mute "no match"
+            else:
+                skipped.append({"path": target.as_posix(),
+                                "reason": "no shipped grammar matches"})
             continue
         reports.append(_file_report(target, target.read_bytes(), name, pack))
     return reports, skipped

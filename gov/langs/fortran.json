@@ -1,0 +1,46 @@
+{
+  "classes": [
+    "module",
+    "derived_type_definition"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function",
+    "subroutine",
+    "procedure"
+  ],
+  "globs": [
+    "*.f90",
+    "*.f95",
+    "*.f03"
+  ],
+  "grammar": "tree_sitter_fortran",
+  "nesting": [
+    "if_statement",
+    "do_statement",
+    "while_statement",
+    "case_statement"
+  ],
+  "string": [
+    "string_literal"
+  ]
+}

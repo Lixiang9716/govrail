@@ -1,0 +1,40 @@
+{
+  "classes": [],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [],
+  "globs": [
+    "*.yml",
+    "*.yaml"
+  ],
+  "grammar": "tree_sitter_yaml",
+  "nesting": [
+    "block_mapping",
+    "block_sequence",
+    "flow_node"
+  ],
+  "string": [
+    "string_scalar",
+    "double_quote_scalar",
+    "single_quote_scalar",
+    "block_scalar"
+  ]
+}

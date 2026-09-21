@@ -1,0 +1,51 @@
+{
+  "classes": [
+    "class_interface",
+    "class_implementation",
+    "protocol_declaration",
+    "struct_specifier"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "method_declaration",
+    "method_definition",
+    "function_definition"
+  ],
+  "globs": [
+    "*.m",
+    "*.mm"
+  ],
+  "grammar": "tree_sitter_objc",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "case_statement",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string_literal"
+  ]
+}

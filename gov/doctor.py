@@ -373,22 +373,42 @@ def _check_parse_layer(checks: list[dict]) -> None:
     from . import parse as parse_mod
     try:
         core = importlib.import_module("tree_sitter")
-        versions = []
-        for name in parse_mod.available():
-            pack = parse_mod.load_pack(name)  # validates kinds (rule 5)
-            ver = parse_mod.grammar_version(pack)
-            versions.append(f"{name}={ver or '?'}")
-        del core
-        checks.append({"name": "parser", "state": "ok",
-                       "detail": f"parse layer ok ({', '.join(versions)})"})
-    except parse_mod.ParseUnavailable as e:
-        checks.append({"name": "parser", "state": "problem",
-                       "detail": str(e)})
     except ImportError as e:
         checks.append({"name": "parser", "state": "problem",
                        "detail": f"tree-sitter is not importable ({e}) — the "
                                  "parse layer cannot run; reinstall: "
                                  "pip install --force-reinstall govrail"})
+        return
+    versions: list[str] = []
+    unavailable: list[str] = []
+    # EVERY pack is tried, and every failure is named: one unusable wheel
+    # must not hide the ones behind it in the list (the Windows ABI class
+    # was found this way — the first aborted sweep named one grammar per
+    # CI round).
+    for name in parse_mod.available():
+        try:
+            pack = parse_mod.load_pack(name)  # validates kinds (rule 5)
+        except parse_mod.ParseUnavailable as e:
+            unavailable.append(f"{name} ({e})")
+            continue
+        ver = parse_mod.grammar_version(pack)
+        versions.append(f"{name}={ver or '?'}")
+    del core
+    if unavailable:
+        # A note, not a problem: the plane DEGRADES by design (stats and
+        # parse skip the language by name), the adopter cannot fix a
+        # wheel, and a permanently red doctor is the vacuous-gate shape
+        # (rule 6) — the state is reported where it changes an answer.
+        checks.append({
+            "name": "parser", "state": "note",
+            "detail": f"parse layer ok for {len(versions)} pack(s); "
+                      f"{len(unavailable)} grammar(s) cannot be loaded by "
+                      f"this interpreter — those languages are skipped by "
+                      f"name in gov stats/parse: "
+                      + "; ".join(unavailable)})
+    else:
+        checks.append({"name": "parser", "state": "ok",
+                       "detail": f"parse layer ok ({', '.join(versions)})"})
 
 
 def _check_seal_rebaseline(checks: list[dict]) -> None:

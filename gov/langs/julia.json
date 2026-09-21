@@ -1,0 +1,43 @@
+{
+  "classes": [
+    "module"
+  ],
+  "comment": [
+    "line_comment",
+    "block_comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_definition"
+  ],
+  "globs": [
+    "*.jl"
+  ],
+  "grammar": "tree_sitter_julia",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string_literal"
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "classes": [
+    "package_declaration",
+    "package_body"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function",
+    "procedure"
+  ],
+  "globs": [
+    "*.adb",
+    "*.ads"
+  ],
+  "grammar": "tree_sitter_ada",
+  "nesting": [
+    "if_statement",
+    "elsif",
+    "loop_statement",
+    "case_statement"
+  ],
+  "string": [
+    "string_literal"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "classes": [],
+  "comment": [],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [],
+  "globs": [
+    "*.md",
+    "*.markdown"
+  ],
+  "grammar": "tree_sitter_markdown",
+  "nesting": [],
+  "string": []
+}

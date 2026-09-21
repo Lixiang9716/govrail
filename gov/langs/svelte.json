@@ -1,0 +1,36 @@
+{
+  "classes": [],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [],
+  "globs": [
+    "*.svelte"
+  ],
+  "grammar": "tree_sitter_svelte",
+  "nesting": [
+    "if_statement",
+    "each_statement",
+    "await_statement"
+  ],
+  "string": [
+    "text"
+  ]
+}

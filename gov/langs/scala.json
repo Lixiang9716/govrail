@@ -1,0 +1,49 @@
+{
+  "classes": [
+    "class_definition",
+    "object_definition",
+    "trait_definition"
+  ],
+  "comment": [
+    "comment",
+    "block_comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_definition",
+    "function_declaration",
+    "lambda_expression"
+  ],
+  "globs": [
+    "*.scala",
+    "*.sc"
+  ],
+  "grammar": "tree_sitter_scala",
+  "nesting": [
+    "if_expression",
+    "for_expression",
+    "while_expression",
+    "match_expression",
+    "try_expression",
+    "catch_clause"
+  ],
+  "string": [
+    "string"
+  ]
+}
