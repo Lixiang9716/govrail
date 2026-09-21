@@ -3194,15 +3194,25 @@ def stats_empty_tree(base):
     rule = v["python"]["rule"]
     assert rule["grammar"] == "tree_sitter_python"
     assert "code_line" in rule and "nesting" in rule
-    # Ten shipped packs (#335): the set is pinned by NAME, not only by
-    # length — a pack that silently vanished and one that silently
-    # arrived are both regressions this scenario exists to catch.
-    assert set(v) == {"c", "cpp", "go", "java", "javascript", "kotlin",
-                      "python", "rust", "swift", "typescript"}, sorted(v)
-    # the two grammar-first packs carry their axes too (their rule echo
-    # proves the pack loaded, not merely that a row exists)
+    # The shipped set is pinned by NAME, not only by length — a pack that
+    # silently vanished and one that silently arrived are both regressions
+    # this scenario exists to catch. The list is the whole parse-layer
+    # inventory: programming languages, and the markup/data formats whose
+    # line counts a size gate still reads.
+    assert set(v) == {
+        "ada", "bash", "c", "c-sharp", "cpp", "css", "cuda", "dart",
+        "elixir", "embedded-template", "fortran", "go", "groovy",
+        "haskell", "html", "java", "javascript", "json", "julia", "kotlin",
+        "lua", "make", "markdown", "nix", "objc", "ocaml", "php",
+        "powershell", "python", "ruby", "rust", "scala", "solidity", "sql",
+        "svelte", "swift", "tlaplus", "toml", "typescript", "yaml", "zig",
+    }, sorted(v)
+    # a grammar-first pack's rule echo proves the pack LOADED, not merely
+    # that a row exists
     assert v["swift"]["rule"]["grammar"] == "tree_sitter_swift"
     assert v["kotlin"]["rule"]["grammar"] == "tree_sitter_kotlin"
+    assert v["php"]["rule"]["grammar"] == "tree_sitter_php"      # factory pack
+    assert v["markdown"]["rule"]["nesting"] == []                # line facts only
 
 
 def agent_lifecycle_receipt(base):

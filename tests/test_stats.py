@@ -418,20 +418,40 @@ class TestKotlinKnownAnswer:
         assert entry["parse_errors"] == 0
 
 
+# Packs that describe a language with line facts ONLY: the grammar ships
+# no comment or string node at all, so the pack is globs + exclusions and
+# `gov stats` reports its files' line counts alone. Named, with the reason,
+# rather than silently exempted (rule 5).
+LINE_FACTS_ONLY = {"markdown": "the grammar has no comment/string nodes"}
+
+
 class TestPackIntegrity:
     def test_every_installed_pack_loads_and_declares_its_axes(self):
         """A pack is DATA validated at load; this walks every installed
         one so a shipped pack cannot rot between releases (a wrong node
-        kind refuses to load — the check that catches it runs here)."""
+        kind refuses to load — the check that catches it runs here).
+
+        Markup and data formats carry the axes their language has (a
+        stylesheet has nesting and strings but no functions); a pack
+        whose axes are ALL empty must be named in LINE_FACTS_ONLY.
+        """
         names = parse.available()
         assert names, "no packs installed"
         for name in names:
             pack = parse.load_pack(name)          # validates kinds (rule 5)
             assert pack.globs, name
-            assert pack.functions, name
-            assert pack.nesting, name
-            assert pack.comment, name
-            assert pack.string, name
+            assert pack.exclude, name
+            axes = (pack.functions, pack.nesting, pack.comment,
+                    pack.string, pack.classes)
+            if name in LINE_FACTS_ONLY:
+                assert not any(axes), (
+                    f"{name} is declared line-facts-only but carries axes: "
+                    "update the declaration")
+            else:
+                assert any(axes), (
+                    f"{name} declares no axis at all — give it the kinds "
+                    "its grammar has, or add it to LINE_FACTS_ONLY with a "
+                    "reason")
 
     def test_parse_covers_a_pack_without_check_rules(self, tmp_path):
         """#335's decoupling: `gov parse` walks every installed PACK
@@ -447,3 +467,101 @@ class TestPackIntegrity:
         assert "swift" in parse.available()
         # the two sets are deliberately different axes
         assert "swift" not in checks.available_langs()
+
+
+# One tiny, VALID snippet per shipped language plus the minimum number of
+# function spans it must yield. The point is not the snippet's depth but
+# the axis: a pack whose `functions` list names a node ordinary code never
+# produces reads as "0 functions" forever — a silently useless pack, the
+# exact failure the load-time kind check cannot catch (the kind exists; it
+# is just the wrong one). Markup and data packs declare 0 and prove the
+# grammar parses them at all.
+SNIPPETS: dict[str, tuple[str, str, int]] = {
+    "ada": ("hello.adb", "procedure Hello is\nbegin\n   null;\nend Hello;\n", 1),
+    "bash": ("greet.sh", "greet() {\n  echo hi\n}\n", 1),
+    "c": ("m.c", "int f(void) { if (1) { return 1; } return 0; }\n", 1),
+    "c-sharp": ("C.cs", "class C {\n  void M() { if (true) { } }\n}\n", 1),
+    "cpp": ("m.cpp", "int f() { if (true) { return 1; } return 0; }\n", 1),
+    "css": ("a.css", ".a { color: red; }\n", 0),
+    "cuda": ("k.cu", "void k() { if (true) { } }\n", 1),
+    "dart": ("m.dart", "void main() { if (true) { } }\n", 1),
+    "elixir": ("m.ex", "defmodule M do\n  def go do\n    :ok\n  end\nend\n", 1),
+    "embedded-template": ("v.erb", "<% if x %>hi<% end %>\n", 0),
+    "fortran": ("m.f90", "subroutine go()\nend subroutine go\n", 1),
+    "go": ("m.go", "package m\n\nfunc F() int {\n\tif true {\n\t\treturn 1\n\t}\n\treturn 0\n}\n", 1),
+    "groovy": ("G.groovy", "class G {\n  def m() { if (true) { } }\n}\n", 1),
+    "haskell": ("M.hs", "f :: Int -> Int\nf x = if x > 0 then x else 0\n", 1),
+    "html": ("i.html", "<p>hi</p>\n", 0),
+    "java": ("M.java", "class M {\n  int f() { if (true) { return 1; } return 0; }\n}\n", 1),
+    "javascript": ("m.js", "function f() { if (true) { return 1; } return 0; }\n", 1),
+    "json": ("d.json", '{"a": [1, 2]}\n', 0),
+    "julia": ("m.jl", "function go(x)\n  if x > 0\n    return x\n  end\nend\n", 1),
+    "kotlin": ("M.kt", "fun go(x: Int): Int {\n    if (x > 0) {\n        return x\n    }\n    return 0\n}\n", 1),
+    "lua": ("m.lua", "function go(x)\n  if x then return x end\nend\n", 1),
+    "make": ("Makefile", "all:\n\techo hi\n", 0),
+    "markdown": ("d.md", "# Title\n\ntext\n", 0),
+    "nix": ("m.nix", "let f = x: x; in f 1\n", 1),
+    "objc": ("m.m", "@implementation C\n- (void)m { if (1) { } }\n@end\n", 1),
+    "ocaml": ("m.ml", "let go x = if x > 0 then x else 0\n", 1),
+    "php": ("m.php", "<?php\nfunction go($x) { if ($x) { return 1; } return 0; }\n", 1),
+    "powershell": ("m.ps1", "function Get-Thing { if ($true) { return 1 } }\n", 1),
+    "python": ("m.py", "def go(x):\n    if x > 0:\n        return x\n    return 0\n", 1),
+    "ruby": ("m.rb", "def go(x)\n  if x > 0\n    x\n  end\nend\n", 1),
+    "rust": ("m.rs", "fn go(x: i32) -> i32 {\n    if x > 0 {\n        return x;\n    }\n    0\n}\n", 1),
+    "scala": ("M.scala", "object M { def go(x: Int): Int = if (x > 0) x else 0 }\n", 1),
+    "solidity": ("C.sol",
+                 "pragma solidity ^0.8.0;\ncontract C { function go(uint x) public pure "
+                 "returns (uint) { if (x > 0) { return x; } return 0; } }\n", 1),
+    "sql": ("q.sql", "SELECT * FROM t WHERE a IN (SELECT b FROM u);\n", 0),
+    "svelte": ("C.svelte", "<script>let a = 1;</script>\n{#if a}<p>x</p>{/if}\n", 0),
+    "swift": ("M.swift", "func go(_ x: Int) -> Int {\n    if x > 0 {\n        return x\n    }\n    return 0\n}\n", 1),
+    "tlaplus": ("M.tla", "---- MODULE M ----\nOp == IF x THEN 1 ELSE 2\n====\n", 1),
+    "toml": ("c.toml", "[a]\nb = 1\n", 0),
+    "typescript": ("m.ts", "function f(): number { if (true) { return 1; } return 0; }\n", 1),
+    "yaml": ("c.yaml", "a:\n  - 1\n  - 2\n", 0),
+    "zig": ("m.zig", "fn go(x: i32) i32 { if (x > 0) return x; return 0; }\n", 1),
+}
+
+
+def _count(node, kinds) -> int:
+    n = 0
+    stack = [node]
+    while stack:
+        cur = stack.pop()
+        if cur.type in kinds:
+            n += 1
+        stack.extend(cur.children)
+    return n
+
+
+class TestEveryPackParsesItsLanguage:
+    def test_the_fixture_table_covers_every_shipped_pack(self):
+        """A new pack without a snippet would sail through this class
+        silently — the coverage assertion is the test's own teeth."""
+        assert set(SNIPPETS) == set(parse.available()), (
+            "every shipped pack needs a snippet: "
+            f"missing {sorted(set(parse.available()) - set(SNIPPETS))}, "
+            f"extra {sorted(set(SNIPPETS) - set(parse.available()))}")
+
+    @pytest.mark.parametrize("lang", sorted(SNIPPETS))
+    def test_snippet_parses_and_finds_its_functions(self, lang, tmp_path):
+        fname, body, want_funcs = SNIPPETS[lang]
+        path = tmp_path / fname
+        path.write_text(body, encoding="utf-8")
+        pack = parse.load_pack(lang)
+        tree = parse.parser_for(pack, path).parse(path.read_bytes())
+        assert _count(tree.root_node, {"ERROR"}) == 0, f"{lang}: {body!r}"
+        assert not any(n.is_missing for n in _all_nodes(tree.root_node)), lang
+        if want_funcs:
+            found = _count(tree.root_node, pack.functions)
+            assert found >= want_funcs, (
+                f"{lang}: the pack's function kinds found nothing in "
+                f"ordinary code ({sorted(pack.functions)})")
+
+
+def _all_nodes(root):
+    stack = [root]
+    while stack:
+        n = stack.pop()
+        yield n
+        stack.extend(n.children)

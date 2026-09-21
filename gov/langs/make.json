@@ -1,0 +1,40 @@
+{
+  "classes": [],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [],
+  "globs": [
+    "Makefile",
+    "*.mk",
+    "GNUmakefile"
+  ],
+  "grammar": "tree_sitter_make",
+  "nesting": [
+    "ifeq_directive",
+    "ifneq_directive",
+    "ifdef_directive",
+    "ifndef_directive",
+    "define_directive"
+  ],
+  "string": [
+    "string"
+  ]
+}

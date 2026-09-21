@@ -1,0 +1,46 @@
+{
+  "classes": [
+    "contract_declaration",
+    "interface_declaration",
+    "library_declaration"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_definition"
+  ],
+  "globs": [
+    "*.sol"
+  ],
+  "grammar": "tree_sitter_solidity",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "do_while_statement",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string",
+    "string_literal"
+  ]
+}

@@ -48,7 +48,7 @@ DEFAULT_EXCLUDE = (
 )
 
 PACK_KEYS = {"globs", "exclude", "grammar", "nesting", "functions",
-             "classes", "comment", "string"}
+             "classes", "comment", "string", "factory"}
 _LIST_KEYS = ("globs", "exclude", "nesting", "functions", "classes",
               "comment", "string")
 
@@ -68,6 +68,7 @@ class LangPack:
     classes: frozenset[str]
     comment: frozenset[str]
     string: frozenset[str]
+    factory: str | None = None
     kind_ids: dict[str, int] = field(default_factory=dict, compare=False)
 
     def matches(self, relpath: str) -> bool:
@@ -146,12 +147,14 @@ def load_pack(name: str) -> LangPack:
             f"{', '.join(missing)}")
 
     mod = _import_grammar(raw["grammar"])
-    # The binding's factory name is not standardized (every other grammar
-    # ships `language`; the typescript one ships `language_typescript` and
-    # `language_tsx` for its two dialects).
-    lang_fn = getattr(mod, "language", None)
+    # The binding's factory name is not standardized: most ship
+    # `language`; the typescript one ships `language_typescript` and
+    # `language_tsx` (two dialects), php and ocaml ship ONLY
+    # dialect-named factories — those packs declare theirs explicitly
+    # with the optional `factory` key rather than guessing here.
+    lang_fn = getattr(mod, raw.get("factory") or "language", None)
     if not callable(lang_fn):
-        for alt in ("language_typescript", "language_tsx"):
+        for alt in ("language", "language_typescript", "language_tsx"):
             lang_fn = getattr(mod, alt, None)
             if callable(lang_fn):
                 break
@@ -180,6 +183,7 @@ def load_pack(name: str) -> LangPack:
         classes=frozenset(raw["classes"]),
         comment=frozenset(raw["comment"]),
         string=frozenset(raw["string"]),
+        factory=raw.get("factory"),
         kind_ids=kind_ids,
     )
 
@@ -202,12 +206,15 @@ def load_parser(pack: LangPack, tsx: bool = False):
     if cached is not None:
         return cached
     mod = import_module(pack.grammar)
+    declared = getattr(pack, "factory", None)
     if tsx:
         lang_fn = (getattr(mod, "language_tsx", None)
                    or getattr(mod, "language_typescript", None)
+                   or (getattr(mod, declared) if declared else None)
                    or getattr(mod, "language", None))
     else:
-        lang_fn = (getattr(mod, "language", None)
+        lang_fn = ((getattr(mod, declared) if declared else None)
+                   or getattr(mod, "language", None)
                    or getattr(mod, "language_typescript", None)
                    or getattr(mod, "language_tsx", None))
     parser = Parser(Language(lang_fn()))

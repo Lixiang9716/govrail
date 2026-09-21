@@ -12,11 +12,15 @@ English | [中文](README.zh.md)
 A governance plane for agent-driven development: coding agents work fast
 in parallel while machines — not vigilance — hold the quality line. The
 governance machinery (gates, notes, receipts, pairing) is language-agnostic;
-the code-facts layer runs on the ten tree-sitter grammars shipped today
-(c, cpp, go, java, javascript, kotlin, python, rust, swift, typescript —
-add more rules via `.gov/checks/<lang>.json` the same way; the check gate
-judges the languages that ship rules, while `gov parse`/`gov stats` read
-every shipped grammar, Swift and Kotlin among them). The runtime is Python 3
+the code-facts layer runs on the forty-one tree-sitter grammars shipped
+today — ada, bash, c, c-sharp, cpp, cuda, dart, elixir, fortran, go,
+groovy, haskell, java, javascript, julia, kotlin, lua, nix, objective-c,
+ocaml, php, powershell, python, ruby, rust, scala, solidity, swift,
+tlaplus, typescript, zig, plus the markup and data formats a size gate
+still counts (css, html, json, make, markdown, svelte, toml, yaml, sql,
+embedded templates); `gov doctor` names the installed set. The check gate
+judges the languages that ship rules (add yours via `.gov/checks/<lang>.json`)
+while `gov parse`/`gov stats` read every installed grammar. The runtime is Python 3
 (>= 3.10) — all installed by `pip install govrail`, no other tooling
 required.
 

@@ -1,0 +1,38 @@
+{
+  "classes": [],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "call"
+  ],
+  "globs": [
+    "*.ex",
+    "*.exs"
+  ],
+  "grammar": "tree_sitter_elixir",
+  "nesting": [
+    "do_block",
+    "stab_clause"
+  ],
+  "string": [
+    "string"
+  ]
+}

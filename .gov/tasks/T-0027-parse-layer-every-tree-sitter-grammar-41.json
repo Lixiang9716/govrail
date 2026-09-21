@@ -1,0 +1,20 @@
+{
+  "title": "parse layer: every tree-sitter grammar (41 packs, factory key, snippet fixtures)",
+  "created": "2026-09-21T09:39:52+00:00",
+  "rules": {
+    "hash": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "files": {
+      ".gov/rules.md": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976",
+      "gates.json": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
+    }
+  },
+  "checklist": [
+    "42 grammar deps declared; all 41 packs load with kind validation",
+    "fixture table parses one snippet per language (0 errors, functions found)",
+    "README pair states 41 grammars; e2e pins the shipped set by name",
+    "full suite + gov run green; PR merged"
+  ],
+  "status": "open",
+  "receipt": null,
+  "id": "T-0027"
+}

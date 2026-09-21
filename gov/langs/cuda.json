@@ -1,0 +1,50 @@
+{
+  "classes": [
+    "class_specifier",
+    "struct_specifier",
+    "union_specifier",
+    "namespace_definition"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_definition"
+  ],
+  "globs": [
+    "*.cu",
+    "*.cuh"
+  ],
+  "grammar": "tree_sitter_cuda",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "case_statement",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string_literal",
+    "raw_string_literal"
+  ]
+}

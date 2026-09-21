@@ -1,0 +1,46 @@
+{
+  "classes": [
+    "class_statement"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_statement"
+  ],
+  "globs": [
+    "*.ps1",
+    "*.psm1"
+  ],
+  "grammar": "tree_sitter_powershell",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "foreach_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string_literal"
+  ]
+}

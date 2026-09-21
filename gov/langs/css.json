@@ -1,0 +1,34 @@
+{
+  "classes": [],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [],
+  "globs": [
+    "*.css"
+  ],
+  "grammar": "tree_sitter_css",
+  "nesting": [
+    "rule_set"
+  ],
+  "string": [
+    "string_value"
+  ]
+}

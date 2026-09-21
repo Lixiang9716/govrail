@@ -1,0 +1,51 @@
+{
+  "classes": [
+    "class_definition",
+    "enum_declaration",
+    "mixin_declaration",
+    "extension_declaration"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_signature",
+    "local_function_declaration",
+    "method_signature",
+    "lambda_expression"
+  ],
+  "globs": [
+    "*.dart"
+  ],
+  "grammar": "tree_sitter_dart",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "switch_expression",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string_literal"
+  ]
+}

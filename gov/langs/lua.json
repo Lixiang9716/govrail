@@ -1,0 +1,41 @@
+{
+  "classes": [],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_definition",
+    "function_declaration"
+  ],
+  "globs": [
+    "*.lua"
+  ],
+  "grammar": "tree_sitter_lua",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "repeat_statement",
+    "do_statement"
+  ],
+  "string": [
+    "string"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "classes": [
+    "class_declaration",
+    "interface_declaration",
+    "trait_declaration"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "factory": "language_php",
+  "functions": [
+    "function_definition",
+    "method_declaration",
+    "anonymous_function",
+    "arrow_function"
+  ],
+  "globs": [
+    "*.php"
+  ],
+  "grammar": "tree_sitter_php",
+  "nesting": [
+    "if_statement",
+    "for_statement",
+    "foreach_statement",
+    "while_statement",
+    "do_statement",
+    "switch_statement",
+    "match_expression",
+    "try_statement",
+    "catch_clause"
+  ],
+  "string": [
+    "string",
+    "heredoc_body"
+  ]
+}

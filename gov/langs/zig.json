@@ -1,0 +1,46 @@
+{
+  "classes": [
+    "struct_declaration",
+    "enum_declaration",
+    "union_declaration",
+    "opaque_declaration"
+  ],
+  "comment": [
+    "comment"
+  ],
+  "exclude": [
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
+    ".gov",
+    ".agents"
+  ],
+  "functions": [
+    "function_declaration"
+  ],
+  "globs": [
+    "*.zig"
+  ],
+  "grammar": "tree_sitter_zig",
+  "nesting": [
+    "if_statement",
+    "if_expression",
+    "for_statement",
+    "for_expression",
+    "while_statement",
+    "while_expression"
+  ],
+  "string": [
+    "string"
+  ]
+}
