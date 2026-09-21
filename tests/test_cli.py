@@ -596,7 +596,9 @@ def test_init_preserves_existing_gitignore(tmp_path):
     assert plane.init(tmp_path) == 0
     lines = gitignore.read_text(encoding="utf-8").splitlines()
     assert lines[:3] == ["node_modules/", "*.pyc", "dist/"]
-    assert lines[-1] == ".gov/tasks/.new.lock"  # #325: lock anchors ignored too
+    # #325/#353: the runtime lock artifacts are ignored too — the task
+    # allocator's flock anchor and the persistent decision lock.
+    assert lines[-2:] == [".gov/tasks/.new.lock", "docs/.decision.lock"]
     assert ".gov/history/" in lines
     assert lines.count(".gov/history/") == 1  # appended once, idempotent
 
@@ -609,13 +611,14 @@ def test_init_gitignore_edges_survive(tmp_path):
     (crlf / ".gitignore").write_bytes(b"node_modules/\r\n*.pyc\r\n")
     assert plane.init(crlf) == 0
     assert ((crlf / ".gitignore").read_bytes()
-            == b"node_modules/\r\n*.pyc\r\n.gov/history/\n.gov/tasks/.new.lock\n")
+            == b"node_modules/\r\n*.pyc\r\n.gov/history/\n"
+               b".gov/tasks/.new.lock\ndocs/.decision.lock\n")
     empty = tmp_path / "empty"
     empty.mkdir()
     (empty / ".gitignore").write_bytes(b"")
     assert plane.init(empty) == 0
     assert (empty / ".gitignore").read_bytes() \
-            == b".gov/history/\n.gov/tasks/.new.lock\n"
+            == b".gov/history/\n.gov/tasks/.new.lock\ndocs/.decision.lock\n"
 
 
 def test_uninstall_removes_gov_hooks_at_resolved_path(tmp_path):

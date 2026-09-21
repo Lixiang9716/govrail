@@ -110,7 +110,7 @@ def test_coverage_ledger_and_bad_shebang(tmp_path, monkeypatch, capsys):
     bad = rej / "case-noshebang.sh"
     bad.write_text("# gate: ghost\nexit 0\n", encoding="utf-8")  # no shebang, unknown gate
     bad.chmod(0o755)
-    assert st.main(["--scope", "project"]) == 1  # the bad case fails, named
+    assert st.main(["--scope", "project", "--explain"]) == 1  # bad case, named
     out = capsys.readouterr().out
     assert "missing shebang" in out
     assert "alpha(1)" in out and "beta(NONE — rule 6)" in out
@@ -123,7 +123,15 @@ def test_coverage_pointer_when_uncovered(tmp_path, monkeypatch, capsys):
     (tmp_path / ".gov").mkdir()
     (tmp_path / "gates.json").write_text(_json.dumps(
         {"modes": {"all": ["x"]}, "gates": [{"id": "x", "command": ["true"]}]}), encoding="utf-8")
+    # #337: the default states coverage as a fact — no per-gate NONE list,
+    # no imperative the adopter cannot clear by finishing anything.
     assert st.main(["--scope", "project"]) == 0  # no cases at all
+    out = capsys.readouterr().out
+    assert "0/1 gate(s) carry a project rejection case" in out
+    assert "(NONE — rule 6)" not in out
+    assert "write one:" not in out
+    # ... and --explain restores the full ledger, remedy included.
+    assert st.main(["--scope", "project", "--explain"]) == 0
     out = capsys.readouterr().out
     assert "x(NONE — rule 6)" in out
     assert "write one: .gov/rejections/case-<gate-id>.sh" in out

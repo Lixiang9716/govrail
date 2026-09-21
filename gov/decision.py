@@ -181,8 +181,30 @@ def _locked(parent: Path):
     B and C both inside, one decision lost). The lock file now stays;
     and Windows no longer degrades silently to no lock at all — without
     a primitive the add refuses (rule 5).
+
+    Because the file STAYS, it must be ignored (#353): the init-time
+    ignore list covers fresh checkouts, and this heals the ones that
+    already exist, at the moment the artifact appears.
     """
-    return lockfile.exclusive(parent / ".decision.lock")
+    _ensure_lock_ignored(parent)
+    return lockfile.exclusive(parent / LOCK_NAME)
+
+
+LOCK_NAME = ".decision.lock"
+
+
+def _ensure_lock_ignored(parent: Path) -> None:
+    """Best effort: the persistent lock must not sit in `git status`
+    forever — an agent's habitual `git add -A` tracks a zero-byte
+    artifact and it rides the next diff (the failure #325 fixed for the
+    task allocator's flock anchor, one file over). Hygiene, never a
+    verdict on the add."""
+    try:
+        root = Path.cwd().resolve()
+        rel = (parent / LOCK_NAME).resolve().relative_to(root)
+    except (OSError, ValueError):
+        return  # outside this checkout (e.g. an absolute --source)
+    atomicio.ensure_line(root / ".gitignore", rel.as_posix())
 
 
 def _atomic_write(path: Path, text: str) -> None:

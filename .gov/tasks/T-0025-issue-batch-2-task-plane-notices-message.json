@@ -1,0 +1,24 @@
+{
+  "title": "issue batch 2: task-plane + notices + messages (#331-#339, #352-#357)",
+  "created": "2026-09-21T07:52:00+00:00",
+  "rules": {
+    "hash": "54be320fc1531e797ba71303cacb18a2e29dddfaac9da90d08d43515de1465c1",
+    "files": {
+      ".gov/rules.md": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976",
+      "gates.json": "08f2aced375a01f315b5a4660cba5dc705bc7c8b72b303916f2f044f82262cdf"
+    }
+  },
+  "checklist": [
+    "task plane: tick/show (#334), id-collision resolve (#352), bounded check output (#357a)",
+    "plane fixes: decision.lock ignore (#353), lease note worktree wording (#336), update re-wires hooks + doctor check (#331)",
+    "notices: self-test coverage line quiet by default (#337a), re-baseline NOTE once per record (#337b)",
+    "messages: check --help suppression docs (#333), surprise strings + discharged marker (#354), note-presence artifact exclusion (#356a), surprise hint overlap (#356b), run summary qualified (#355), pairing header spelling (#357b)",
+    "#339 verified against master and closed with evidence",
+    "dsh-mobile: untracked source files visible to check-size/check-logging (#338)",
+    "grammar: Swift/Kotlin decision (#335/#351)",
+    "tests + notes + PRs + CI green + every issue commented and closed"
+  ],
+  "status": "open",
+  "receipt": null,
+  "id": "T-0025"
+}

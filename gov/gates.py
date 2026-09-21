@@ -557,6 +557,31 @@ def _kill_tree(proc: Any) -> None:
             pass
 
 
+def _selection_label(selected_by: str, changed: list[str] | None,
+                     scoped_out: list[str] | None) -> str:
+    """What the summary line counted (#355).
+
+    The same tree answers ``8 gates: 8 pass`` under ``--base HEAD~1`` and
+    ``12 gates: 12 pass`` bare. Both numbers are correct and unrelated,
+    and read as a contradiction because the line never says which
+    mechanism picked the set.
+    """
+    if selected_by == "every-gate":
+        return "every enabled gate"
+    if selected_by.startswith("mode:"):
+        return f"mode: {selected_by.split(':', 1)[1]}"
+    if selected_by.startswith("default-mode:"):
+        return f"default mode: {selected_by.split(':', 1)[1]}"
+    if selected_by.startswith("base:"):
+        base = selected_by.split(":", 1)[1]
+        n = len(scoped_out or [])
+        return (f"path-scoped vs {base}"
+                + (f", {n} gate(s) out of scope" if n else ""))
+    if selected_by == "gate":
+        return "one gate, named by --gate"
+    return "all enabled gates"
+
+
 def _first_line(text: str) -> str:
     """The first non-blank line, trimmed — the summary's quoting unit."""
     for line in text.splitlines():
@@ -673,6 +698,24 @@ def _changed_files(base: str) -> list[str] | None:
         print(f"gov run: --base {base!r} failed: {error}", file=sys.stderr)
         return None
     return files
+
+
+def _name_omitted(gates: list[Gate], selection: list[str], what: str,
+                  json_mode: bool = False) -> None:
+    """Name enabled gates a mode does not select (#355).
+
+    "12 gates" against a 13-gate file is the question the summary could
+    not answer; it is also the disagreement behind #329/#339, where a
+    mode-all receipt met a reader that expected every gate. One line, and
+    only when something is actually omitted.
+    """
+    omitted = [g.id for g in gates if g.enabled and g.id not in set(selection)]
+    if omitted:
+        # --json keeps stdout to exactly one JSON value (D26): the prose
+        # moves to stderr, same as every other pre-run line.
+        print(f"gov run: {what} omits {len(omitted)} enabled gate(s): "
+              f"{', '.join(omitted)} (--every-gate runs the full matrix)",
+              file=sys.stderr if json_mode else sys.stdout)
 
 
 def _select_by_paths(
@@ -884,8 +927,13 @@ def run_gates(
 
     counts = {o: sum(1 for v in outcomes.values() if v == o) for o in OUTCOME_ORDER}
     parts = [f"{n} {o.lower()}" for o, n in counts.items() if n]
+    # #355: the count is qualified — a bare `N gates: N pass` is right and
+    # unreadable (the same tree answers 8, 9 and 12 from three entry
+    # points); the bracket names the mechanism that picked the set.
+    label = _selection_label(selected_by, changed, scoped_out)
     emit(
         f"{len(outcomes)} gates: " + (", ".join(parts) if parts else "none ran")
+        + f"  [{label}]"
     )
 
     scoped_out_ids = set(scoped_out or [])
@@ -1103,22 +1151,10 @@ def _plane_precheck(tool: str = "gov run", config_rel: str | None = None,
         raise SystemExit(1)
     # #311: a recent re-baseline must be SEEN — the reset itself is a
     # recorded ritual, but a ritual nobody hears about does not raise the
-    # cost of a rogue re-seal. Announced in the run header, advisory.
-    try:
-        rebaselines = verify_plane.recent_rebaselines()
-    except Exception:  # noqa: BLE001 — visibility must never block a run
-        rebaselines = []
-    if rebaselines:
-        latest = rebaselines[-1]
-        who = latest.get("caller", "?")
-        how = "UNATTENDED" if latest.get("unattended") else "interactive"
-        print(f"{tool}: NOTE — the constitution was re-baselined "
-              f"{len(rebaselines)} time(s) in the last "
-              f"{verify_plane.REBASELINE_WINDOW_DAYS} day(s); latest by "
-              f"{who} ({how})"
-              + (f" — reason: {latest['reason']}" if latest.get("reason")
-                 else " — no reason recorded"),
-              file=sys.stderr)
+    # cost of a rogue re-seal. Announced in the run header, advisory, and
+    # ONCE per record (#337: a note repeated on every run stops being a
+    # note — the ledger keeps the long form, `gov verify-plane` the detail).
+    verify_plane.announce_rebaselines(tool)
     # N6: --config pointing outside the sealed set opts out of everything
     # the seal just verified. In a governed repository that is a
     # recorded-decision-level change, not a flag.
@@ -1316,6 +1352,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         selection = modes[args.mode]
         selected_by = f"mode:{args.mode}"
+        _name_omitted(gates, selection, f"mode '{args.mode}'", args.json)
     elif args.base:
         changed = _changed_files(args.base)
         if changed is None:
@@ -1336,6 +1373,7 @@ def main(argv: list[str] | None = None) -> int:
     elif default_mode:
         selection = modes[default_mode]
         selected_by = f"default-mode:{default_mode}"
+        _name_omitted(gates, selection, f"the default mode '{default_mode}'", args.json)
     elif not gates:
         print("no gates configured", file=sys.stderr)
         return 0

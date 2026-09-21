@@ -18,12 +18,16 @@ telemetry (rule 11):
 - ``gov surprise list [--sig SLUG] [--json]`` counts surprises per
   signature, newest last.
 
-Enforcement lives in the ``surprises`` gate (scripts/check_surprises.py):
-when one signature reaches three recorded surprises, the gate stays red
-until a process note citing ``surprise:<sig>`` ships — a recurring
-surprise is a process defect, not bad luck. Recording never blocks on
-that: data first, verdict in the gate (facts vs. verdicts, #265's
-shape). Exit codes follow D2: 0 ok, 2 usage/config error — a surprise
+Rule 11's escalation is a ledger FACT, not a shipped gate: at three
+recorded surprises for one signature the entry reads ESCALATION OWED
+until a process note citing ``surprise:<sig>`` ships, and
+``gov surprise list`` reads the notes tree and reports the discharge.
+Whether the obligation BLOCKS is the adopting project's wiring choice —
+govrail's own plane wires ``scripts/check_surprises.py`` as its
+``surprises`` gate, an adopter's repo may not have one, and the
+messages say the obligation rather than a gate an adopter cannot see.
+Recording never blocks: data first, verdict in whatever gate the project
+wired (facts vs. verdicts, #265's shape). Exit codes follow D2: 0 ok, 2 usage/config error — a surprise
 ledger has no failure verdict, so it is 0/2-only in the contract
 (tests/test_exit_code_contract.py).
 """
@@ -76,8 +80,64 @@ def _slugify(text: str) -> str:
     return "-".join(words[:4]) or "unfiled"
 
 
+# Words that carry no signature identity (#356): without them every
+# entry about gov's own tooling "matched" every other one and the
+# have-I-seen-this-before hint answered with unrelated signatures.
+STOPWORDS = frozenset("""
+the and for with that this from into its not but was were are when what
+does have has had one two all any can cannot should would could then than
+yet because while after before over under only also just still more most
+gov govrail task card cards gate gates run runs running plane file files
+""".split())
+
+
 def _terms(text: str) -> set[str]:
-    return {w for w in re.split(r"[^a-z0-9]+", text.lower()) if len(w) > 2}
+    return {w for w in re.split(r"[^a-z0-9]+", text.lower())
+            if len(w) > 2 and w not in STOPWORDS}
+
+
+def _similar(candidate: str, entries: list[dict]) -> list[dict]:
+    """Earlier surprises whose signature shares content terms (#356).
+
+    One shared word is noise (every entry here is about the same tool);
+    two shared content terms is the smallest overlap that plausibly means
+    "same kind". An empty list is a fine answer — the hint is a lookup,
+    and a lookup that always finds something is not a lookup.
+    """
+    mine = _terms(candidate)
+    if len(mine) < 2:
+        return []
+    out = []
+    for e in entries:
+        other = _terms(f"{e['expectation']} {e.get('reality', '')}")
+        if len(mine & other) >= 2:
+            out.append(e)
+    return out
+
+
+NOTES = Path(".agents/notes")
+
+
+def _discharged(sig: str) -> str | None:
+    """The note discharging an escalation, or None (#354).
+
+    Rule 11's discharge is a shipped process note citing
+    ``surprise:<sig>``. The ledger is a pure count, so the marker read
+    identically before and after the note — owed and discharged, the one
+    distinction an operator needs, was the one the surface could not
+    show. Scanning the notes tree is what govrail's own self-hosted
+    surprises gate does; here it is the read side of the same contract.
+    """
+    needle = f"surprise:{sig}"
+    if not NOTES.is_dir():
+        return None
+    for p in sorted(NOTES.rglob("*.md")):
+        try:
+            if needle in p.read_text(encoding="utf-8", errors="replace"):
+                return p.as_posix()
+        except OSError:
+            continue
+    return None
 
 
 def _counts(entries: list[dict]) -> dict[str, int]:
@@ -115,8 +175,8 @@ def _cmd_record(args: argparse.Namespace) -> int:
           f"({counts[sig]} entr{'y' if counts[sig] == 1 else 'ies'} so far)")
     others = [e for e in entries
               if e["sig"] != sig
-              and _terms(expectation + " " + reality) & _terms(
-                  e["expectation"] + " " + e["reality"])]
+              and len(_terms(expectation + " " + reality)
+                      & _terms(e["expectation"] + " " + e["reality"])) >= 2]
     if others:
         print("surprise: similar earlier surprise(s) — same kind? "
               "reuse its sig next time:")
@@ -125,9 +185,9 @@ def _cmd_record(args: argparse.Namespace) -> int:
     if counts[sig] >= ESCALATION_AT:
         print(f"surprise: ESCALATION OWED — sig '{sig}' now has "
               f"{counts[sig]} surprises; a recurring surprise is a "
-              f"process defect, not bad luck. The surprises gate stays "
-              f"red until a process note citing surprise:{sig} ships "
-              f"(gov note new --class process).", file=sys.stderr)
+              f"process defect, not bad luck. Ship a process note citing "
+              f"surprise:{sig} (gov note new --class process); "
+              f"`gov surprise list` reports the discharge.", file=sys.stderr)
     return 0
 
 
@@ -151,7 +211,12 @@ def _cmd_list(args: argparse.Namespace) -> int:
     for sig in sorted(counts, key=lambda s: (-counts[s], s)):
         latest = max((e for e in entries if e["sig"] == sig),
                      key=lambda e: e["ts"])
-        owed = " — ESCALATION OWED" if counts[sig] >= ESCALATION_AT else ""
+        owed = ""
+        if counts[sig] >= ESCALATION_AT:
+            note = _discharged(sig)
+            owed = (f" — ESCALATION DISCHARGED (note {note})" if note
+                    else " — ESCALATION OWED (ship a process note citing "
+                         f"surprise:{sig})")
         print(f"{counts[sig]:2d}  {sig}{owed}")
         print(f"    latest: {latest['expectation'][:72]}")
     return 0

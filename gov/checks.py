@@ -496,6 +496,19 @@ def build_parser() -> argparse.ArgumentParser:
         description="Syntax-class static checks over the parse layer: "
                     "rules find patterns in the tree; suppressions are "
                     "counted, never invisible.",
+        epilog="Suppressing a finding (#333): put a comment containing "
+               "'gov:ignore-check <rule-id>' on the finding's own line, or "
+               "anywhere inside the finding node's row span (the id is the "
+               "bracketed one in the finding line, e.g. 'gov:ignore-check "
+               "cpp/syntax'). A suppression discharges every finding of "
+               "that rule in its window and is COUNTED: the summary prints "
+               "'N suppressed' and --record writes the per-rule count to "
+               ".gov/history/stats.jsonl, so an exemption growing is "
+               "visible rather than silent. Whole paths the gate must not "
+               "judge at all — vendored trees kept verbatim — are declared "
+               "in .gov/checks/exclude.json ({'exclude': [{'path': "
+               "'<glob>', 'reason': '<why>'}]}); every declared pattern is "
+               "reported as a counted SKIP.",
     )
     parser.add_argument("--lang", action="append", dest="lang",
                         metavar="LANG",

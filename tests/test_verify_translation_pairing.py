@@ -332,3 +332,19 @@ def test_write_stamps_untracked_sentinel_not_empty_scalar(tmp_path,
     assert "en_commit: \n" not in rec and "zh_commit: \n" not in rec
     # informational only: the gate still reads the record and stays green
     assert vtp.main([]) == 0
+
+
+def test_record_header_names_the_canonical_spelling(tmp_path, monkeypatch):
+    """#357: the emitted record's own header must not teach the
+    deprecated alias (`gov verify-pairing`) the CLI warns about."""
+    monkeypatch.chdir(tmp_path)
+    docs = _pair(tmp_path)
+    import subprocess
+    for argv in (["git", "init", "-q", "."],
+                 ["git", "config", "user.email", "t@t"],
+                 ["git", "config", "user.name", "t"]):
+        subprocess.run(argv, cwd=tmp_path, check=True, capture_output=True)
+    assert vtp.main(["--write", "foo"]) == 0
+    rec = (docs / "foo.i18n.yaml").read_text(encoding="utf-8")
+    assert "`gov verify pairing --write`" in rec
+    assert "gov verify-pairing" not in rec

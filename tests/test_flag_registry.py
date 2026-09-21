@@ -51,7 +51,11 @@ HELP_ARGV: dict[str, list[list[str]]] = {
     # `list` (#125's claim semantics)
     "task": [["task", "new", "--help"], ["task", "close", "--help"],
              ["task", "claim", "--help"], ["task", "release", "--help"],
-             ["task", "list", "--help"], ["task", "void", "--help"]],
+             ["task", "list", "--help"], ["task", "void", "--help"],
+             # --strict/--verbose live on check; tick/show are positional
+             # (#334), probed so their surfaces stay registered
+             ["task", "check", "--help"], ["task", "tick", "--help"],
+             ["task", "show", "--help"]],
     "receipt": [["receipt", "verify", "--help"],   # --record is verify's
                 ["receipt", "show", "--help"]],    # --commit is show's
     "preset": [["preset", "apply", "--help"]],     # --project is apply's

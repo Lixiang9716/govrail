@@ -332,11 +332,14 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
         return 2
     gitignore = project / ".gitignore"
     # Runtime artifacts the plane itself creates inside tracked areas:
-    # the run history (D-gitignore) and the task allocator's flock
-    # anchor (#325 — dsh-mobile tracked a zero-byte .new.lock with a
-    # habitual git add -A; locks are content-free, tracking them is
-    # pure noise).
-    ignore_lines = (".gov/history/", ".gov/tasks/.new.lock")
+    # the run history (D-gitignore), the task allocator's flock anchor
+    # (#325 — dsh-mobile tracked a zero-byte .new.lock with a habitual
+    # git add -A; locks are content-free, tracking them is pure noise),
+    # and the decision ledger's persistent lock (#353 — same shape;
+    # decision._ensure_lock_ignored heals older checkouts at the moment
+    # the artifact appears).
+    ignore_lines = (".gov/history/", ".gov/tasks/.new.lock",
+                    "docs/.decision.lock")
     ignore_line = ".gov/history/"
     if gitignore.is_symlink():
         # N13/N10: a user-managed .gitignore link (stow, dotfiles) must

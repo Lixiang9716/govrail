@@ -309,6 +309,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--scope", choices=("all", "tools", "project"),
                         default="all", help="which family of cases to run")
+    parser.add_argument("--explain", action="store_true",
+                        help="print the full rule-6 coverage ledger: the "
+                             "per-gate case list and the case-authoring "
+                             "remedy (the default reports coverage counts "
+                             "only, #337)")
     parser.add_argument("--case", metavar="NAME",
                         help="run one tools-family case by name and exit — "
                              "the diagnostic building block of the clean-env "
@@ -368,7 +373,7 @@ def main(argv: list[str] | None = None) -> int:
                   "run arbitrary scripts; reproduce by hand in a minimal "
                   "environment.")
             counts["unclassified"] += 1
-    _coverage_report()
+    _coverage_report(explain=getattr(args, "explain", False))
     tools_n, project_n = len(tool_jobs), len(project_jobs)
     parts = [f"tools {tools_n}" if tools_n else "", f"project {project_n}" if project_n else ""]
     family = " + ".join(p for p in parts if p)

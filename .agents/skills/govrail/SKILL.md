@@ -100,7 +100,10 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   — every exclusion surfaces as a counted SKIP, never invisible.
 - `gov self-test` — every governance gate proves it can reject (rule
   6). Run it whenever touching gates.json, a checker, or a rejection
-  case; a gate whose rejection proof is red is vacuous, not green.
+  case; a gate whose rejection proof is red is vacuous, not green. The
+  closing coverage line reports counts; `--explain` prints the per-gate
+  ledger and the case-authoring remedy (a project that chose not to
+  author project cases is a state, not a fresh action item).
 - `gov receipt verify/show` — cited receipts: verify one against its
   commit before trusting a claim that cites it; show renders one
   (`show --markdown` renders a paste-ready PR/job-summary block).
@@ -134,7 +137,12 @@ push (the pre-push hook re-runs the scoped DAG automatically).
 - `gov lease acquire` / `release` / `locks` — only when ≥2 workers may touch
   one resource; busy is exit 3, `--wait S` polls. Single worker: skip.
 - `gov task new/check/close` — briefs for subagents; a `done` card
-  without a green receipt is named by `task check`.
+  without a green receipt is named by `task check`. `gov task tick <id>
+  <n>` ticks a checklist item (the canonical `[x] `; hand-editing the
+  card JSON is the one move that is never OK); `gov task show <id>`
+  renders a card whole — checklist, void reason, receipt — which is why
+  `task check` can stay one line per card (`--verbose` keeps the reasons
+  in the gate output).
 
 **Memory and history**
 - `gov recall` — before proposing anything (see the recall-first skill).

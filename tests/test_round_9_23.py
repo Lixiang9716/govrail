@@ -74,7 +74,7 @@ def test_18_ledger_credits_executed_undeclared(tmp_path, monkeypatch, capsys):
     legacy.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     legacy.chmod(0o755)
     from gov import self_test as st
-    assert st.main(["--scope", "project"]) == 0
+    assert st.main(["--scope", "project", "--explain"]) == 0
     out = capsys.readouterr().out
     assert "x(NONE — rule 6)" in out
     assert "source-limits-rejects.py" in out  # the executed case is named

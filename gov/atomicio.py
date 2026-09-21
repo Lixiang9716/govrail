@@ -179,3 +179,38 @@ def write_bytes(path: Path, data: bytes, *, fsync: bool = True,
     assert_contained(path, root)
     path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_replace(path, data, _target_mode(path), fsync)
+
+
+def ensure_line(path: Path, line: str) -> bool:
+    """Idempotently ensure ``path`` carries ``line`` as its own line (#353).
+
+    Runtime artifacts the plane creates inside tracked areas — the
+    persistent decision lock is the one outside ``.gov/`` — must not sit
+    in ``git status`` forever: an agent's habitual ``git add -A`` tracks
+    them, and a zero-byte lock then rides the next diff (the failure #325
+    fixed for the task allocator's flock anchor). The init-time ignore
+    list covers fresh checkouts; this is the same guarantee at the moment
+    the artifact appears, so checkouts that already exist heal on their
+    own. Appends the original BYTES (CRLF endings, BOM and non-UTF-8
+    content survive) and lands atomically like every write here.
+
+    Hygiene, not a verdict — never raises (rule 5 governs verdicts). A
+    symlinked ``path`` is left strictly alone: it may be dotfiles-managed,
+    and writing through a link lands in someone's home directory. Returns
+    True when the line was appended.
+    """
+    if path.is_symlink():
+        return False
+    try:
+        raw = path.read_bytes() if path.exists() else b""
+    except OSError:
+        return False
+    have = raw.decode("utf-8-sig", errors="replace").splitlines()
+    if line in have:
+        return False
+    sep = b"" if (not raw or raw.endswith(b"\n")) else b"\n"
+    try:
+        write_bytes(path, raw + sep + line.encode("utf-8") + b"\n")
+    except OSError:
+        return False
+    return True

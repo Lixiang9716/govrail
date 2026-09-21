@@ -63,7 +63,7 @@ FLAGS: dict[str, set[str]] = {
     "run": {"--config", "--allow-unsealed-config", "--mode", "--base", "--gate", "--every-gate",
             "--merge", "--tag", "--no-record", "--receipt", "--json",
             "--fail-fast", "--verbose", "--cost"},
-    "self-test": {"--scope", "--case"},
+    "self-test": {"--scope", "--case", "--explain"},
     "receipt": {"--record", "--commit", "--markdown"},
     "verify-notes": set(),
     "verify-pairing": {"--write", "--staged", "--explain"},
@@ -99,7 +99,9 @@ FLAGS: dict[str, set[str]] = {
     "agent-hooks": {"--dialect"},  # D60: the installed platform's output contract
     "task": {"--check", "--rules", "--mode", "--timeout",
              "--agent", "--ttl", "--wait", "--json", "--force",
-             "--reason", "--refresh-receipt"},  # across subcommands; --agent/--force on close, --reason on void (#322)
+             "--reason", "--refresh-receipt", "--verbose", "--strict"},
+             # across subcommands; --agent/--force on close, --reason on
+             # void (#322), --verbose/--strict on check (#334/#357)
     "preset": {"--project"},  # on the `apply` subcommand (list/show are flagless)
     "update": {"--apply", "--confirm-unattended"},
     "acquire": {"--agent", "--ttl", "--wait"},

@@ -155,7 +155,7 @@ def test_bare_task_fails_loud_naming_choices(tmp_path, monkeypatch, capsys):
     assert exc.value.code == 2
     err = capsys.readouterr().err
     assert ("a subcommand is required "
-            "(new|check|close|claim|release|list|void)") in err
+            "(new|check|close|claim|release|list|void|tick|show)") in err
 
 
 # --- claim semantics: leases on cards (D52 applied; card JSON untouched) ------
@@ -447,9 +447,9 @@ def test_open_card_with_unchecked_items_exits_one(tmp_path, monkeypatch, capsys)
         "checklist": ["fix the seal", "update the pin"],
         "status": "open", "receipt": None,
     }), encoding="utf-8")
-    assert task.main(["check", "--strict"]) == 1  # unchecked: blocking
+    assert task.main(["check", "--strict"]) == 1  # unticked: blocking
     out = capsys.readouterr().out
-    assert "unchecked" in out
+    assert "unticked" in out
 
 
 def test_close_ignores_non_run_outcomes(tmp_path, monkeypatch):
@@ -697,3 +697,140 @@ def test_void_no_reminder_when_git_reports_the_card_clean(tmp_path,
     capsys.readouterr()
     assert task.main(["void", "T-0001", "--reason", "probe"]) == 0
     assert "uncommitted" not in capsys.readouterr().out
+
+
+def _open_card(proj, cid="T-0001", slug="fix", checklist=None, **extra):
+    combined, _ = task.rules_hash(proj)
+    card = {"id": cid, "title": "fix things", "rules": {"hash": combined},
+            "checklist": checklist if checklist is not None else ["one", "two"],
+            "status": "open", "receipt": None}
+    card.update(extra)
+    (proj / ".gov/tasks" / f"{cid}-{slug}.json").write_text(
+        json.dumps(card), encoding="utf-8")
+    return card
+
+
+def test_tick_marks_item_and_strict_counts_only_unticked(tmp_path, monkeypatch,
+                                                         capsys):
+    """#334: ticking is the sanctioned way to record progress; --strict
+    counts what is left, not every item as before."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj)
+    assert task.main(["check", "--strict"]) == 1
+    assert "2 unticked" in capsys.readouterr().out
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    out = capsys.readouterr().out
+    assert "ticked T-0001 item 1 — one" in out
+    assert "1 unticked: 2" in out
+    assert task.main(["check", "--strict"]) == 1     # one item remains
+    assert "1 unticked" in capsys.readouterr().out
+    assert task.main(["tick", "T-0001", "2"]) == 0
+    assert "all 2 item(s) ticked" in capsys.readouterr().out
+    assert task.main(["check", "--strict"]) == 0     # rule 9 satisfied
+
+
+def test_tick_refuses_out_of_range_and_non_open(tmp_path, monkeypatch,
+                                                capsys):
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, checklist=["only one"])
+    assert task.main(["tick", "T-0001", "2"]) == 2
+    err = capsys.readouterr().err
+    assert "has 1 item(s) — 2 is out of range" in err
+    assert task.main(["tick", "T-0001", "0"]) == 2
+    _open_card(proj, status="voided", checklist=["only one"])
+    assert task.main(["tick", "T-0001", "1"]) == 2
+    assert "not open" in capsys.readouterr().err
+
+
+def test_tick_is_idempotent(tmp_path, monkeypatch, capsys):
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, checklist=["one"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    assert "already ticked" in capsys.readouterr().out
+
+
+def test_non_canonical_done_marker_warns_then_blocks_strict(
+        tmp_path, monkeypatch, capsys):
+    """#334: `[X] ` looks ticked but the reader counts it open — the
+    warning names the fix; --strict makes it a problem."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, checklist=["[X] hand ticked", "plain"])
+    assert task.main(["check"]) == 0                 # advisory
+    assert "non-canonical done marker" in capsys.readouterr().err
+    assert task.main(["check", "--strict"]) == 1     # blocking
+    assert "non-canonical done marker" in capsys.readouterr().err
+
+
+def test_show_renders_the_whole_card(tmp_path, monkeypatch, capsys):
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, checklist=["done thing", "todo thing"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["show", "T-0001"]) == 0
+    out = capsys.readouterr().out
+    assert "T-0001 — fix things  [open]" in out
+    assert "[x] 1. done thing" in out
+    assert "[ ] 2. todo thing" in out
+
+
+def test_check_bounds_void_reasons_default_and_verbose(tmp_path, monkeypatch,
+                                                       capsys):
+    """#357: one line per card by default — the void reason IS the audit
+    trail and grows with the ledger; --verbose keeps it reachable."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    story = "retired because " + ("x" * 400)
+    _open_card(proj, status="voided", checklist=[],
+               void={"ts": "2026-01-01T00:00:00+00:00", "by": "t",
+                     "reason": story})
+    assert task.main(["check"]) == 0
+    out = capsys.readouterr().out
+    assert story not in out
+    assert "voided T-0001 fix things" in out
+    assert "1 card(s) — 0 open, 0 stale, 0 done, 1 voided" in out
+    assert task.main(["check", "--verbose"]) == 0
+    assert story in capsys.readouterr().out
+
+
+def test_resolve_accepts_the_card_slug(tmp_path, monkeypatch, capsys):
+    """#352: the slug `task new` prints is a legal handle."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, slug="real-llm-streaming-session")
+    assert task.main(["show", "T-0001-real-llm-streaming-session"]) == 0
+    assert "T-0001 — fix things" in capsys.readouterr().out
+
+
+def test_resolve_prefers_the_unique_open_card_among_colliding_ids(
+        tmp_path, monkeypatch, capsys):
+    """#352: colliding ids are permanent (per-worktree counters); every
+    other match being terminal is the shape parallel merges leave."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, slug="still-open")
+    _open_card(proj, slug="retired-a", status="voided", checklist=[],
+               void={"ts": "t", "by": "t", "reason": "merged"})
+    _open_card(proj, slug="retired-b", status="voided", checklist=[],
+               void={"ts": "t", "by": "t", "reason": "merged"})
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    assert "ticked T-0001" in capsys.readouterr().out
+
+
+def test_resolve_ambiguous_ids_name_each_file(tmp_path, monkeypatch,
+                                              capsys):
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, slug="worker-a")
+    _open_card(proj, slug="worker-b")
+    with pytest.raises(SystemExit) as exc:   # _resolve aborts loud
+        task.main(["tick", "T-0001", "1"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "ambiguous" in err and "T-0001-worker-a.json" in err
