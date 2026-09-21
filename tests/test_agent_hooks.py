@@ -344,3 +344,84 @@ def test_upgrade_report_names_platforms_still_available(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "agent platforms not installed: claude, copilot, gemini" in out
     assert "gov init --platforms claude,copilot,gemini" in out
+
+
+# ── capture: seeing what the platform actually sends ─────────────────
+
+def test_capture_writes_the_payload_verbatim(tmp_path, monkeypatch, capsys):
+    """`--capture PATH`: one JSON line per invocation carrying what the
+    platform SENT — and the hook's own output contract is untouched."""
+    monkeypatch.chdir(_governed(tmp_path))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "ls"},
+         "session_id": "s-1"})))
+    target = tmp_path / "cap" / "hooks.jsonl"
+    assert agent_hooks.main(["pre-tool-use", "--capture", str(target)]) == 0
+    capsys.readouterr()          # stdout is the handler's contract, not ours
+    lines = target.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    rec = json.loads(lines[0])
+    assert rec["event"] == "pre-tool-use" and rec["dialect"] == "claude"
+    assert rec["payload"]["tool_name"] == "Bash"
+    assert rec["payload"]["session_id"] == "s-1"     # unknown keys survive
+    assert rec["argv"] == ["pre-tool-use", "--capture", str(target)]
+    assert rec["cwd"].endswith(str(tmp_path.name))
+    assert "v" in rec and "ts" in rec
+
+
+def test_capture_appends_and_env_turns_it_on(tmp_path, monkeypatch, capsys):
+    """Two invocations, two lines; the env form defaults to the
+    gitignored history ledger and takes a path when given one."""
+    monkeypatch.chdir(_governed(tmp_path))
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"a": 1}'))
+    target = tmp_path / "cap.jsonl"
+    monkeypatch.setenv("GOV_AGENT_HOOK_CAPTURE", str(target))
+    assert agent_hooks.main(["stop"]) == 0
+    assert agent_hooks.main(["stop"]) == 0
+    assert len(target.read_text(encoding="utf-8").splitlines()) == 2
+    # the truthy form writes .gov/history/agent-hooks.jsonl
+    monkeypatch.setenv("GOV_AGENT_HOOK_CAPTURE", "1")
+    assert agent_hooks.main(["stop"]) == 0
+    ledger = tmp_path / ".gov" / "history" / "agent-hooks.jsonl"
+    assert ledger.exists() and "stop" in ledger.read_text(encoding="utf-8")
+
+
+def test_capture_off_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(_governed(tmp_path))
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"a": 1}'))
+    monkeypatch.delenv("GOV_AGENT_HOOK_CAPTURE", raising=False)
+    assert agent_hooks.main(["stop"]) == 0
+    assert not list(tmp_path.rglob("*.jsonl"))
+
+
+def test_malformed_payload_is_captured_raw(tmp_path, monkeypatch):
+    """The payload a parser rejected is the one worth keeping: the record
+    carries the raw text and the named error."""
+    monkeypatch.chdir(_governed(tmp_path))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("{not json"))
+    target = tmp_path / "cap.jsonl"
+    assert agent_hooks.main(["pre-tool-use", "--capture", str(target)]) == 0
+    rec = json.loads(target.read_text(encoding="utf-8").splitlines()[0])
+    assert rec["payload_raw"] == "{not json"
+    assert "malformed hook payload" in rec["payload_error"]
+
+
+def test_capture_failure_never_changes_the_verdict(tmp_path, monkeypatch,
+                                                   capsys):
+    """A capture that cannot be written is a named warning; the deny
+    contract stays what the platform reads."""
+    monkeypatch.chdir(_governed(tmp_path))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(
+        {"tool_input": {"command": "rm -rf /"}})))
+    blocked = tmp_path / "adir"
+    blocked.mkdir()
+    rc = agent_hooks.main(["pre-tool-use", "--capture", str(blocked)])
+    cap = capsys.readouterr()
+    assert rc == 0
+    assert "deny" in cap.out          # the verdict is intact
+    assert "capture failed" in cap.err
+
+
+def test_capture_requires_a_path(capsys):
+    assert agent_hooks.main(["stop", "--capture"]) == 2
+    assert "--capture requires a path" in capsys.readouterr().err
