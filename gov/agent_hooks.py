@@ -34,6 +34,7 @@ every PreToolUse call for a framework that doesn't speak JSON.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -87,23 +88,100 @@ BUILTIN_DENY_RULES = [
 HOOK_DENY_CONFIG = Path(".gov/hook-deny.json")
 
 
-def _read_stdin_json() -> tuple[dict, str | None]:
+def _read_stdin_json() -> tuple[str, dict, str | None]:
     """Read the hook payload from stdin (Claude Code sends JSON).
 
-    Returns (payload, error). An empty stdin is a legitimate no-payload
-    call; a MALFORMED one comes back as a named error for the caller to
-    print — never a silently swallowed {} (rule 5).
+    Returns (raw, payload, error). An empty stdin is a legitimate
+    no-payload call; a MALFORMED one comes back as a named error for the
+    caller to print — never a silently swallowed {} (rule 5). ``raw`` is
+    the bytes as the platform sent them, which is what a capture wants to
+    keep: a payload the parser rejected is exactly the one worth seeing.
     """
     try:
         raw = sys.stdin.read()
     except OSError as e:
-        return {}, f"stdin unreadable ({e})"
+        return "", {}, f"stdin unreadable ({e})"
     if not raw.strip():
-        return {}, None
+        return raw, {}, None
     try:
-        return json.loads(raw), None
+        return raw, json.loads(raw), None
     except json.JSONDecodeError as e:
-        return {}, f"malformed hook payload on stdin ({e})"
+        return raw, {}, f"malformed hook payload on stdin ({e})"
+
+
+#: Opt-in capture of hook invocations (see `_capture`).
+CAPTURE_ENV = "GOV_AGENT_HOOK_CAPTURE"
+CAPTURE_LEDGER = "agent-hooks.jsonl"
+CAPTURE_TRUTHY = ("1", "true", "yes", "on")
+
+
+def _capture_target(explicit: str | None) -> Path | None:
+    """Where this invocation's payload goes, or None when capture is off.
+
+    OFF by default, deliberately: these payloads carry the user's own
+    prompts and the exact commands an agent runs — worth inspecting,
+    not something to accumulate behind the operator's back. Two opt-ins:
+
+    - ``--capture PATH`` — this one invocation (debugging a hook that
+      fires when the platform says it does);
+    - ``GOV_AGENT_HOOK_CAPTURE=1`` (or a path) — every invocation, to
+      the default target ``.gov/history/agent-hooks.jsonl``: local,
+      ensure-ignored runtime state, never the tracked tree.
+    """
+    if explicit:
+        return Path(explicit)
+    env = os.environ.get(CAPTURE_ENV, "").strip()
+    if not env:
+        return None
+    if env.lower() in CAPTURE_TRUTHY:
+        try:
+            from .anchor import history_path
+        except ImportError:  # direct script execution
+            from anchor import history_path
+        return history_path(CAPTURE_LEDGER)
+    return Path(env)
+
+
+def _capture(path: Path | None, event: str, dialect: str, argv: list[str],
+             raw: str, payload: dict, err: str | None) -> None:
+    """Append one invocation record — a ledger, not a verdict.
+
+    The record is what the PLATFORM sent (event, dialect, cwd, argv, and
+    the payload verbatim), so a hook author can see the real shape per
+    event per platform instead of guessing it. A capture that cannot be
+    written never changes the hook's answer: the exit code is a contract
+    with the caller, the ledger is bookkeeping (a named warning says the
+    write failed, rule 5's naming side).
+    """
+    if path is None:
+        return
+    from datetime import datetime, timezone
+    record: dict = {
+        "v": 1,
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "event": event,
+        "dialect": dialect,
+        "cwd": str(Path.cwd()),
+        "argv": list(argv),
+    }
+    if err is not None:
+        record["payload_error"] = err
+        record["payload_raw"] = raw
+    else:
+        record["payload"] = payload
+    line = json.dumps(record, ensure_ascii=False) + "\n"
+    try:
+        try:
+            from . import atomicio
+            from .anchor import ledger_root
+        except ImportError:  # direct script execution
+            import atomicio
+            from anchor import ledger_root
+        path.parent.mkdir(parents=True, exist_ok=True)
+        atomicio.append_line(path, line, root=ledger_root(path))
+    except Exception as e:  # noqa: BLE001 — capture never breaks a hook
+        print(f"gov agent-hooks: capture failed ({path}: {e}) — the hook's "
+              "verdict is unchanged", file=sys.stderr)
 
 
 def _output(data: dict | None = None) -> None:
@@ -382,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     event = ""
     dialect = "claude"
+    capture: str | None = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -401,6 +480,16 @@ def main(argv: list[str] | None = None) -> int:
             print("                   `gov init --platforms` writes the "
                   "matching spelling")
             print("                   into that platform's hook config")
+            print("  --capture PATH   append this invocation's payload "
+                  "(event, dialect, cwd, argv,")
+            print("                   the stdin JSON verbatim) to PATH as "
+                  "one JSON line —")
+            print("                   off by default: payloads carry the "
+                  "user's prompts and the")
+            print("                   commands an agent runs. Always-on "
+                  f"form: {CAPTURE_ENV}=1")
+            print("                   (default target "
+                  ".gov/history/agent-hooks.jsonl, gitignored).")
             print("  -h, --help       show this help and exit")
             return 0
         if a == "--dialect":
@@ -409,6 +498,14 @@ def main(argv: list[str] | None = None) -> int:
                       f"(known: {', '.join(DIALECTS)})", file=sys.stderr)
                 return 2
             dialect = args[i + 1]
+            i += 2
+            continue
+        if a == "--capture":
+            if i + 1 >= len(args):
+                print("gov agent-hooks: --capture requires a path",
+                      file=sys.stderr)
+                return 2
+            capture = args[i + 1]
             i += 2
             continue
         if a.startswith("--"):
@@ -433,10 +530,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"gov agent-hooks: unknown event '{event}' "
               f"(known: {', '.join(sorted(HANDLERS))})", file=sys.stderr)
         return 2
-    payload, err = _read_stdin_json()
+    raw, payload, err = _read_stdin_json()
     if err:
         print(f"gov agent-hooks: {event}: {err} — continuing without it",
               file=sys.stderr)
+    # Capture BEFORE the handler runs: what the platform sent is the
+    # question being asked, and a handler that returns early (no repo,
+    # denied tool) must not lose the evidence.
+    _capture(_capture_target(capture), event, dialect,
+             list(sys.argv[1:] if argv is None else argv),
+             raw, payload, err)
     return handler(payload, event, dialect)
 
 

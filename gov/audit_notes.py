@@ -96,7 +96,7 @@ FLAGS: dict[str, set[str]] = {
     "change-scope": {"--base"},
     "surprise": {"--reality", "--sig", "--surface", "--json"},
     "archive-notes": {"--rebaseline"},
-    "agent-hooks": {"--dialect"},  # D60: the installed platform's output contract
+    "agent-hooks": {"--dialect", "--capture"},  # D60: the installed platform's output contract; --capture records the payload
     "task": {"--check", "--rules", "--mode", "--timeout",
              "--agent", "--ttl", "--wait", "--json", "--force",
              "--reason", "--refresh-receipt", "--verbose", "--strict"},

@@ -53,7 +53,10 @@ push (the pre-push hook re-runs the scoped DAG automatically).
 - `gov agent-hooks <event> [--dialect <platform>]` — the plane's
   presence at the agent's lifecycle events across platforms: claude
   (default), codex, copilot, gemini — same five events, each platform's
-  own deny/context contract. pre-tool-use judges from a deny-rules
+  own deny/context contract. To see what a platform actually sends,
+  `--capture <path>` (or `GOV_AGENT_HOOK_CAPTURE=1` for every
+  invocation, into gitignored `.gov/history/`) appends the payload
+  verbatim — event, dialect, cwd, argv, the stdin JSON. pre-tool-use judges from a deny-rules
   table (built-ins for forced-recursive `rm` and `git reset --hard`;
   `.gov/hook-deny.json` adds rules and allow-exemptions); `stop`
   surfaces an advisory (open cards, dirty tree). A presence, not a
