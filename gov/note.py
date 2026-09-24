@@ -320,9 +320,12 @@ def main(argv: list[str] | None = None) -> int:
     def _run_verify(args):
         return _delegate("verify_notes", [], getattr(args, "rest", []))
 
-    p_verify = sub.add_parser("verify", help="check note format (the notes gate)")
+    p_verify = sub.add_parser(
+        "verify", help="check note format (the notes gate); name note "
+                       "paths to verify exactly those (#386)")
     p_verify.add_argument("rest", nargs=argparse.REMAINDER,
-                          help=argparse.SUPPRESS)
+                          help="note file(s) to verify (default: every "
+                               "implemented note)")
     p_verify.set_defaults(func=_run_verify)
     p_presence = sub.add_parser(
         "presence", help="warn when a non-trivial diff carries no note (--strict)")
