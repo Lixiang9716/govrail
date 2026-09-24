@@ -736,7 +736,7 @@ def test_tick_marks_item_and_strict_counts_only_unticked(tmp_path, monkeypatch,
     assert "2 unticked" in capsys.readouterr().out
     assert task.main(["tick", "T-0001", "1"]) == 0
     out = capsys.readouterr().out
-    assert "ticked T-0001 item 1 — one" in out
+    assert "ticked T-0001 (T-0001-fix) item 1 — one" in out  # #378: the slug names WHICH card moved
     assert "1 unticked: 2" in out
     assert task.main(["check", "--strict"]) == 1     # one item remains
     assert "1 unticked" in capsys.readouterr().out
@@ -767,6 +767,40 @@ def test_tick_is_idempotent(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
     assert task.main(["tick", "T-0001", "1"]) == 0
     assert "already ticked" in capsys.readouterr().out
+
+
+def test_tick_echoes_the_resolved_card_identity(tmp_path, monkeypatch, capsys):
+    """#378: a mutating command names WHICH card moved — an id alone is
+    only unique at the moment it was read, and in a shared checkout the
+    resolver may honestly land on a sibling minted since."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0037", slug="overnight")
+    assert task.main(["tick", "T-0037", "1"]) == 0
+    assert "ticked T-0037 (T-0037-overnight) item 1" in capsys.readouterr().out
+
+
+def test_slug_guard_refuses_a_mismatch_before_mutation(tmp_path, monkeypatch,
+                                                       capsys):
+    """#378: --slug turns 'I read this id earlier in the session' into an
+    assertion instead of hope: a mismatch refuses BEFORE any mutation,
+    and the .json suffix is tolerated like _resolve tolerates it."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0037", slug="overnight")
+    with pytest.raises(SystemExit):
+        task.main(["tick", "T-0037", "1", "--slug", "T-0037-local-dev"])
+    err = capsys.readouterr().err
+    assert "--slug guard" in err and "T-0037-overnight" in err
+    card = json.loads((proj / ".gov/tasks/T-0037-overnight.json")
+                      .read_text(encoding="utf-8"))
+    assert card["checklist"] == ["one", "two"]      # unmutated
+    assert task.main(["tick", "T-0037", "1",
+                      "--slug", "T-0037-overnight.json"]) == 0
+    with pytest.raises(SystemExit):
+        task.main(["void", "T-0037", "--reason", "probe", "--slug", "wrong"])
+    with pytest.raises(SystemExit):  # before any gate run
+        task.main(["close", "T-0037", "--slug", "wrong"])
 
 
 def test_non_canonical_done_marker_warns_then_blocks_strict(
@@ -835,7 +869,7 @@ def test_resolve_prefers_the_unique_open_card_among_colliding_ids(
     _open_card(proj, slug="retired-b", status="voided", checklist=[],
                void={"ts": "t", "by": "t", "reason": "merged"})
     assert task.main(["tick", "T-0001", "1"]) == 0
-    assert "ticked T-0001" in capsys.readouterr().out
+    assert "ticked T-0001 (" in capsys.readouterr().out  # #378: identity present
 
 
 def test_resolve_ambiguous_ids_name_each_file(tmp_path, monkeypatch,
@@ -939,7 +973,7 @@ def test_repin_advances_a_stale_brief_and_records_it(tmp_path, monkeypatch,
     assert task.main(["repin", "T-0001", "--reason",
                       "wired the noop gate; the brief is unchanged"]) == 0
     out = capsys.readouterr().out
-    assert f"re-pinned T-0001 rules@{old_pin[:12]} ->" in out
+    assert f"re-pinned T-0001 (T-0001-unchanged-brief) rules@{old_pin[:12]} ->" in out
     card = json.loads(next((proj / ".gov/tasks").glob("T-0001-*.json"))
                       .read_text(encoding="utf-8"))
     repin = card["repins"][-1]

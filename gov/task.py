@@ -403,6 +403,38 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _named(card: dict, path: Path) -> str:
+    """The card's name WITH its file identity (#378).
+
+    An id alone names several cards once parallel workers mint colliding
+    numbers, and the #378 incident class is a mutation that moves the
+    WRONG one while a sibling is transiently absent — visible at the
+    terminal only if the success line says WHICH file moved. The slug is
+    what `gov task new` prints and what `--slug` guards against.
+    """
+    return f"{card['id']} ({path.stem})"
+
+
+def _guard_slug(args: argparse.Namespace, path: Path, card: dict) -> None:
+    """`--slug <file-stem>`: turn "I read this id earlier" into an
+    assertion (#378). A remembered id is only unique at the moment it
+    was read; in a shared checkout a sibling card can appear, leave
+    (a stash), or be minted between the read and this command, and the
+    resolver will honestly resolve to whatever the CURRENT tree holds.
+    The caller who knows which card they mean passes its slug; a
+    mismatch refuses BEFORE any mutation."""
+    expected = getattr(args, "slug", None)
+    if not expected:
+        return
+    want = expected[:-5] if expected.endswith(".json") else expected
+    if want != path.stem:
+        print(f"task: --slug guard: '{args.id}' resolved to "
+              f"{_named(card, path)}, not '{expected}' — refusing to "
+              "mutate a card you did not mean (gov task show lists the "
+              "slug per card)", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def cmd_tick(args: argparse.Namespace) -> int:
     """Tick one checklist item (#334) — the sanctioned way to record
     progress, where hand-editing .gov/tasks/<id>.json used to be the only
@@ -415,6 +447,7 @@ def cmd_tick(args: argparse.Namespace) -> int:
         return 2
     cards = _load_cards()
     path, card = _resolve(cards, args.id)
+    _guard_slug(args, path, card)
     if card.get("status") != "open":
         print(f"task: {card['id']} is {card.get('status')!r}, not open — "
               "ticking records progress on in-flight work", file=sys.stderr)
@@ -430,13 +463,13 @@ def cmd_tick(args: argparse.Namespace) -> int:
         return 2
     text = str(items[args.item - 1])
     if _is_ticked(text):
-        print(f"task: {card['id']} item {args.item} is already ticked")
+        print(f"task: {_named(card, path)} item {args.item} is already ticked")
         return 0
     items[args.item - 1] = TICK_PREFIX + text
     atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
     remaining = [i for i, it in enumerate(items, 1)
                  if not _is_ticked(str(it))]
-    print(f"task: ticked {card['id']} item {args.item} — {text}")
+    print(f"task: ticked {_named(card, path)} item {args.item} — {text}")
     if remaining:
         print(f"  {len(remaining)} unticked: "
               + ", ".join(str(i) for i in remaining))
@@ -513,6 +546,7 @@ def cmd_repin(args: argparse.Namespace) -> int:
     combined, _files = rules_hash()
     cards = _load_cards()
     path, card = _resolve(cards, args.id)
+    _guard_slug(args, path, card)
     if card.get("status") != "open":
         print(f"task: {card['id']} is {card.get('status')!r}, not open — "
               "only an in-flight brief has a pin to advance",
@@ -532,7 +566,7 @@ def cmd_repin(args: argparse.Namespace) -> int:
     })
     card["rules"]["hash"] = combined
     atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
-    print(f"task: re-pinned {card['id']} rules@{str(pinned)[:12]} -> "
+    print(f"task: re-pinned {_named(card, path)} rules@{str(pinned)[:12]} -> "
           f"rules@{combined[:12]} — {args.reason.strip()}")
     _uncommitted_reminder(path)
     return 0
@@ -549,6 +583,7 @@ def cmd_void(args: argparse.Namespace) -> int:
     card like any non-open one — a void is terminal."""
     cards = _load_cards()
     path, card = _resolve(cards, args.id)
+    _guard_slug(args, path, card)
     if card.get("status") == "done":
         # #329: trust the receipt's VALIDITY, not its presence — a done
         # card whose receipt fails validation is exactly the bricked
@@ -578,7 +613,7 @@ def cmd_void(args: argparse.Namespace) -> int:
     _clear_task_lease(card,
                       holder=locks._holder_id(getattr(args, "agent", None)),
                       force=True)
-    print(f"task: voided {card['id']} — {args.reason}")
+    print(f"task: voided {_named(card, path)} — {args.reason}")
     print(f"  recorded by {card['void']['by']} at {card['void']['ts']} "
           "(the card file stays; its history is auditable)")
     _uncommitted_reminder(path)
@@ -589,6 +624,7 @@ def cmd_close(args: argparse.Namespace) -> int:
     combined, _files = rules_hash()
     cards = _load_cards()
     path, card = _resolve(cards, args.id)
+    _guard_slug(args, path, card)
     if card.get("status") != "open":
         # #329: a done card whose receipt FAILS validation is a bricked
         # state (check red, void refused, close refused) —
@@ -672,7 +708,7 @@ def cmd_close(args: argparse.Namespace) -> int:
     if failed:
         # A card closes only on an all-green run; a red run changes nothing
         # (the run itself is already in .gov/history/gates.jsonl).
-        print(f"task: refusing to close {card['id']} — gate run not green "
+        print(f"task: refusing to close {_named(card, path)} — gate run not green "
               f"({', '.join(failed)})", file=sys.stderr)
         return 1
     card["receipt"] = {
@@ -686,7 +722,7 @@ def cmd_close(args: argparse.Namespace) -> int:
     atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
     _clear_task_lease(card, holder=locks._holder_id(getattr(args, "agent", None)),
                       force=args.force)
-    print(f"task: closed {card['id']} with an all-green "
+    print(f"task: closed {_named(card, path)} with an all-green "
           f"{args.mode} run ({len(records)} gates)")
     _uncommitted_reminder(path)
     return 0
@@ -796,11 +832,11 @@ def cmd_claim(args: argparse.Namespace) -> int:
     locks._refuse_hostile_env("task claim")
     _cards = _load_cards()
     _path, card = _resolve(_cards, args.id)
+    _guard_slug(args, _path, card)
     if card.get("status") != "open":
         print(f"task: {card['id']} is {card.get('status')!r}, not open — "
               "only an open card can be claimed", file=sys.stderr)
         return 2
-    cid = card["id"]
     resource = _lease_resource(card)   # #332: card identity, not the bare id
     holder = locks._holder_id(args.agent)
     rc = locks.acquire(resource, holder, args.ttl, args.wait,
@@ -820,11 +856,13 @@ def cmd_claim(args: argparse.Namespace) -> int:
     data = locks._read_lease(
         locks._lease_path(_common_dir_quiet(), resource))
     if isinstance(data, dict):
-        print(f"task: {cid} claimed by '{data.get('holder')}' "
+        print(f"task: {_named(card_now, _path_now)} claimed by "
+              f"'{data.get('holder')}' "
               f"until {data.get('expires_at')} (lease '{resource}'; the "
               "card JSON is untouched)", file=sys.stderr)
     else:
-        print(f"task: {cid} claimed (lease '{resource}')", file=sys.stderr)
+        print(f"task: {_named(card_now, _path_now)} claimed "
+              f"(lease '{resource}')", file=sys.stderr)
     return 0
 
 
@@ -908,6 +946,10 @@ def main(argv: list[str] | None = None) -> int:
                             "card (#334) — the sanctioned alternative to "
                             "hand-editing .gov/tasks/<id>.json")
     p_tick.add_argument("id", help="card id, id prefix, or card-file slug")
+    p_tick.add_argument("--slug", metavar="STEM",
+                        help="#378 scripted-use guard: fail unless the "
+                             "resolved card's file stem is exactly this "
+                             "(the slug `task new` prints)")
     p_tick.add_argument("item", type=int, metavar="N",
                         help="1-based checklist item number (gov task show "
                              "lists them)")
@@ -921,6 +963,9 @@ def main(argv: list[str] | None = None) -> int:
     p_close = sub.add_parser("close", help="run the gate DAG now and close "
                              "the card with a green-run receipt")
     p_close.add_argument("id", help="card id or unique prefix (T-0001)")
+    p_close.add_argument("--slug", metavar="STEM",
+                         help="#378 scripted-use guard: fail unless the "
+                              "resolved card's file stem is exactly this")
     p_close.add_argument("--mode", default="all",
                          help="gate mode to run (default: all)")
     p_close.add_argument("--timeout", type=int, default=600,
@@ -947,6 +992,9 @@ def main(argv: list[str] | None = None) -> int:
     p_claim = sub.add_parser("claim", help="lease an open card for one "
                              "worker (busy → exit 3 naming the holder)")
     p_claim.add_argument("id", help="card id or unique prefix (T-0001)")
+    p_claim.add_argument("--slug", metavar="STEM",
+                         help="#378 scripted-use guard: fail unless the "
+                              "resolved card's file stem is exactly this")
     p_claim.add_argument("--agent", metavar="ID",
                          help="holder identity (default: $GOV_CALLER, then "
                               "the OS user)")
@@ -973,6 +1021,9 @@ def main(argv: list[str] | None = None) -> int:
                              "pin (#368): the constitution moved, the brief "
                              "is unchanged — a recorded act")
     p_repin.add_argument("id", help="card id, id prefix, or card-file slug")
+    p_repin.add_argument("--slug", metavar="STEM",
+                         help="#378 scripted-use guard: fail unless the "
+                              "resolved card's file stem is exactly this")
     p_repin.add_argument("--reason", required=True, metavar="TEXT",
                          help="what changed, and why the same brief still "
                               "describes the work (required; recorded)")
@@ -985,6 +1036,9 @@ def main(argv: list[str] | None = None) -> int:
                             "receipt — recorded, terminal (rule 9's "
                             "'explicitly defer it' exit, #322)")
     p_void.add_argument("id", help="card id or unique prefix (T-0001)")
+    p_void.add_argument("--slug", metavar="STEM",
+                        help="#378 scripted-use guard: fail unless the "
+                             "resolved card's file stem is exactly this")
     p_void.add_argument("--reason", required=True, metavar="TEXT",
                         help="why this card is being retired (required; "
                              "recorded on the card)")

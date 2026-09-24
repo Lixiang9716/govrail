@@ -99,9 +99,11 @@ FLAGS: dict[str, set[str]] = {
     "agent-hooks": {"--dialect", "--capture"},  # D60: the installed platform's output contract; --capture records the payload
     "task": {"--check", "--rules", "--mode", "--timeout",
              "--agent", "--ttl", "--wait", "--json", "--force",
-             "--reason", "--refresh-receipt", "--verbose", "--strict"},
+             "--reason", "--refresh-receipt", "--verbose", "--strict",
+             "--slug"},
              # across subcommands; --agent/--force on close, --reason on
-             # void (#322), --verbose/--strict on check (#334/#357)
+             # void (#322), --verbose/--strict on check (#334/#357),
+             # --slug on tick/close/claim/void/repin (#378)
     "preset": {"--project"},  # on the `apply` subcommand (list/show are flagless)
     "update": {"--apply", "--confirm-unattended"},
     "acquire": {"--agent", "--ttl", "--wait"},
