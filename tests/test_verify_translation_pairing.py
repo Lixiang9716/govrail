@@ -29,6 +29,42 @@ def test_resolve_source_i18n_side(tmp_path, monkeypatch):
     assert vtp._resolve_source("docs/foo.i18n.yaml", vtp.DEFAULT_CONFIG).resolve() == (tmp_path / "docs" / "foo.md").resolve()
 
 
+def test_resolve_source_bare_stem_uses_the_include_scope(tmp_path, monkeypatch):
+    """#379: a bare stem is the include scope's canonical name — a pair
+    nested below docs/ resolves by its name, not only via the legacy
+    flat docs/ fallback."""
+    monkeypatch.chdir(tmp_path)
+    nested = tmp_path / "docs" / "research"
+    nested.mkdir(parents=True)
+    (nested / "upstream.md").write_text("# upstream\n", encoding="utf-8")
+    (nested / "upstream.zh.md").write_text("# upstream 中文\n", encoding="utf-8")
+    assert vtp._resolve_source("upstream", vtp.DEFAULT_CONFIG).resolve() == \
+        (nested / "upstream.md").resolve()
+
+
+def test_resolve_source_ambiguous_stem_names_the_candidates(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    for sub in ("a", "b"):
+        d = tmp_path / "docs" / sub
+        d.mkdir(parents=True)
+        (d / "twin.md").write_text("# twin\n", encoding="utf-8")
+        (d / "twin.zh.md").write_text("# twin 中文\n", encoding="utf-8")
+    assert vtp._resolve_source("twin", vtp.DEFAULT_CONFIG) is None
+    err = capsys.readouterr().err
+    assert "docs/a/twin.md" in err and "docs/b/twin.md" in err
+
+
+def test_resolve_source_failure_names_the_roots_tried(tmp_path, monkeypatch, capsys):
+    """#379: the failure names the repository root and the include scope,
+    so the next invocation is not a guess."""
+    monkeypatch.chdir(tmp_path)
+    assert vtp._resolve_source("nowhere", vtp.DEFAULT_CONFIG) is None
+    err = capsys.readouterr().err
+    assert "nowhere" in err
+    assert str(tmp_path) in err          # the repository root (== cwd here)
+    assert ".gov/pairing.json" in err    # the include scope that was searched
+
+
 def test_verify_rejects_missing_record(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _pair(tmp_path)

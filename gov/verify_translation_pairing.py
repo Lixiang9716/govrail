@@ -227,8 +227,17 @@ def _counterpart(src: Path, cfg: dict[str, list[str]]) -> Path | None:
     return _recorded_counterpart(src) or _pattern_counterpart(src, cfg)
 
 
-def _resolve_source(arg: str, cfg: dict[str, list[str]]) -> Path:
-    """Resolve a --write argument (bare stem or any side) to the source .md."""
+def _resolve_source(arg: str, cfg: dict[str, list[str]]) -> Path | None:
+    """Resolve a --write argument (bare stem or any side) to the source .md.
+
+    Resolution roots, in order (#379): the given path against the
+    repository root (where the command anchors, and what its own banner
+    names), the legacy ``docs/`` fallback, and — for a bare stem — the
+    ``.gov/pairing.json`` include scope, when exactly ONE source matches
+    the name. None means no match (or an ambiguous one): the caller
+    exits 2, and the diagnostic names the roots that were tried, so the
+    next invocation is not a guess.
+    """
     p = Path(arg)
     name = p.name
     if name.endswith(".i18n.yaml"):
@@ -244,7 +253,30 @@ def _resolve_source(arg: str, cfg: dict[str, list[str]]) -> Path:
     if p.exists():
         return p
     alt = Path("docs") / name
-    return alt if alt.exists() else p
+    if alt.exists():
+        return alt
+    # A bare stem is the include scope's canonical name: resolve it
+    # against the pairs the project actually declares, not just the two
+    # literal roots above.
+    candidates = [s for s in _sources(cfg) if s.name == name]
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        print(f"verify_translation_pairing: '{arg}' is ambiguous — "
+              f"{len(candidates)} pair(s) named {name}: "
+              + ", ".join(s.as_posix() for s in candidates)
+              + " — name one with its repository-root path", file=sys.stderr)
+        return None
+    cwd = Path.cwd()
+    proc = gitutil.git("rev-parse", "--show-toplevel")
+    root = (Path(proc.stdout.strip()) if proc.returncode == 0
+            and proc.stdout.strip() else cwd)
+    roots = (f"the repository root {root}"
+             if root == cwd else f"the CWD {cwd} and the repository root {root}")
+    print(f"verify_translation_pairing: no such pair source: {arg} — "
+          f"resolved against {roots} and the "
+          f"{CONFIG_PATH.as_posix()} include scope", file=sys.stderr)
+    return None
 
 
 def _last_commit(path: Path) -> str:
@@ -534,7 +566,13 @@ def _write(items: list[str], cfg: dict[str, list[str]]) -> int:
         return 0
 
     if items:
-        sources = sorted({_resolve_source(a, cfg) for a in items})
+        sources = []
+        for a in items:
+            r = _resolve_source(a, cfg)
+            if r is None:
+                return 2  # the diagnostic named where it looked (#379)
+            sources.append(r)
+        sources = sorted(set(sources))
     else:
         # #32/D32: the bare form baselines only what is currently OUT OF
         # SYNC — green pairs keep the confirmation they earned; forcing a
