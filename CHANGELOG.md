@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.49.0](https://github.com/Lixiang9716/govrail/compare/v0.48.0...v0.49.0) (2026-09-24)
+
+
+### Features
+
+* a scoped run judges one worker's paths; every run leaves full evidence ([#388](https://github.com/Lixiang9716/govrail/issues/388)) ([51ed433](https://github.com/Lixiang9716/govrail/commit/51ed433cdb014427ad4f823a4061b25e1e862335))
+* surprise list answers keyword lookups over the full entry ([#382](https://github.com/Lixiang9716/govrail/issues/382)) ([5d4e78a](https://github.com/Lixiang9716/govrail/commit/5d4e78a9dfd8d2de7027bdc8a1b83453a276d5b2))
+
+
+### Bug Fixes
+
+* parse facts are single-visit and named; ArkTS joins the language set ([#387](https://github.com/Lixiang9716/govrail/issues/387)) ([93f04df](https://github.com/Lixiang9716/govrail/commit/93f04df4ba3e9f41b9fed81646121cbc8ce495fe))
+* task mutating commands echo which card moved; --slug asserts it ([#378](https://github.com/Lixiang9716/govrail/issues/378)) ([#383](https://github.com/Lixiang9716/govrail/issues/383)) ([ce82159](https://github.com/Lixiang9716/govrail/commit/ce82159f9f918c9de44f9821a822b7c06eb36819))
+* the new-branch push scope declares its root; self-test is immune to an ambient scope ([#371](https://github.com/Lixiang9716/govrail/issues/371)) ([#384](https://github.com/Lixiang9716/govrail/issues/384)) ([1ce6ece](https://github.com/Lixiang9716/govrail/commit/1ce6ece6ccfd8ab0e95cab251dd93342f1d1dfc8))
+* update --apply re-wires the drifted hook from the template; init --hooks stops implying claude ([#380](https://github.com/Lixiang9716/govrail/issues/380)) ([56e8a0f](https://github.com/Lixiang9716/govrail/commit/56e8a0f9a95ca01a0d3f135aaf7ac092e9b2cb42))
+* verify pairing --write resolves a bare stem against the include scope and names the roots it tried ([#379](https://github.com/Lixiang9716/govrail/issues/379)) ([#381](https://github.com/Lixiang9716/govrail/issues/381)) ([71d37c9](https://github.com/Lixiang9716/govrail/commit/71d37c9f3a0c1bf5160688444692a16723afb7c8))
+
 ## [0.48.0](https://github.com/Lixiang9716/govrail/compare/v0.47.1...v0.48.0) (2026-09-21)
 
 

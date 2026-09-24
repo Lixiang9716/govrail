@@ -3,6 +3,16 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.49.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- a scoped run judges one worker's paths; every run leaves full evidence
+- surprise list answers keyword lookups over the full entry
+- parse facts are single-visit and named; ArkTS joins the language set
+- task mutating commands echo which card moved; --slug asserts it
+- the new-branch push scope declares its root; self-test is immune to an ambient scope
+- update --apply re-wires the drifted hook from the template; init --hooks stops implying claude
+- verify pairing --write resolves a bare stem against the include scope and names the roots it tried
+
 ## 0.48.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
 - **agent-hooks:** capture what the platform actually sends
