@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.50.0](https://github.com/Lixiang9716/govrail/compare/v0.49.0...v0.50.0) (2026-09-24)
+
+
+### Features
+
+* gov note verify names files — the authoring loop lints exactly the notes it names ([#386](https://github.com/Lixiang9716/govrail/issues/386)) ([#390](https://github.com/Lixiang9716/govrail/issues/390)) ([0a40150](https://github.com/Lixiang9716/govrail/commit/0a40150583874d3d7fce6b1a493ac345f656a9f0))
+* gov task close takes several cards — one gate run, one shared receipt ([#385](https://github.com/Lixiang9716/govrail/issues/385)) ([#391](https://github.com/Lixiang9716/govrail/issues/391)) ([851cd18](https://github.com/Lixiang9716/govrail/commit/851cd18bfe9c6c637df5fcde9122e114f792c0c9))
+
 ## [0.49.0](https://github.com/Lixiang9716/govrail/compare/v0.48.0...v0.49.0) (2026-09-24)
 
 
