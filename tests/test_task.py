@@ -910,6 +910,88 @@ def test_close_refuses_unticked_items_and_tick_unblocks(tmp_path, monkeypatch,
     assert task.main(["check"]) == 0
 
 
+def test_close_batch_one_run_shared_receipt(tmp_path, monkeypatch, capsys):
+    """#385: `task close <id> <id>` runs the gate DAG ONCE and closes
+    every card against the SAME receipt — closing N landed cards no
+    longer costs N full-DAG runs (the cost that pushed a user onto the
+    receipt-less void exit)."""
+    proj = _project(tmp_path)
+    marker = proj / "marker"
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["noop"]},
+        "gates": [{"id": "noop", "command": [
+            sys.executable, "-c",
+            "open(r'%s', 'a').write('x')" % marker.as_posix()]},
+        ]}), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="alpha", checklist=["done work"])
+    _open_card(proj, cid="T-0002", slug="beta", checklist=["done too"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    assert task.main(["tick", "T-0002", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "T-0002",
+                      "--mode", "all", "--timeout", "60"]) == 0
+    out = capsys.readouterr().out
+    assert "closed T-0001 (T-0001-alpha)" in out
+    assert "closed T-0002 (T-0002-beta)" in out
+    assert marker.read_text(encoding="utf-8") == "x", \
+        "the batch must cost exactly ONE gate run"
+    a = json.loads((proj / ".gov/tasks/T-0001-alpha.json")
+                   .read_text(encoding="utf-8"))
+    b = json.loads((proj / ".gov/tasks/T-0002-beta.json")
+                   .read_text(encoding="utf-8"))
+    assert a["status"] == "done" and b["status"] == "done"
+    assert a["receipt"] == b["receipt"], "one verdict, every card"
+    assert a["receipt"]["green"] is True
+
+
+def test_close_batch_preflight_refuses_all(tmp_path, monkeypatch, capsys):
+    """#385: ONE bad card refuses the whole batch BEFORE the DAG run —
+    a partial close would leave the operator guessing which half landed."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["noop"]},
+        "gates": [{"id": "noop", "command": PASS}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="ready", checklist=["x"])
+    _open_card(proj, cid="T-0002", slug="unready",
+               checklist=["not ticked"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "T-0002",
+                      "--mode", "all", "--timeout", "60"]) == 1
+    err = capsys.readouterr().err
+    assert "refusing to close T-0002" in err
+    assert "unticked" in err
+    still = json.loads((proj / ".gov/tasks/T-0001-ready.json")
+                       .read_text(encoding="utf-8"))
+    assert still["status"] == "open", "the good card must not close either"
+
+
+def test_close_batch_duplicate_handles_close_once(tmp_path, monkeypatch,
+                                                   capsys):
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["noop"]},
+        "gates": [{"id": "noop", "command": PASS}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="alpha", checklist=["x"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "T-0001-alpha",
+                      "--mode", "all", "--timeout", "60"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("closed T-0001") == 1
+
+
 def test_check_names_unticked_items_without_blocking(tmp_path, monkeypatch,
                                                      capsys):
     """#358: an in-flight card MAY carry unticked items — the default
