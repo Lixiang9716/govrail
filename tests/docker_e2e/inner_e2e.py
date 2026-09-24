@@ -3200,8 +3200,8 @@ def stats_empty_tree(base):
     # inventory: programming languages, and the markup/data formats whose
     # line counts a size gate still reads.
     assert set(v) == {
-        "ada", "bash", "c", "c-sharp", "cpp", "css", "cuda", "dart",
-        "elixir", "embedded-template", "fortran", "go", "groovy",
+        "ada", "arkts", "bash", "c", "c-sharp", "cpp", "css", "cuda",
+        "dart", "elixir", "embedded-template", "fortran", "go", "groovy",
         "haskell", "html", "java", "javascript", "json", "julia", "kotlin",
         "lua", "make", "markdown", "nix", "objc", "ocaml", "php",
         "powershell", "python", "ruby", "rust", "scala", "sql",
