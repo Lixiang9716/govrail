@@ -238,6 +238,20 @@ def _scrub_environment() -> None:
         print(f"self-test: scrubbed repository-resolving variable(s) from the "
               f"environment ({', '.join(dangerous)}) — cases must resolve "
               "repositories by cwd (hook-context leak, #20)")
+    # #371: the push's declared change scope is valid in ONE repository.
+    # A pre-push hook exports GOV_CHANGE_BASE (with or without its ROOT)
+    # and every gate it runs inherits it — including this runner, whose
+    # in-process cases would judge scratch repositories against a ref
+    # from the HOST repo. Same wall as GIT_*: cleared structurally at the
+    # runner, not per hook branch, and the case-level env builders strip
+    # it too in case a case spawns before this wall is up.
+    scoped = [k for k in os.environ if k.startswith("GOV_CHANGE_")]
+    for k in scoped:
+        del os.environ[k]
+    if scoped:
+        print(f"self-test: scrubbed declared change scope "
+              f"({', '.join(sorted(scoped))}) — a push's scope is valid "
+              "only in the repository that declared it (#371)")
 
 
 

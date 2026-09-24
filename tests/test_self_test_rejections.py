@@ -225,6 +225,26 @@ def test_project_failure_carries_hand_repro_hint(tmp_path, monkeypatch, capsys):
     assert "unclassified 1" in out
 
 
+def test_case_and_fixture_envs_strip_an_ambient_push_scope(tmp_path,
+                                                           monkeypatch):
+    """#371: the push's declared scope (GOV_CHANGE_BASE/ROOT) is valid in
+    ONE repository. A pre-push hook leaks it into every gate it runs, and
+    self-test's scratch repositories judged against the HOST's fork sha
+    died on `bad object` — the env is stripped structurally, so no future
+    hook branch can un-declare the root and re-arm the leak."""
+    monkeypatch.setenv("GOV_CHANGE_BASE", "0" * 40)
+    monkeypatch.setenv("GOV_CHANGE_ROOT", str(tmp_path))
+    from gov.self_test import _harness as h
+    for env in (h._case_env(), h._fixture_env(tmp_path),
+                h._clean_replay_env(tmp_path)):
+        assert "GOV_CHANGE_BASE" not in env
+        assert "GOV_CHANGE_ROOT" not in env
+    # the runner's own wall: in-process cases read os.environ directly
+    st._scrub_environment()
+    assert "GOV_CHANGE_BASE" not in os.environ
+    assert "GOV_CHANGE_ROOT" not in os.environ
+
+
 def test_run_text_survives_non_utf8_child_bytes(tmp_path):
     """#172: the harness's text spawns decode pinned UTF-8/replace — a
     child emitting non-UTF-8 (GBK) bytes comes back as mojibake, never a
