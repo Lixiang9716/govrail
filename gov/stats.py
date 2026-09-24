@@ -77,11 +77,20 @@ def _walk_metrics(src: bytes, root, pack) -> _Metrics:
     m = _Metrics()
 
     def visit(node, depth: int) -> int:
-        """Walk once; return the deepest nesting level in this subtree."""
+        """Walk once; return the deepest nesting level in this subtree.
+
+        Every child is visited EXACTLY ONCE (#372): the first cut walked
+        a function node's children twice — once at depth 0 for the
+        function's inner depth, once at the tree-walk depth — so every
+        nested function, closure, class, and ERROR node was counted
+        twice and its span reported twice (a size gate then filed the
+        same violation two times under two start lines).
+        """
         if node.type == "ERROR" or node.is_missing:
             m.error_nodes += 1
         if node.type in pack.comment:
             m.comment_spans.append((node.start_byte, node.end_byte))
+        nxt = depth + (1 if node.type in pack.nesting else 0)
         if node.type in pack.functions:
             m.functions += 1
             name_node = node.child_by_field_name("name")
@@ -98,15 +107,21 @@ def _walk_metrics(src: bytes, root, pack) -> _Metrics:
             # INSIDE the function, not how deeply the function itself is
             # nested (the prototype shipped this wrong once and every
             # number looked plausible — the known-answer fixture exists
-            # to catch exactly this).
-            inner = 0
+            # to catch exactly this). One child walk serves both this
+            # measurement and the tree walk: children recurse at the
+            # body's own depth, and `inner` is their deepest level minus
+            # the body's top — nesting increments are the only thing
+            # depth carries, so the difference is levels-inside.
+            child_max = nxt
             for c in node.children:
-                inner = max(inner, visit(c, 0))
+                child_max = max(child_max, visit(c, nxt))
+            inner = child_max - nxt
             m.depths.append(inner)
             m.deepest.append((name, inner, node.start_point[0] + 1))
             m.function_spans.append((name, node.start_point[0] + 1,
                                      node.end_point[0] + 1, inner))
             m.max_depth = max(m.max_depth, inner)
+            return child_max
         if node.type in pack.classes:
             m.classes += 1
             name_node = node.child_by_field_name("name")
@@ -115,7 +130,6 @@ def _walk_metrics(src: bytes, root, pack) -> _Metrics:
                     .decode("utf-8", errors="replace")
                 if not name.startswith("_"):
                     m.public += 1
-        nxt = depth + (1 if node.type in pack.nesting else 0)
         deepest = nxt
         for c in node.children:
             deepest = max(deepest, visit(c, nxt))
@@ -518,8 +532,12 @@ def parse_main(argv: list[str] | None = None) -> int:
              f"{r['max_depth']}"
              + (f", {r['parse_errors']} parse error(s)"
                 if r["parse_errors"] else ""))
-        for n, s, e, d in r["functions"]:
-            emit(f"    {n}  {s}-{e}  depth {d}")
+        for f in r["functions"]:
+            # #372: the rows are the FACTS — the first cut iterated the
+            # dicts and unpacked their four KEYS, printing the column
+            # names where the values belong on every row.
+            emit(f"    {f['name']}  {f['start']}-{f['end']}  "
+                 f"depth {f['depth']}")
     if not reports:
         emit("gov parse: nothing matched a shipped grammar")
     return 0
