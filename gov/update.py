@@ -158,6 +158,41 @@ def _rewire_executed_hooks(root: Path) -> int:
     return rewired
 
 
+def _refresh_tracked_hooks(root: Path) -> int:
+    """#373: the drift note promised ``--apply`` re-wires the hook, but
+    only the EXECUTED copy was ever touched (#331) — and it was re-wired
+    from the tracked copy, which itself was still the old version's
+    bytes. ``gov init --hooks`` always re-installs from the shipped
+    template; the migration step now does the same for the tracked
+    copies first, so both copies end on this version's template. The
+    contract is init's own: a copy that is not a gov hook (no
+    ``# govrail:`` marker) is someone else's — named skip, never
+    overwritten.
+    """
+    from importlib.resources import files as _res_files
+    refreshed = 0
+    for name in ("pre-push", "pre-commit"):
+        tracked = root / ".gov" / "hooks" / name
+        if not tracked.is_file() or tracked.is_symlink():
+            continue
+        try:
+            body = tracked.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if "# govrail:" not in body:
+            continue  # a foreign hook — none of our business
+        tpl = _res_files("gov.templates").joinpath(name)
+        try:
+            current = tpl.read_bytes()
+        except (OSError, FileNotFoundError):
+            continue
+        if tracked.read_bytes() == current:
+            continue
+        atomicio.write_bytes(tracked, current, root=root)
+        refreshed += 1
+    return refreshed
+
+
 def _hook_drift_notes(root: Path) -> list[str]:
     """#324: installed gov hooks from an EARLIER plane keep invoking
     retired spellings — after the D57 renames, an unrefreshed pre-commit
@@ -329,6 +364,14 @@ def main(argv: list[str] | None = None) -> int:
             if rc != 0:
                 return rc
         steps_done += 1
+        # #373: refresh the TRACKED gov hook copies to this version's
+        # templates first — #331's re-wire copies the tracked bytes to the
+        # executed path, so without this the executed hook was re-wired
+        # to the OLD body the drift note promised to fix.
+        refreshed = _refresh_tracked_hooks(root)
+        if refreshed:
+            print(f"gov update: refreshed {refreshed} tracked hook "
+                  "copy(ies) to this version's template", file=sys.stderr)
         # #331: the tracked hook templates were just refreshed — re-wire
         # the copies git actually executes, so the checkout runs what the
         # plane tracks (one source, both copies).

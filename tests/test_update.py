@@ -232,6 +232,47 @@ def test_rewire_leaves_a_foreign_hook_alone(tmp_path, monkeypatch):
     assert "echo mine" in (hooks / "pre-commit").read_text(encoding="utf-8")
 
 
+def test_apply_rewires_a_drifted_hook_end_to_end(tmp_path):
+    """#373: the drift note promised `--apply` re-wires the hook, but only
+    the executed copy was touched — re-wired FROM the tracked copy, which
+    itself stayed on the old version's bytes. The migration refreshes the
+    tracked gov-marked copies from the shipped template first, so both
+    copies end on this version's hook."""
+    from importlib.resources import files as _res_files
+    _setup(tmp_path)
+    assert plane.init(tmp_path, hooks=True) == 0  # installs both copies
+    stale = "#!/bin/sh\n# govrail: 0.1.2 hook\ngov run --mode all\n"
+    for rel in (".gov/hooks/pre-push", ".git/hooks/pre-push"):
+        p = tmp_path / rel
+        p.write_text(stale, encoding="utf-8")
+    # _add_ons stamps the manifest with the RUNNING version; put the
+    # migration premise back (initialized at 0.1.2) before committing.
+    manifest = tmp_path / ".gov" / "manifest.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["version"] = "0.1.2"
+    manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    _commit(tmp_path, "hooks at 0.1.2")
+    assert _invoke(["update", "--apply", "--confirm-unattended"],
+                   tmp_path, consent=True) == 0
+    template = _res_files("gov.templates").joinpath("pre-push").read_bytes()
+    assert (tmp_path / ".gov" / "hooks" / "pre-push").read_bytes() == template
+    assert (tmp_path / ".git" / "hooks" / "pre-push").read_bytes() == template
+
+
+def test_refresh_leaves_a_foreign_tracked_hook_alone(tmp_path):
+    """The tracked copy carries the same contract as the executed one: a
+    hook without the govrail marker is someone else's, and the migration
+    must not overwrite it any more than `gov init --hooks` would."""
+    from gov import update as update_mod
+    _repo(tmp_path)
+    tracked = tmp_path / ".gov" / "hooks"
+    tracked.mkdir(parents=True)
+    mine = "#!/bin/sh\necho mine\n"
+    (tracked / "pre-push").write_text(mine, encoding="utf-8")
+    assert update_mod._refresh_tracked_hooks(tmp_path) == 0
+    assert (tracked / "pre-push").read_text(encoding="utf-8") == mine
+
+
 def test_doctor_names_executed_hook_drift(tmp_path, monkeypatch, capsys):
     """The doctor half of #331: executed vs tracked byte drift is named
     with the one-line fix."""

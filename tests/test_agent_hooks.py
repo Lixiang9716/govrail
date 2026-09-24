@@ -215,7 +215,8 @@ def test_help_lists_dialect_flag_in_options_block(capsys):
 
 def test_add_ons_installs_template_bytes_and_bare_created_entry(tmp_path):
     manifest_path = _manifest(tmp_path)
-    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False,
+                          platforms=["claude"]) == 0  # #373: explicit opt-in
     settings = tmp_path / ".claude" / "settings.json"
     assert settings.read_bytes() == \
         plane.TEMPLATES.joinpath("claude-settings.json").read_bytes()
@@ -229,7 +230,8 @@ def test_add_ons_reports_existing_settings_and_leaves_it(
     settings = tmp_path / ".claude" / "settings.json"
     settings.parent.mkdir()
     settings.write_text('{"hooks": {}}', encoding="utf-8")  # the adopter's
-    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False,
+                          platforms=["claude"]) == 0  # #373: explicit opt-in
     assert settings.read_text() == '{"hooks": {}}'
     assert ".claude/settings.json" not in \
         json.loads(manifest_path.read_text(encoding="utf-8"))["created"]
@@ -238,14 +240,16 @@ def test_add_ons_reports_existing_settings_and_leaves_it(
 
 def test_uninstall_removes_pristine_settings(tmp_path):
     manifest_path = _manifest(tmp_path)
-    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False,
+                          platforms=["claude"]) == 0  # #373: explicit opt-in
     assert plane.uninstall(tmp_path) == 0
     assert not (tmp_path / ".claude" / "settings.json").exists()
 
 
 def test_uninstall_keeps_customized_settings_until_force(tmp_path, capsys):
     manifest_path = _manifest(tmp_path)
-    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False) == 0
+    assert plane._add_ons(tmp_path, manifest_path, hooks=False, ci=False,
+                          platforms=["claude"]) == 0  # #373: explicit opt-in
     settings = tmp_path / ".claude" / "settings.json"
     settings.write_text('{"hooks": {}, "model": "adopters-own"}',
                         encoding="utf-8")
@@ -285,7 +289,7 @@ def test_platforms_all_installs_every_target(tmp_path):
         assert (tmp_path / rel).exists()
 
 
-def test_explicit_platforms_replace_the_claude_default(tmp_path):
+def test_platforms_install_only_what_was_named(tmp_path):
     rc, _ = _add_ons_with_platforms(tmp_path, ["codex"])
     assert rc == 0
     assert (tmp_path / ".codex" / "hooks.json").exists()
