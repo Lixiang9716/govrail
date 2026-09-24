@@ -620,11 +620,18 @@ def cmd_void(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_close(args: argparse.Namespace) -> int:
-    combined, _files = rules_hash()
-    cards = _load_cards()
-    path, card = _resolve(cards, args.id)
-    _guard_slug(args, path, card)
+def _close_preflight(path: Path, card: dict, combined: str,
+                     args: argparse.Namespace) -> tuple[int, str] | None:
+    """Every refusal close can name, before the (expensive) DAG run.
+
+    #385: a batch names several cards, and ONE bad card refuses the
+    whole batch — a partial close would leave the operator guessing
+    which half landed. Returns (exit code, reason) when the card must
+    not close, None when it may. The codes are close's own: 2 for
+    usage-shaped refusals (not open, nothing to refresh, someone
+    else's lease), 1 for judgment-shaped ones (stale pin, unticked
+    contract).
+    """
     if card.get("status") != "open":
         # #329: a done card whose receipt FAILS validation is a bricked
         # state (check red, void refused, close refused) —
@@ -634,24 +641,20 @@ def cmd_close(args: argparse.Namespace) -> int:
         if card.get("status") == "done" and args.refresh_receipt:
             problems = _check_receipt(card["id"], card)
             if not problems:
-                print(f"task: {card['id']} has a verifiable green receipt "
-                      "— nothing to refresh", file=sys.stderr)
-                return 2
+                return (2, f"task: {card['id']} has a verifiable green "
+                           "receipt — nothing to refresh")
             print(f"task: refreshing {card['id']}'s receipt — the recorded "
                   f"one fails validation ({'; '.join(problems)})")
         else:
-            print(f"task: {card['id']} is {card.get('status')!r}, not open",
-                  file=sys.stderr)
-            return 2
+            return (2, f"task: {card['id']} is "
+                       f"{card.get('status')!r}, not open")
     pinned = card.get("rules", {}).get("hash")
     if pinned != combined:
-        print(f"task: {card['id']} pins rules@{str(pinned)[:12]} but the "
-              f"project is at rules@{combined[:12]} — if this brief still "
-              f"describes the work, advance it (gov task re-pin "
-              f"{card['id']} --reason <why>); otherwise re-brief against "
-              "the adopted rules (gov task check names the stale cards)",
-              file=sys.stderr)
-        return 1
+        return (1, f"task: {card['id']} pins rules@{str(pinned)[:12]} but "
+                f"the project is at rules@{combined[:12]} — if this brief "
+                f"still describes the work, advance it (gov task re-pin "
+                f"{card['id']} --reason <why>); otherwise re-brief against "
+                "the adopted rules (gov task check names the stale cards)")
     # #358: the checklist is the contract the card exists to carry, so a
     # close with items still unticked refuses — the exits are tick (the
     # work is done; `gov task tick` writes the canonical marker) or void
@@ -662,12 +665,11 @@ def cmd_close(args: argparse.Namespace) -> int:
     if unticked:
         shown = ", ".join(str(i) for i in unticked[:8]) + (
             f" …and {len(unticked) - 8} more" if len(unticked) > 8 else "")
-        print(f"task: refusing to close {card['id']} — {len(unticked)} "
-              f"unticked checklist item(s) ({shown}): tick the items the "
-              f"work satisfies (gov task tick {card['id']} <n>; gov task "
-              "show lists them), or void the card if the checklist no "
-              "longer describes the work (rule 9)", file=sys.stderr)
-        return 1
+        return (1, f"task: refusing to close {card['id']} — {len(unticked)} "
+                f"unticked checklist item(s) ({shown}): tick the items the "
+                f"work satisfies (gov task tick {card['id']} <n>; gov task "
+                "show lists them), or void the card if the checklist no "
+                "longer describes the work (rule 9)")
     # A live lease naming someone else IS in-flight work: closing here
     # would silently delete the worker's claim out from under it. Only
     # the holder (or an explicit --force, a knowing steal) may close a
@@ -676,12 +678,34 @@ def cmd_close(args: argparse.Namespace) -> int:
     closer = locks._holder_id(getattr(args, "agent", None))
     claim = _claim_of(card, _common_dir_quiet())
     if claim and claim["claimed_by"] != closer and not args.force:
-        print(f"task: {card['id']} is claimed by "
-              f"'{claim['claimed_by']}' until {claim['expires_at']} — "
-              "closing would delete their live lease; pass --force to "
-              "steal it knowingly, or have the holder release first",
-              file=sys.stderr)
-        return 2
+        return (2, f"task: {card['id']} is claimed by "
+                f"'{claim['claimed_by']}' until {claim['expires_at']} — "
+                "closing would delete their live lease; pass --force to "
+                "steal it knowingly, or have the holder release first")
+    return None
+
+
+def cmd_close(args: argparse.Namespace) -> int:
+    combined, _files = rules_hash()
+    cards = _load_cards()
+    # #385: one DAG run, one receipt, N cards. EVERY card passes the
+    # preflight before the run starts — the gate DAG is the expensive
+    # part (minutes per run in the field), and a red or refused batch
+    # changes nothing on any card.
+    planned: list[tuple[Path, dict]] = []
+    seen: set[Path] = set()
+    for cid in args.id:
+        path, card = _resolve(cards, cid)
+        _guard_slug(args, path, card)
+        if path in seen:
+            continue  # two handles, one card (id + slug): close it once
+        seen.add(path)
+        refusal = _close_preflight(path, card, combined, args)
+        if refusal is not None:
+            rc, reason = refusal
+            print(reason, file=sys.stderr)
+            return rc
+        planned.append((path, card))
     argv = [sys.executable, "-m", "gov", "run", "--json",
             "--mode", args.mode]
     try:
@@ -707,24 +731,29 @@ def cmd_close(args: argparse.Namespace) -> int:
     failed = _receipt_failures(records)
     if failed:
         # A card closes only on an all-green run; a red run changes nothing
-        # (the run itself is already in .gov/history/gates.jsonl).
-        print(f"task: refusing to close {_named(card, path)} — gate run not green "
-              f"({', '.join(failed)})", file=sys.stderr)
+        # on ANY card of the batch (the run itself is already in
+        # .gov/history/gates.jsonl).
+        print(f"task: refusing to close {len(planned)} card(s) — gate run "
+              f"not green ({', '.join(failed)})", file=sys.stderr)
         return 1
-    card["receipt"] = {
+    receipt = {
         "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "mode": args.mode,
         "rules": combined,
         "green": True,
         "gates": records,
     }
-    card["status"] = "done"
-    atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
-    _clear_task_lease(card, holder=locks._holder_id(getattr(args, "agent", None)),
-                      force=args.force)
-    print(f"task: closed {_named(card, path)} with an all-green "
-          f"{args.mode} run ({len(records)} gates)")
-    _uncommitted_reminder(path)
+    for i, (path, card) in enumerate(planned):
+        card["receipt"] = dict(receipt)   # one run's verdict, every card
+        card["status"] = "done"
+        atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
+        _clear_task_lease(
+            card, holder=locks._holder_id(getattr(args, "agent", None)),
+            force=args.force)
+        shared = "" if i == 0 else " — the batch's shared run"
+        print(f"task: closed {_named(card, path)} with an all-green "
+              f"{args.mode} run ({len(records)} gates){shared}")
+        _uncommitted_reminder(path)
     return 0
 
 
@@ -962,7 +991,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p_close = sub.add_parser("close", help="run the gate DAG now and close "
                              "the card with a green-run receipt")
-    p_close.add_argument("id", help="card id or unique prefix (T-0001)")
+    p_close.add_argument("id", nargs="+", metavar="ID",
+                         help="card id, unique prefix, or slug — one or "
+                              "more: one gate run, one receipt, every card "
+                              "closed against it (#385)")
     p_close.add_argument("--slug", metavar="STEM",
                          help="#378 scripted-use guard: fail unless the "
                               "resolved card's file stem is exactly this")
