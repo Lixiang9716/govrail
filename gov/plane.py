@@ -1016,10 +1016,10 @@ def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
 
     Only the requested add-ons are touched — rules, gates, notes, skills,
     and the AGENTS.md reference line stay exactly as they are, so
-    retrofitting a hook never resets customizations. ``platforms=None``
-    keeps the pre-D60 shape (the claude config rides along); an explicit
-    ``--platforms`` list replaces that default and installs exactly what
-    was named.
+    retrofitting a hook never resets customizations. Platforms are
+    explicit opt-in only (#373), same contract as a fresh init (D60): a
+    retrofit named for its git hooks must not adopt a platform config
+    the caller never asked for — ``--platforms`` is how platforms happen.
     """
     try:
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -1061,8 +1061,11 @@ def _add_ons(project: Path, manifest_path: Path, hooks: bool, ci: bool,
 
     # Agent hooks (D59/D60): the plane's lifecycle events wired into each
     # selected agent platform's own hook config — presence at every point
-    # of the agent's workflow, not just at push time.
-    selected = list(platforms) if platforms else ["claude"]
+    # of the agent's workflow, not just at push time. Explicit opt-in
+    # only (#373): the pre-D60 default (claude riding along with any
+    # retrofit) adopted a repo-visible config file a `--hooks` caller
+    # never asked for; a fresh init has been explicit-only since D60.
+    selected = list(platforms) if platforms else []
     for name in selected:
         _install_platform(project, name, created)
 

@@ -233,6 +233,21 @@ def test_retrofit_is_idempotent(tmp_path):
     assert manifest["gitHooks"] == ["pre-push"]
 
 
+def test_hooks_retrofit_does_not_adopt_a_platform(tmp_path):
+    """#373: the git-hook verb is not the platform verb. A retrofit named
+    for its hooks adopted .claude/settings.json — a repo-visible config
+    the caller never asked for; a fresh init has been explicit-only since
+    D60, and the retrofit path now matches."""
+    _git_repo(tmp_path)
+    assert plane.init(tmp_path) == 0
+    assert plane.init(tmp_path, hooks=True) == 0
+    assert not (tmp_path / ".claude" / "settings.json").exists()
+    manifest = json.loads((tmp_path / ".gov" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["platforms"] == []
+    assert plane.init(tmp_path, platforms=["claude"]) == 0  # explicit still works
+    assert (tmp_path / ".claude" / "settings.json").exists()
+
+
 def test_retrofit_respects_foreign_hook(tmp_path):
     _git_repo(tmp_path)
     assert plane.init(tmp_path) == 0
