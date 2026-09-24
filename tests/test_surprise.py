@@ -37,6 +37,26 @@ def test_record_appends_and_list_counts(tmp_path, monkeypatch, capsys):
     assert len(out) == 2
 
 
+def test_keyword_list_greps_the_full_text(tmp_path, monkeypatch, capsys):
+    """#376: the have-I-seen-this-before lookup is keyword-shaped — words
+    grep verbatim (case-insensitively) across sig, surface, expectation,
+    and reality, AND over words; a zero-match query says so instead of
+    reading as an empty ledger."""
+    assert _run(["record", "the CI pin drifted silently",
+                 "--reality", "master ran stale config",
+                 "--sig", "pin-drift", "--surface", "gov.yml"],
+                tmp_path, monkeypatch) == 0
+    capsys.readouterr()
+    assert _run(["list", "pin"], tmp_path, monkeypatch) == 0
+    assert "pin-drift" in capsys.readouterr().out
+    assert _run(["list", "STALE", "config"], tmp_path, monkeypatch) == 0  # AND, case-insensitive
+    assert "pin-drift" in capsys.readouterr().out
+    assert _run(["list", "absent-word"], tmp_path, monkeypatch) == 0
+    err_free = capsys.readouterr()
+    assert "no recorded surprise matches absent-word" in err_free.out
+    assert "no surprises recorded" not in err_free.out
+
+
 def test_sig_derived_from_expectation(tmp_path, monkeypatch):
     assert _run(["record", "the CI pin drifted silently",
                  "--reality", "master ran stale config"],
