@@ -929,7 +929,7 @@ def run_gates(
         emit("\n".join(shown))
         if omitted > 0:
             emit(f"... ({omitted} earlier line(s) not shown; full output: "
-                 f"{last_run_dir / (gid + '.log')})")
+                 f"{(last_run_dir / (gid + '.log')).as_posix()})")
 
     if failed:
         emit(f"--- summary: {len(failed)} blocking failure(s) ---")
@@ -945,7 +945,7 @@ def run_gates(
             # the summary stays a pointer, not a reprint.
             line = f"{gid}: {first}" if first else f"{gid}:"
             emit(f"{line} (rerun: gov run --gate {gid}; full output: "
-                 f"{last_run_dir / (gid + '.log')})")
+                 f"{(last_run_dir / (gid + '.log')).as_posix()})")
 
     counts = {o: sum(1 for v in outcomes.values() if v == o) for o in OUTCOME_ORDER}
     parts = [f"{n} {o.lower()}" for o, n in counts.items() if n]
