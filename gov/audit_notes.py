@@ -60,7 +60,7 @@ FLAGS: dict[str, set[str]] = {
              "--json", "--adopt", "--adopt-new", "--preview", "--preset",
              "--platforms"},
     "uninstall": {"--project", "--force"},
-    "run": {"--config", "--allow-unsealed-config", "--mode", "--base", "--gate", "--every-gate",
+    "run": {"--config", "--allow-unsealed-config", "--mode", "--base", "--gate", "--every-gate", "--only-paths",
             "--merge", "--tag", "--no-record", "--receipt", "--json",
             "--fail-fast", "--verbose", "--cost"},
     "self-test": {"--scope", "--case", "--explain"},

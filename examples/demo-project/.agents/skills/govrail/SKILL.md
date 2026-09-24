@@ -79,7 +79,8 @@ push (the pre-push hook re-runs the scoped DAG automatically).
 **Running gates**
 - `gov run` — the scoped DAG (auto base: dirty worktree → working
   tree; clean → unpushed commits; else last commit). The default is
-  almost always right.
+  almost always right; `--only-paths g1,g2` narrows a multi-worker run
+  to one worker's paths.
 - `gov gate add <id> [options] -- <command...>` — wire a product gate
   into gates.json (validated against the runner's schema, merged
   atomically, then one verification `gov run --gate <id>`). Use for

@@ -251,6 +251,85 @@ def test_main_base_scopes_run(tmp_path, capsys, monkeypatch):
     assert "PASS unpathed" in out  # unpathed gates always run
 
 
+def test_main_only_paths_scopes_to_one_worker(tmp_path, capsys, monkeypatch):
+    """#374: a multi-worker checkout scopes a run to one worker's paths —
+    the changed set is intersected with the declared globs, path-scoped
+    gates select against THAT, unpathed gates keep judging the
+    repository, and the declared set is exported to the gates."""
+    monkeypatch.chdir(tmp_path)
+    _git_repo(tmp_path)
+    env_stub = tmp_path / "env-stub.py"
+    env_stub.write_text(
+        "import json, os, sys\n"
+        "print(json.dumps({k: os.environ.get(k) for k in"
+        " ('GOV_CHANGE_PATHS', 'GOV_CHANGE_ROOT')}))\n",
+        encoding="utf-8")
+    _write(
+        tmp_path,
+        {"gates": [
+            {"id": "py-gate", "command": [sys.executable, str(env_stub)],
+             "paths": ["src/**/*.py"]},
+            {"id": "js-gate", "command": PASS, "paths": ["web/**/*.js"]},
+            {"id": "unpathed", "command": PASS},
+        ]},
+    )
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "web").mkdir()
+    (tmp_path / "web" / "b.js").write_text("let x;\n", encoding="utf-8")
+    assert gates.main(["--only-paths", "src/**/*.py"]) == 0
+    out = capsys.readouterr().out
+    assert "scope --only-paths: 1/" in out and "changed file(s)" in out
+    assert "PASS unpathed" in out
+    assert "PASS js-gate" not in out
+    # the gate's own stdout IS the env payload (the stub prints one JSON
+    # object naming the two declared-scope variables)
+    env_line = [ln for ln in out.splitlines() if ln.startswith('{"GOV')]
+    assert env_line, out
+    env = json.loads(env_line[-1])
+    assert env["GOV_CHANGE_PATHS"] == "src/**/*.py"
+    assert env["GOV_CHANGE_ROOT"] == str(tmp_path.resolve())
+
+
+def test_main_only_paths_matching_nothing_is_a_named_refusal(
+        tmp_path, capsys, monkeypatch):
+    """Rule 5: a scoped run that would judge nothing is a caller typo,
+    not a green zero."""
+    monkeypatch.chdir(tmp_path)
+    _git_repo(tmp_path)
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS,
+                                 "paths": ["src/**"]}]})
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("x\n", encoding="utf-8")
+    assert gates.main(["--only-paths", "web/**/*.js"]) == 2
+    err = capsys.readouterr().err
+    assert "none of the " in err and "changed file(s) match" in err
+
+
+def test_main_full_gate_output_lands_in_last_run(tmp_path, capsys, monkeypatch):
+    """#375: one run yields all the evidence — a failing gate's full
+    output is captured in .gov/last-run/<gate>.log and the failure line
+    names it, so reading a failure never costs a re-run."""
+    monkeypatch.chdir(tmp_path)
+    long_fail = [sys.executable, "-c",
+                 "print('line %d' % i for i in ()) ; "
+                 "import sys; sys.stderr.write(''.join(f'l{i}\\n' for i in"
+                 " range(40)) ); raise SystemExit(1)"]
+    _write(tmp_path, {"gates": [{"id": "noisy", "command": long_fail}]})
+    assert gates.main([]) == 1
+    log = tmp_path / ".gov" / "last-run" / "noisy.log"
+    assert log.is_file()
+    body = log.read_text(encoding="utf-8")
+    assert "l0" in body and "l39" in body      # the FULL output, not a tail
+    assert "full output:" in capsys.readouterr().out
+    # the next run clears what it did not write
+    (tmp_path / ".gov" / "last-run" / "ghost.log").write_text(
+        "stale\n", encoding="utf-8")
+    _write(tmp_path, {"gates": [{"id": "ok", "command": PASS}]})
+    assert gates.main([]) == 0
+    assert not (tmp_path / ".gov" / "last-run" / "ghost.log").exists()
+
+
 def test_main_gate_flag_runs_one(tmp_path, capsys, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write(
@@ -287,8 +366,10 @@ def test_failure_summary_names_gate_and_rerun(capsys):
     out = capsys.readouterr().out
     assert "--- summary: 1 blocking failure(s) ---" in out
     assert "boom: boom" in out
-    # #109: the failure line itself carries the per-gate rerun command.
-    assert "boom: boom (rerun: gov run --gate boom)" in out
+    # #109: the failure line itself carries the per-gate rerun command;
+    # #375: it names where the full captured output landed.
+    assert "boom: boom (rerun: gov run --gate boom; " \
+           "full output: .gov/last-run/boom.log)" in out
 
 
 def test_failed_gate_output_is_failure_first_uncapped(capsys):

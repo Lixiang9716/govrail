@@ -875,11 +875,31 @@ def run_gates(
                     break
                 settle(g.id)
 
+    # #375: one run yields all the evidence — every gate's FULL output
+    # lands in .gov/last-run/<gate>.log (cleared per run, gitignored),
+    # so a truncated report view or a scrolled terminal never forces a
+    # re-run just to read a failure.
+    last_run_dir = Path(".gov") / "last-run"
+    try:
+        last_run_dir.mkdir(parents=True, exist_ok=True)
+        for stale in last_run_dir.glob("*.log"):
+            if stale.stem not in outcomes:
+                stale.unlink()
+        for gid, detail in details.items():
+            if detail:
+                (last_run_dir / f"{gid}.log").write_text(
+                    detail + ("\n" if not detail.endswith("\n") else ""),
+                    encoding="utf-8")
+    except OSError as e:
+        print(f"gov run: cannot write .gov/last-run/ evidence: {e}",
+              file=sys.stderr)
+
     failed = [gid for gid in outcomes if blocking.get(gid, False)]
     # A failing gate's evidence prints ONCE, in the body, under an
     # outcome-specific header (#317: the old summary reprinted the tail a
     # second time — long output read double). The summary keeps only the
-    # one-line pointer with the rerun command.
+    # one-line pointer with the rerun command — and, since #375, the
+    # path of the full captured output.
     outcome_marks = {"FAIL": "failed", "TIMEOUT": "timed out",
                      "MISSING": "command missing"}
     for gid, outcome in outcomes.items():
@@ -908,7 +928,8 @@ def run_gates(
         emit(f"--- output of {gid} (passed with output) ---")
         emit("\n".join(shown))
         if omitted > 0:
-            emit(f"... ({omitted} earlier line(s) not shown)")
+            emit(f"... ({omitted} earlier line(s) not shown; full output: "
+                 f"{(last_run_dir / (gid + '.log')).as_posix()})")
 
     if failed:
         emit(f"--- summary: {len(failed)} blocking failure(s) ---")
@@ -923,7 +944,8 @@ def run_gates(
             # gate's own output printed once in the body above (#317);
             # the summary stays a pointer, not a reprint.
             line = f"{gid}: {first}" if first else f"{gid}:"
-            emit(f"{line} (rerun: gov run --gate {gid})")
+            emit(f"{line} (rerun: gov run --gate {gid}; full output: "
+                 f"{(last_run_dir / (gid + '.log')).as_posix()})")
 
     counts = {o: sum(1 for v in outcomes.values() if v == o) for o in OUTCOME_ORDER}
     parts = [f"{n} {o.lower()}" for o, n in counts.items() if n]
@@ -1192,6 +1214,14 @@ def main(argv: list[str] | None = None) -> int:
                              "with --merge: the integration target baseline instead "
                              "(default origin/master)")
     parser.add_argument("--gate", default=None, help="run a single gate by id")
+    parser.add_argument("--only-paths", default=None, metavar="GLOB,...",
+                        help="judge only what these globs carry (#374): the "
+                             "changed-file set is intersected with the list "
+                             "and path-scoped gates select against THAT — a "
+                             "multi-worker checkout scopes a run to one "
+                             "worker's paths; the union is still verified at "
+                             "push. The declared set is exported to the gates "
+                             "as GOV_CHANGE_PATHS (root-guarded)")
     parser.add_argument("--every-gate", action="store_true",
                         help="run every enabled gate — the full matrix, ignoring "
                              "modes and defaultMode (CI owns this)")
@@ -1312,7 +1342,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     explicit = [flag for flag, on in (("--gate", args.gate), ("--mode", args.mode),
-                                      ("--base", args.base), ("--every-gate", args.every_gate)) if on]
+                                      ("--base", args.base), ("--every-gate", args.every_gate),
+                                      ("--only-paths", args.only_paths)) if on]
     if len(explicit) > 1:
         print(f"gov run: {' and '.join(explicit)} cannot be combined", file=sys.stderr)
         return 2
@@ -1362,6 +1393,48 @@ def main(argv: list[str] | None = None) -> int:
         scope_line = (
             f"scope vs {args.base}: {len(selection)}/{len([g for g in gates if g.enabled])} "
             f"gate(s) selected" + (f"; out of scope: {', '.join(scoped_out_ids)}" if scoped_out_ids else "")
+        )
+        if args.json:  # stdout carries exactly one JSON value (D26)
+            print(scope_line, file=sys.stderr, flush=True)
+        else:
+            print(scope_line, flush=True)
+    elif args.only_paths:
+        # #374: the changed set (the auto cascade — working tree when
+        # dirty, the unpushed range when clean) is intersected with the
+        # declared globs, and path-scoped gates select against THAT.
+        # Unpathed gates still run: they judge the repository, not a
+        # file set. A declared intersection that keeps NOTHING is a
+        # caller typo, not a green zero (rule 5).
+        globs = [g.strip() for g in args.only_paths.split(",") if g.strip()]
+        if not globs:
+            print("gov run: --only-paths: empty glob list", file=sys.stderr)
+            return 2
+        changed_all = _changed_files("HEAD")
+        if changed_all is None:
+            return 2
+        from .pathmatch import glob_to_regex
+        kept = []
+        for f in changed_all:
+            parts = f.replace("\\", "/").split("/")
+            for g in globs:
+                rx = glob_to_regex(g)
+                if rx.match(f) or ("/" not in g and rx.match(parts[-1])):
+                    kept.append(f)
+                    break
+        if not kept:
+            print(f"gov run: --only-paths {args.only_paths!r}: none of the "
+                  f"{len(changed_all)} changed file(s) match — a scoped run "
+                  "that would judge nothing is a typo, not a pass "
+                  "(rule 5)", file=sys.stderr)
+            return 2
+        selection, scoped_out_ids = _select_by_paths(gates, kept)
+        selected_by = f"only-paths:{len(kept)}-file(s)"
+        os.environ["GOV_CHANGE_PATHS"] = ",".join(globs)
+        os.environ["GOV_CHANGE_ROOT"] = str(Path.cwd().resolve())
+        scope_line = (
+            f"scope --only-paths: {len(kept)}/{len(changed_all)} changed "
+            f"file(s) in {', '.join(globs)}; {len(selection)} gate(s) "
+            "selected (unpathed gates judge the repository)"
         )
         if args.json:  # stdout carries exactly one JSON value (D26)
             print(scope_line, file=sys.stderr, flush=True)

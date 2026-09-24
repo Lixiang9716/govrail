@@ -174,7 +174,19 @@ def _is_exempt(path: str, globs: list[str]) -> bool:
 
 def _changed_files(base: str) -> tuple[list[str], str | None]:
     """Tracked diff plus untracked files against ``base``; error message."""
-    return gitutil.changed_files(base)
+    files, error = gitutil.changed_files(base)
+    if error is not None:
+        return files, error
+    # #374: a scoped run judges only its declared paths — a worker's
+    # gate must not go red on a file another worker has in flight (the
+    # union is still verified at push). Imported here, not at module
+    # level: change_scope's own module imports reach back into this
+    # family, and a top-level import back would close a cycle.
+    try:
+        from .change_scope import restrict_to_declared_paths
+    except ImportError:  # direct-script execution (self-test runs files by path)
+        from change_scope import restrict_to_declared_paths
+    return restrict_to_declared_paths(files), None
 
 
 def _resolve_auto_base() -> tuple[str, str]:

@@ -183,3 +183,55 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def _scope_root_matches() -> bool:
+    """Is GOV_CHANGE_ROOT absent, or does it name THIS repository?"""
+    import os
+    from pathlib import Path as _P
+    root = os.environ.get("GOV_CHANGE_ROOT", "").strip()
+    if not root:
+        return True
+    proc = gitutil.git("rev-parse", "--show-toplevel")
+    here = proc.stdout.strip() if proc.returncode == 0 else ""
+    try:
+        return bool(here) and (
+            _P(here).resolve().as_posix() == _P(root).resolve().as_posix())
+    except OSError:
+        return False
+
+
+def declared_paths() -> list[str] | None:
+    """The run's declared path set (#374): ``GOV_CHANGE_PATHS``, the
+    comma-separated globs a scoped run judges — the machine-readable
+    answer to "judge only MY lease's paths". Root-guarded like the
+    declared base (#363): a scope is valid in the repository that
+    declared it, and a subprocess's scratch repo must not inherit it."""
+    import os
+    raw = os.environ.get("GOV_CHANGE_PATHS", "").strip()
+    if not raw:
+        return None
+    if not _scope_root_matches():
+        return None
+    return [g.strip() for g in raw.split(",") if g.strip()]
+
+
+def restrict_to_declared_paths(files: list[str]) -> list[str]:
+    """Intersect a changed-file listing with ``GOV_CHANGE_PATHS``.
+
+    A no-op when no scope is declared. Globs use the plane's one glob
+    grammar (pathmatch): ``**`` spans directories, a slash-less glob
+    matches a basename — the same rule the language packs match by.
+    """
+    paths = declared_paths()
+    if paths is None or not files:
+        return files
+    kept = []
+    for f in files:
+        parts = f.replace("\\", "/").split("/")
+        for g in paths:
+            rx = _glob_regex(g)
+            if rx.match(f) or ("/" not in g and rx.match(parts[-1])):
+                kept.append(f)
+                break
+    return kept
