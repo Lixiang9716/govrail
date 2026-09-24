@@ -164,8 +164,9 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   it; the ledger counts recurrences per signature and the `surprises`
   gate escalates the third into a process note. Not for ordinary bugs —
   for the moment reality disagrees with your model of it.
-- `gov surprise list` — counts per signature; the "have I seen this
-  before?" lookup before recording.
+- `gov surprise list [WORD...]` — counts per signature; the "have I seen
+  this before?" lookup; keywords grep verbatim, zero matches said out
+  loud.
 - `gov decision next/add/verify` — the D-number registry behind
   docs/decisions.md: `next` finds the free number, `add` lands a row
   atomically and validated, `verify` guards the table structure. A
