@@ -193,8 +193,23 @@ def _cmd_record(args: argparse.Namespace) -> int:
 
 def _cmd_list(args: argparse.Namespace) -> int:
     entries = _load(Path.cwd())
+    filters = bool(args.sig) or bool(args.keywords)
     if args.sig:
         entries = [e for e in entries if e["sig"] == args.sig]
+    if args.keywords:
+        # #376: the "have I seen this before?" lookup is keyword-shaped —
+        # the words are grepped verbatim (case-insensitive) over sig,
+        # surface, expectation, and reality, AND over words like `gov
+        # recall`. A keyword query that matches nothing must SAY so: the
+        # unfiltered empty-ledger message would read as "the ledger is
+        # empty" and send the operator re-recording a surprise that is
+        # already there.
+        words = [w.lower() for w in args.keywords]
+
+        def _hay(e: dict) -> str:
+            return " ".join((e["sig"], e.get("surface") or "",
+                             e["expectation"], e["reality"])).lower()
+        entries = [e for e in entries if all(w in _hay(e) for w in words)]
     if args.json:
         print(json.dumps(
             [{"sig": e["sig"], "ts": e["ts"],
@@ -203,9 +218,16 @@ def _cmd_list(args: argparse.Namespace) -> int:
             ensure_ascii=False, indent=2))
         return 0
     if not entries:
-        print("surprise: no surprises recorded — either the process is "
-              "aligned with reality, or surprises are evaporating "
-              "unrecorded")
+        if filters:
+            parts = ((["--sig " + args.sig] if args.sig else [])
+                     + list(args.keywords))
+            print(f"surprise: no recorded surprise matches "
+                  f"{' '.join(parts)} — the words are searched verbatim "
+                  "across signature, surface, expectation, and reality")
+        else:
+            print("surprise: no surprises recorded — either the process is "
+                  "aligned with reality, or surprises are evaporating "
+                  "unrecorded")
         return 0
     counts = _counts(entries)
     for sig in sorted(counts, key=lambda s: (-counts[s], s)):
@@ -241,7 +263,13 @@ def main(argv: list[str] | None = None) -> int:
                           help="where it happened: a path, gate id, or "
                                "command")
     p_list = sub.add_parser(
-        "list", help="count surprises per signature")
+        "list", help="count surprises per signature; keyword arguments "
+                     "grep the entries verbatim")
+    p_list.add_argument("keywords", nargs="*", metavar="WORD",
+                        help="only entries whose signature, surface, "
+                             "expectation, or reality contain ALL of these "
+                             "words (verbatim, case-insensitive); zero "
+                             "matches are said out loud")
     p_list.add_argument("--sig", help="only this signature")
     p_list.add_argument("--json", action="store_true",
                         help="exactly one machine-readable JSON value")
