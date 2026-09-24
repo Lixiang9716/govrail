@@ -3,15 +3,20 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
-## 0.49.0 — (draft: copied from CHANGELOG, rewrite for usage)
+## 0.50.0 —
 
-- a scoped run judges one worker's paths; every run leaves full evidence
-- surprise list answers keyword lookups over the full entry
-- parse facts are single-visit and named; ArkTS joins the language set
-- task mutating commands echo which card moved; --slug asserts it
-- the new-branch push scope declares its root; self-test is immune to an ambient scope
-- update --apply re-wires the drifted hook from the template; init --hooks stops implying claude
-- verify pairing --write resolves a bare stem against the include scope and names the roots it tried
+- **note:** `gov note verify <file>...` lints exactly the notes you name — the authoring loop's fast feedback; no names still means the repo-wide gate
+- **task:** `gov task close <id> <id>...` runs the gate DAG once and closes every card against the SAME receipt — landing N cards no longer costs N full-DAG runs
+
+## 0.49.0 —
+
+- **run:** `--only-paths g1,g2` judges one worker's paths in a shared checkout (unpathed gates still judge the repository); every run leaves each gate's full output in `.gov/last-run/<gate>.log` — reading a failure never costs a re-run
+- **surprise:** `gov surprise list <word>...` greps the entries verbatim — the have-I-seen-this-before lookup by keyword, zero matches said out loud
+- **parse:** facts are single-visit (counts match the declarations; spans once each) and the table renders values; ArkTS (`.ets`) joins the language set
+- **task:** mutating commands echo WHICH card file moved (`ticked T-x (T-x-slug)`); `--slug <stem>` asserts the card you meant before any mutation
+- **pre-push:** the new-branch scope declares its root, so self-test's scratch repositories are immune to an ambient push scope — first pushes of new branches stop dying
+- **update:** `--apply` re-wires the drifted hook from this version's template (both copies end on the same bytes); `init --hooks` no longer implies the claude platform config
+- **pairing:** `--write <stem>` resolves a bare stem against the include scope from any subdirectory, and a failed resolution names where it looked
 
 ## 0.48.0 — (draft: copied from CHANGELOG, rewrite for usage)
 
