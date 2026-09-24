@@ -204,18 +204,22 @@ def test_new_branch_scopes_to_the_fork_point(hooked):
 
 
 def test_push_scope_is_exported_to_the_gates(hooked, monkeypatch, tmp_path):
-    """The hook declares the push's scope in GOV_CHANGE_BASE so
-    change-scoped TOOLS can honor it (#363) — a project gate reading the
-    env judges the push range instead of the working tree."""
+    """The hook declares the push's scope in GOV_CHANGE_BASE — with its
+    ROOT, on every branch that sets it (#371) — so change-scoped TOOLS
+    can honor it (#363): a project gate reading the env judges the push
+    range instead of the working tree, and a scratch repository the gate
+    spawns knows the scope is not its own."""
     tmp_path, log, checkout, fork, tip = _hooked_with_origin(hooked)
     stub = tmp_path / "gov-env-stub.sh"
     stub.write_text(
         "#!/bin/sh\n"
-        'echo "GOV_CHANGE_BASE=${GOV_CHANGE_BASE:-unset} $@" >> '
+        'echo "GOV_CHANGE_BASE=${GOV_CHANGE_BASE:-unset} '
+        'ROOT=${GOV_CHANGE_ROOT:-unset} $@" >> '
         f"{log}\n", encoding="utf-8")
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
     monkeypatch.setenv("GOV_BIN", str(stub))
     r = _push((tmp_path, log, checkout),
               [f"{checkout} {tip} refs/heads/feature {ZERO}"])
     assert r.returncode == 0, r.stderr
-    assert _calls(log) == [f"GOV_CHANGE_BASE={fork} run --base {fork}"]
+    assert _calls(log) == [f"GOV_CHANGE_BASE={fork} ROOT={tmp_path} "
+                           f"run --base {fork}"]

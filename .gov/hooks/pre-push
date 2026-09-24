@@ -114,7 +114,8 @@ if [ "$full" = 1 ] && [ "$bases" = 0 ] && [ "$updates" = 1 ] \
     done
     if [ -n "$fork" ]; then
         echo "pre-push: new branch — scoping to the fork point $fork" >&2
-        GOV_CHANGE_BASE="$fork"             gov_cmd run --base "$fork"
+        GOV_CHANGE_BASE="$fork" GOV_CHANGE_ROOT="$repo_root" \
+            gov_cmd run --base "$fork"
     else
         echo "pre-push: new branch with no shared ancestor (no @{upstream}, \
 no origin/HEAD) — running the full matrix" >&2

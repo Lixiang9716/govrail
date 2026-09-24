@@ -71,6 +71,11 @@ def _case_env() -> dict:
     do when run by hand.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    # The push's declared change scope (#363/#371) is valid in ONE
+    # repository: GOV_CHANGE_BASE/ROOT inherited from a pre-push hook
+    # would judge every scratch repo against a ref it never had, so the
+    # pair goes the way of GIT_* here — structural, not per-hook-branch.
+    env = {k: v for k, v in env.items() if not k.startswith("GOV_CHANGE_")}
     # Children speak UTF-8 regardless of the platform locale (#168): the
     # harness decodes their output as UTF-8, so both ends agree.
     env["PYTHONIOENCODING"] = "utf-8"
@@ -166,6 +171,7 @@ def _fixture_env(root: Path) -> dict:
        even a surprising cwd cannot walk up into the host.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env = {k: v for k, v in env.items() if not k.startswith("GOV_CHANGE_")}
     env["GIT_CEILING_DIRECTORIES"] = str(root.parent)
     return env
 
@@ -276,7 +282,8 @@ def _clean_replay_env(stage: Path) -> dict:
     process re-establishes the git ceiling wall itself via ``main()``.
     """
     env = {k: v for k, v in os.environ.items()
-           if not k.startswith("GIT_") and not k.startswith("PYTHON")}
+           if not k.startswith("GIT_") and not k.startswith("PYTHON")
+           and not k.startswith("GOV_CHANGE_")}
     env["PYTHONNOUSERSITE"] = "1"
     env["PYTHONPATH"] = str(stage)
     return env
