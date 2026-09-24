@@ -197,20 +197,43 @@ def _check_placement(root: Path) -> tuple[list[str], list[Path]]:
 def main(argv: list[str] | None = None) -> int:
     anchor_to_git_root("verify_notes")
     argv = list(sys.argv[1:]) if argv is None else argv
-    if argv:
-        # This command is flagless. It used to ignore argv entirely and
+    flags = [a for a in argv if a.startswith("-")]
+    if flags:
+        # This command takes no FLAGS. It used to ignore argv entirely and
         # answer a mistyped invocation with a GREEN verdict — 31 of 32
         # commands refuse unknown flags with exit 2; this was the one
-        # that did not (found by the exit-code contract's probe).
-        print(f"verify_notes: unexpected argument '{argv[0]}' — this "
+        # that did not (found by the exit-code contract's probe). Paths,
+        # though, are accepted since #386: naming notes verifies exactly
+        # those (the authoring loop's fast feedback), no names = the
+        # repo-wide gate, unchanged.
+        print(f"verify_notes: unexpected argument '{flags[0]}' — this "
               "command takes no flags", file=sys.stderr)
         return 2
     notes_root = NOTES_DIR / "implemented"
-    notes = ([p for p in sorted(notes_root.rglob("*"))
-              if p.is_file() and p.suffix.lower() == ".md"]
-             if notes_root.exists() else [])
+    scoped: list[Path] = [Path(a) for a in argv]
+    for p in scoped:
+        if not p.is_file():
+            print(f"verify_notes: no such note file: {p}", file=sys.stderr)
+            return 2
+    if scoped:
+        # #386: single-note authoring loop — the same per-note judgment
+        # (format, sections, thin-section advisories, superseded pointer),
+        # scoped to the named files. Placement stays a repo-wide concern:
+        # a note mid-move is exactly when this form is used, and a
+        # placement verdict here would judge the workflow, not the file.
+        notes = scoped
+        loose: list[Path] = []
+        errors: list[str] = []
+    else:
+        notes = ([p for p in sorted(notes_root.rglob("*"))
+                  if p.is_file() and p.suffix.lower() == ".md"]
+                 if notes_root.exists() else [])
+        errors = []
+        loose = []
     try:
-        errors, loose = _check_placement(NOTES_DIR)
+        if not scoped:
+            placement_errors, loose = _check_placement(NOTES_DIR)
+            errors.extend(placement_errors)
         # Loose root notes get the format check too — placement is wrong,
         # but the content is still a note and still has to answer for it.
         for note in notes + loose:

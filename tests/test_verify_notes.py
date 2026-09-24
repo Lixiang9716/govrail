@@ -54,6 +54,41 @@ def test_bom_prefixed_note_passes(tmp_path, monkeypatch):
 GARBAGE = "not a note at all\n"
 
 
+def test_scoped_verify_names_verify_exactly_those_notes(tmp_path, monkeypatch,
+                                                        capsys):
+    """#386: the authoring loop's fast feedback — `gov note verify
+    <path>...` judges exactly the named files, so a second bad note
+    elsewhere on disk stays out of the report; with no paths the
+    repo-wide gate is unchanged."""
+    bad = tmp_path / "mine.md"
+    bad.write_text(VALID.replace("## Alternatives considered\na\n", ""),
+                   encoding="utf-8")
+    other = tmp_path / ".agents/notes/implemented/bug-fix"
+    other.mkdir(parents=True)
+    (other / "2026-01-01-bad.md").write_text(GARBAGE, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert verify_notes.main([str(bad)]) == 1
+    out = capsys.readouterr().out
+    assert "mine.md" in out and "Alternatives considered" in out
+    assert "2026-01-01-bad.md" not in out
+    assert "1 violation(s) in 1 note(s)" in out
+    capsys.readouterr()
+    good = tmp_path / "good.md"
+    good.write_text(VALID, encoding="utf-8")
+    assert verify_notes.main([str(good), str(bad)]) == 1
+    out2 = capsys.readouterr().out
+    # good.md passes clean, so it appears only in the note COUNT
+    assert "1 violation(s) in 2 note(s)" in out2
+    capsys.readouterr()
+    assert verify_notes.main([str(good)]) == 0
+    assert "1 note(s) ok" in capsys.readouterr().out
+
+
+def test_scoped_verify_refuses_a_missing_path(tmp_path, capsys):
+    assert verify_notes.main([str(tmp_path / "ghost.md")]) == 2
+    assert "no such note file" in capsys.readouterr().err
+
+
 def test_uppercase_extension_note_is_checked_in_class_dir(tmp_path, monkeypatch, capsys):
     """H-7: BYPASS.MD under implemented/<class>/ is a note whatever the
     extension's case — garbage content must fail the gate, not buy a
