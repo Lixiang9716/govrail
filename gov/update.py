@@ -74,16 +74,21 @@ def _gitignore_history(root: Path) -> bool:
         print("gov update: .gitignore is a symlink — add '.gov/history/' "
               "to the file it points at yourself", file=sys.stderr)
         return False
-    line = ".gov/history/"
+    lines = [".gov/history/", ".gov/last-run/"]
     if gi.exists():
         raw = gi.read_bytes()
-        if line in raw.decode("utf-8-sig", errors="replace").splitlines():
+        have = raw.decode("utf-8-sig", errors="replace").splitlines()
+        missing = [ln for ln in lines if ln not in have]
+        if not missing:
             return True
         sep = b"" if (not raw or raw.endswith(b"\n")) else b"\n"
-        atomicio.write_bytes(gi, raw + sep + line.encode("utf-8") + b"\n",
-                             root=root)
+        atomicio.write_bytes(
+            gi, raw + sep
+            + b"\n".join(ln.encode("utf-8") for ln in missing) + b"\n",
+            root=root)
         return True
-    atomicio.write_bytes(gi, line.encode("utf-8") + b"\n", root=root)
+    atomicio.write_bytes(
+        gi, b"".join(ln.encode("utf-8") + b"\n" for ln in lines), root=root)
     return True
 
 

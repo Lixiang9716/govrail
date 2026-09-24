@@ -15,3 +15,4 @@ docs/.decision.lock
 
 # docker e2e per-cell bake stamps (host-local image state)
 tests/docker_e2e/.stamp-*
+.gov/last-run/

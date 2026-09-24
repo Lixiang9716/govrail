@@ -626,14 +626,14 @@ def test_init_gitignore_edges_survive(tmp_path):
     (crlf / ".gitignore").write_bytes(b"node_modules/\r\n*.pyc\r\n")
     assert plane.init(crlf) == 0
     assert ((crlf / ".gitignore").read_bytes()
-            == b"node_modules/\r\n*.pyc\r\n.gov/history/\n"
+            == b"node_modules/\r\n*.pyc\r\n.gov/history/\n.gov/last-run/\n"
                b".gov/tasks/.new.lock\ndocs/.decision.lock\n")
     empty = tmp_path / "empty"
     empty.mkdir()
     (empty / ".gitignore").write_bytes(b"")
     assert plane.init(empty) == 0
     assert (empty / ".gitignore").read_bytes() \
-            == b".gov/history/\n.gov/tasks/.new.lock\ndocs/.decision.lock\n"
+            == b".gov/history/\n.gov/last-run/\n.gov/tasks/.new.lock\ndocs/.decision.lock\n"
 
 
 def test_uninstall_removes_gov_hooks_at_resolved_path(tmp_path):
