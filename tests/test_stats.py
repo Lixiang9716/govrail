@@ -478,6 +478,13 @@ class TestPackIntegrity:
 # grammar parses them at all.
 SNIPPETS: dict[str, tuple[str, str, int]] = {
     "ada": ("hello.adb", "procedure Hello is\nbegin\n   null;\nend Hello;\n", 1),
+    # #377: ArkTS (.ets) rides the TypeScript grammar — a host tree cannot
+    # grow an ungated language. The third span is the grammar's anonymous
+    # `function` keyword child, the same kind the typescript pack carries.
+    "arkts": ("m.ets",
+              "class Svc {\n  start(): void {\n    if (true) { }\n  }\n}\n"
+              "function boot(n: number): number {\n  return 1;\n}\n",
+              3),
     "bash": ("greet.sh", "greet() {\n  echo hi\n}\n", 1),
     "c": ("m.c", "int f(void) { if (1) { return 1; } return 0; }\n", 1),
     "c-sharp": ("C.cs", "class C {\n  void M() { if (true) { } }\n}\n", 1),
@@ -553,6 +560,34 @@ class TestEveryPackParsesItsLanguage:
             assert found >= want_funcs, (
                 f"{lang}: the pack's function kinds found nothing in "
                 f"ordinary code ({sorted(pack.functions)})")
+
+
+def test_swift_spans_single_visit_and_named(tmp_path, capsys):
+    """#372: a closure inside a function used to be visited twice — its
+    span reported twice (a size gate filed the same violation under two
+    start lines) and the count inflated past the declarations; and the
+    human table unpacked the span dicts' four KEYS, printing the column
+    names where the values belong."""
+    from gov import parse as parse_layer
+    from gov.stats import _walk_metrics
+    (tmp_path / "X.swift").write_text(
+        "final class C {\n"
+        "    func a() { if true { let f = { () -> Void in }; f() } }\n"
+        "    func b() {}\n"
+        "}\n", encoding="utf-8")
+    pack = parse_layer.load_pack("swift")
+    src = (tmp_path / "X.swift").read_bytes()
+    parser = parse_layer.load_parser(pack)
+    m = _walk_metrics(src, parser.parse(src).root_node, pack)
+    assert m.functions == 3, m.function_spans   # a, b, and the closure — once each
+    names = [n for n, *_ in m.function_spans]
+    assert names.count("a") == 1 and names.count("b") == 1
+    assert len({tuple(s) for s in m.function_spans}) == len(m.function_spans)
+    assert stats.parse_main([str(tmp_path / "X.swift")]) == 0
+    out = capsys.readouterr().out
+    assert "name  start-end" not in out, "column names are not values"
+    assert "a  2-2  depth 1" in out
+    assert "b  3-3  depth 0" in out
 
 
 def _all_nodes(root):
