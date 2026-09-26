@@ -85,7 +85,9 @@ def test_mixed_push_deletion_does_not_pollute_the_base(hooked):
         f"(delete) {ZERO} refs/heads/side {SHA}2",
     ])
     assert r.returncode == 0, r.stderr
-    assert _calls(log) == [f"run --base {SHA}"]
+    assert _calls(log) == [f"run --base {SHA}"], (
+        f"stderr={r.stderr!r} hook-tail="
+        f"{(tmp_path / '.git' / 'hooks' / 'pre-push').read_text()[-300:]!r}")
 
 
 def test_pushing_a_non_checked_out_branch_forces_full(hooked):
@@ -201,6 +203,27 @@ def test_new_branch_scopes_to_the_fork_point(hooked):
     assert _calls(log) == [f"run --base {fork}"], (
         "a new branch with a fork point must be reviewed against it")
     assert "scoping to the fork point" in r.stderr
+
+
+def test_red_dag_names_the_evidence_and_propagates_the_code(hooked,
+                                                            monkeypatch):
+    """#394: on a red DAG the hook points at the evidence directory (the
+    gate's own run output names the per-gate files), and the hook exits
+    with the run's code — gov_cmd no longer execs, so the hook can react."""
+    tmp_path, log, checkout = hooked
+    stub = tmp_path / "gov-red-stub.sh"
+    stub.write_text("#!/bin/sh\necho \"$@\" >> " + str(log) + "\n"
+                    "echo 'code-size: Traceback (most recent call last): "
+                    "(rerun: gov run --gate code-size)' >&2\nexit 1\n",
+                    encoding="utf-8")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("GOV_BIN", str(stub))
+    r = _push(hooked, [f"{checkout} {SHA} refs/heads/b {ZERO}"])
+    assert r.returncode != 0, "a red DAG must refuse the push"
+    err = r.stderr
+    assert "the gate DAG is red" in err
+    assert ".gov/last-run/" in err and "*.log.prev" in err
+    assert "rerun: gov run --gate code-size" in err  # the run's own hint survives
 
 
 def test_push_scope_is_exported_to_the_gates(hooked, monkeypatch, tmp_path):

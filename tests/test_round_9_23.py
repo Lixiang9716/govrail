@@ -113,7 +113,11 @@ def test_20_self_test_scrubs_hook_environment(tmp_path, monkeypatch, capsys):
 @needs_posix_exec
 def test_22_hook_selects_by_push_range():
     hook = (HERE / "templates" / "pre-push").read_text(encoding="utf-8")
-    assert 'run --base "$base"' in hook
+    # #394: the DAG invocation funnels through run_dag, which reacts to
+    # a red run by naming the evidence directory before exiting with the
+    # run's own code (gov_cmd no longer execs).
+    assert 'run_dag --base "$base"' in hook
+    assert "per-gate evidence" in hook
     assert "unset GIT_DIR" in hook
     # functional: feed push stdin, expect scoped invocation (dry: sh -n ok)
     assert subprocess.run(["sh", "-n", str(HERE / "templates" / "pre-push")]).returncode == 0

@@ -322,12 +322,42 @@ def test_main_full_gate_output_lands_in_last_run(tmp_path, capsys, monkeypatch):
     body = log.read_text(encoding="utf-8")
     assert "l0" in body and "l39" in body      # the FULL output, not a tail
     assert "full output:" in capsys.readouterr().out
-    # the next run clears what it did not write
+    # the next run ROTATES what it does not write (#394: never deletes —
+    # a stale log moves to .log.prev)
     (tmp_path / ".gov" / "last-run" / "ghost.log").write_text(
         "stale\n", encoding="utf-8")
     _write(tmp_path, {"gates": [{"id": "ok", "command": PASS}]})
     assert gates.main([]) == 0
     assert not (tmp_path / ".gov" / "last-run" / "ghost.log").exists()
+    assert (tmp_path / ".gov" / "last-run" / "ghost.log.prev"
+            ).read_text(encoding="utf-8") == "stale\n"
+
+
+def test_failing_evidence_survives_a_passing_rerun(tmp_path, capsys,
+                                                   monkeypatch):
+    """#394/#396: the transient-crash loop — a gate crashes in the DAG,
+    passes standalone seconds later, and the crash body used to be
+    overwritten by the rerun's own output. Rotation keeps one generation:
+    the rerun's .log is current, the crash's scene is .log.prev."""
+    monkeypatch.chdir(tmp_path)
+    fail_cmd = [sys.executable, "-c",
+                "import sys; sys.stderr.write('Traceback (most recent "
+                "call last):\\n  boom frame\\nValueError: dead\\n'); "
+                "raise SystemExit(1)"]
+    _write(tmp_path, {"gates": [{"id": "flaky", "command": fail_cmd}]})
+    assert gates.main([]) == 1
+    crash = (tmp_path / ".gov" / "last-run" / "flaky.log"
+             ).read_text(encoding="utf-8")
+    assert "ValueError: dead" in crash
+    pass_cmd = [sys.executable, "-c",
+                "import sys; print('clean now')"]
+    _write(tmp_path, {"gates": [{"id": "flaky", "command": pass_cmd}]})
+    assert gates.main([]) == 0
+    log = tmp_path / ".gov" / "last-run" / "flaky.log"
+    prev = tmp_path / ".gov" / "last-run" / "flaky.log.prev"
+    assert "clean now" in log.read_text(encoding="utf-8")
+    assert "ValueError: dead" in prev.read_text(encoding="utf-8"), \
+        "the crash scene must survive the passing rerun"
 
 
 def test_main_gate_flag_runs_one(tmp_path, capsys, monkeypatch):

@@ -21,17 +21,35 @@
 # interpreter arguments ("python -m gov"); a path containing spaces is
 # not a supported form.
 gov_cmd() {
+    # Plain invocation, not exec (#394): the hook must be able to react
+    # to a red DAG (it points at the evidence directory) and still exit
+    # with the run's own code.
     if [ -n "$GOV_BIN" ]; then
-        exec $GOV_BIN "$@"
+        $GOV_BIN "$@"
+        return $?
     fi
     if command -v gov >/dev/null 2>&1; then
         GOV_BIN="gov"          # propagate the resolution: gate commands
         export GOV_BIN         # that name `gov` inherit it (#250)
-        exec gov "$@"
+        gov "$@"
+        return $?
     fi
     GOV_BIN="python3 -m gov"
     export GOV_BIN
-    exec python3 -m gov "$@"
+    python3 -m gov "$@"
+}
+
+# Every DAG invocation funnels here (#394): on red, the hook names where
+# the full per-gate evidence lives — a crashing gate's scene (and the
+# generation before it, *.log.prev) survives the diagnostic rerun.
+run_dag() {
+    gov_cmd run "$@"
+    hook_rc=$?
+    if [ "$hook_rc" -ne 0 ]; then
+        echo "pre-push: the gate DAG is red — per-gate evidence: \
+.gov/last-run/<gate>.log (previous generation: *.log.prev)" >&2
+    fi
+    return $hook_rc
 }
 
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH \
@@ -115,11 +133,11 @@ if [ "$full" = 1 ] && [ "$bases" = 0 ] && [ "$updates" = 1 ] \
     if [ -n "$fork" ]; then
         echo "pre-push: new branch — scoping to the fork point $fork" >&2
         GOV_CHANGE_BASE="$fork" GOV_CHANGE_ROOT="$repo_root" \
-            gov_cmd run --base "$fork"
+            run_dag --base "$fork"
     else
         echo "pre-push: new branch with no shared ancestor (no @{upstream}, \
 no origin/HEAD) — running the full matrix" >&2
-        gov_cmd run
+        run_dag
     fi
 elif [ "$full" = 1 ] || [ "$bases" -gt 1 ]; then
     # Several push ranges — or a brand-new branch with nothing to merge
@@ -127,12 +145,12 @@ elif [ "$full" = 1 ] || [ "$bases" -gt 1 ]; then
     # range would let a second branch's diff skip its gates, turning
     # "smallest sufficient set" into an insufficient set. Full matrix:
     # always sufficient.
-    gov_cmd run
+    run_dag
 else
     # GOV_CHANGE_BASE tells change-scoped TOOLS (gov check, a project's
     # own size/logging gates that read it) which range this run is about;
     # without it they fall back to their own cascade, which on a dirty
     # tree means the working tree. See the pre-push-checks skill.
     GOV_CHANGE_BASE="$base" GOV_CHANGE_ROOT="$repo_root" \
-        gov_cmd run --base "$base"
+        run_dag --base "$base"
 fi
