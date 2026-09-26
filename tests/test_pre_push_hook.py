@@ -85,7 +85,9 @@ def test_mixed_push_deletion_does_not_pollute_the_base(hooked):
         f"(delete) {ZERO} refs/heads/side {SHA}2",
     ])
     assert r.returncode == 0, r.stderr
-    assert _calls(log) == [f"run --base {SHA}"]
+    assert _calls(log) == [f"run --base {SHA}"], (
+        f"stderr={r.stderr!r} hook-tail="
+        f"{(tmp_path / '.git' / 'hooks' / 'pre-push').read_text()[-300:]!r}")
 
 
 def test_pushing_a_non_checked_out_branch_forces_full(hooked):
