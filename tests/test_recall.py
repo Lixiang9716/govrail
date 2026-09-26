@@ -111,6 +111,37 @@ def test_any_ranks_partial_matches(tmp_path, monkeypatch, capsys):
     assert "2/3" in ranked[0]
 
 
+def test_any_tiers_title_hits_above_body_hits(tmp_path, monkeypatch, capsys):
+    """#395: --any keeps the strict-AND contract's ranking (title >
+    heading > body) as its primary key — a title hit surfaces even when
+    a body-only entry matched more terms, and the header says so."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".agents" / "notes" / "implemented" / "feature").mkdir(
+        parents=True)
+    (tmp_path / ".agents" / "notes" / "implemented" / "feature" /
+     "2026-01-01-titled.md").write_text(
+        "# Agent Note: the zephyr gate\n\nStatus: implemented\n\n"
+        "## Problem\nnothing relevant here\n\n"
+        "## Decision\nplain words only\n\n"
+        "## Alternatives considered\nnone\n", encoding="utf-8")
+    (tmp_path / ".agents" / "notes" / "implemented" / "bug-fix").mkdir(
+        parents=True)
+    (tmp_path / ".agents" / "notes" / "implemented" / "bug-fix" /
+     "2026-01-02-body-heavy.md").write_text(
+        "# Agent Note: unrelated title\n\nStatus: implemented\n\n"
+        "## Problem\nzephyr appears here and zephyr again, twice in the "
+        "body\n\n"
+        "## Decision\nmore zephyr mentions still\n\n"
+        "## Alternatives considered\nno zephyr in the title though\n",
+        encoding="utf-8")
+    assert recall.main(["--any", "zephyr", "absent-word"]) == 0
+    out = capsys.readouterr().out
+    ranked = [ln for ln in out.splitlines() if "matched" in ln and " — " in ln]
+    assert "in title" in ranked[0], ranked
+    assert "in body" in ranked[1], ranked
+    assert "title > heading > body" in out
+
+
 def test_any_with_zero_matches_still_fails_loud(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     _memory(tmp_path)
