@@ -74,7 +74,8 @@ def _gitignore_history(root: Path) -> bool:
         print("gov update: .gitignore is a symlink — add '.gov/history/' "
               "to the file it points at yourself", file=sys.stderr)
         return False
-    lines = [".gov/history/", ".gov/last-run/"]
+    lines = [".gov/history/", ".gov/last-run/",
+             ".gov/tasks/.reminders.json"]
     if gi.exists():
         raw = gi.read_bytes()
         have = raw.decode("utf-8-sig", errors="replace").splitlines()

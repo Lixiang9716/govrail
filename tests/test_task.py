@@ -12,6 +12,7 @@ from gov import task
 # Portable gate command (#168): the Unix `true` does not exist on
 # Windows — "a command that exits 0" must not depend on PATH.
 PASS = [sys.executable, "-c", "pass"]
+FAIL = [sys.executable, "-c", "raise SystemExit(1)"]
 
 
 def _project(tmp_path: Path) -> Path:
@@ -226,6 +227,73 @@ def test_claim_leases_open_card_and_announces(tmp_path, monkeypatch, capsys):
     after = json.loads(next(proj.joinpath(".gov/tasks").glob("T-0001-*.json"))
                        .read_text(encoding="utf-8"))
     assert after == before
+
+
+def test_close_refusal_carries_the_run_evidence(tmp_path, monkeypatch,
+                                                capsys):
+    """#395: the not-green refusal names WHICH run it evaluated — THIS
+    close's own, just recorded — and carries the runner's report tail,
+    whose pointers are the diagnosis (a standalone --gate pass measured
+    a different run)."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["boom"]},
+        "gates": [{"id": "boom", "command": FAIL}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="alpha", checklist=["x"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "--mode", "all",
+                      "--timeout", "60"]) == 1
+    err = capsys.readouterr().err
+    assert "THIS close's own gate run" in err
+    assert "(boom)" in err
+    assert "run: --- summary:" in err, "the runner's report tail rides along"
+    assert ".gov/last-run/boom.log" in err
+
+
+def test_uncommitted_reminder_throttles_per_card(tmp_path, monkeypatch,
+                                                 capsys):
+    """#395: ticking a seven-item checklist is seven invocations; six
+    identical warnings read as noise. The reminder fires once per card
+    per window; the window lives in a gitignored sidecar."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="alpha", checklist=["x"])
+    subprocess.run(["git", "init", "-q", "."], cwd=proj, check=True,
+                   capture_output=True)
+    task._uncommitted_reminder(proj / ".gov/tasks/T-0001-alpha.json")
+    assert "uncommitted" in capsys.readouterr().out
+    task._uncommitted_reminder(proj / ".gov/tasks/T-0001-alpha.json")
+    assert "uncommitted" not in capsys.readouterr().out, \
+        "inside the window: silent"
+    # a DIFFERENT card is not throttled by the first card's reminder
+    _open_card(proj, cid="T-0002", slug="beta", checklist=["y"])
+    task._uncommitted_reminder(proj / ".gov/tasks/T-0002-beta.json")
+    assert "uncommitted" in capsys.readouterr().out
+    # outside the window the first card is reminded again
+    sidecar = proj / ".gov" / "tasks" / ".reminders.json"
+    data = json.loads(sidecar.read_text(encoding="utf-8"))
+    data["T-0001-alpha"] -= task.REMINDER_WINDOW_S + 1
+    sidecar.write_text(json.dumps(data), encoding="utf-8")
+    task._uncommitted_reminder(proj / ".gov/tasks/T-0001-alpha.json")
+    assert "uncommitted" in capsys.readouterr().out
+
+
+def test_load_cards_skips_dotfile_sidecars(tmp_path, monkeypatch):
+    """#395: the reminder throttle's sidecar must never read as a card
+    (a malformed card aborts every task command) — dotfiles are plane
+    bookkeeping, not cards."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj)
+    (proj / ".gov" / "tasks" / ".reminders.json").write_text(
+        '{"T-0001-alpha": 1}', encoding="utf-8")
+    cards = task._load_cards()
+    assert [c[0] for c in cards] == ["T-0001"]
 
 
 def test_claim_missing_or_closed_card_exit2(tmp_path, monkeypatch, capsys):

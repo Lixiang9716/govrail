@@ -403,10 +403,13 @@ def main(argv: list[str] | None = None) -> int:
                                e.source, where, e))
         if not scored:
             return _print_miss(entries, terms, args.fuzzy)
-        # Full AND matches first, then more terms beat fewer; ties: where
-        # they hit, then current authority over frozen evidence, then path
-        # (F4).
-        scored.sort(key=lambda s: (-s[0], -s[1], "/archived/" in s[2], s[2]))
+        # #395: --any keeps the strict-AND contract's ranking (title >
+        # heading > body, F4) as the PRIMARY key — the top line should be
+        # the answer, and a title hit buried under body-only matches with
+        # the same or fewer terms reads as a miss. More terms beat fewer
+        # WITHIN the same tier; then current authority over frozen
+        # evidence, then path.
+        scored.sort(key=lambda s: (-s[1], -s[0], "/archived/" in s[2], s[2]))
         for k, _best, source, where, e in scored:
             mark = (f" (superseded by {e.superseded_by})"
                     if e.superseded_by else "")
@@ -419,7 +422,8 @@ def main(argv: list[str] | None = None) -> int:
                 if line:
                     print(f"    {line}")
         print(f"recall: {len(scored)} partial hit(s) for "
-              f"{' '.join(terms)!r} (--any: ranked by terms matched)")
+              f"{' '.join(terms)!r} (--any: ranked by where they hit — "
+              "title > heading > body — then by terms matched)")
         return 0
 
     hits: list[tuple[int, str, str]] = []

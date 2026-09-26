@@ -1933,10 +1933,11 @@ def table_edges(base):
 
 
 def recall_any_multilingual(base):
-    """--any ranks by TERMS MATCHED: an entry containing two of the
-    query terms outranks entries containing one — regardless of where
-    (title beats body within the same term count). Case-insensitive:
-    Hedge matches hedge."""
+    """--any ranks by WHERE it hits first (#395: title > heading >
+    body, the strict-AND contract), then by terms matched within a
+    tier: an entry containing two of the query terms outranks entries
+    containing one in the same tier. Case-insensitive: Hedge matches
+    hedge."""
     p = fresh_project(base)
     gov("init", cwd=p)
     impl = p / ".agents" / "notes" / "implemented" / "bug-fix"
@@ -2080,9 +2081,10 @@ def cost_untagged_multi(base):
 
 
 def recall_any_multiling(base):
-    """--any's rank: TERMS MATCHED first (2/2 body beats 1/2 title),
-    then where (title beats body within a count). A trilingual corpus
-    with crossing terms pins both keys in one printed order."""
+    """--any's rank (#395): WHERE first (a 1/2 TITLE entry outranks a
+    2/2 body entry — the strict-AND contract's title > heading > body),
+    terms matched second within a tier. A corpus with crossing terms
+    pins both keys in one printed order."""
     p = fresh_project(base)
     gov("init", cwd=p)
     impl = p / ".agents" / "notes" / "implemented" / "bug-fix"
@@ -2101,10 +2103,10 @@ def recall_any_multiling(base):
     r = gov("recall", "--any", "hedge", "exposure", cwd=p)
     lines = [ln for ln in r.stdout.splitlines() if " — matched " in ln]
     assert len(lines) == 2, lines
-    # the 2/2 body entry FIRST, the 1/2 title entry second — terms
-    # matched is the PRIMARY key, where-it-hit the tie-break
-    assert "matched 2/2" in lines[0] and "both.md" in lines[0], lines
-    assert "matched 1/2" in lines[1] and "hedge.md" in lines[1], lines
+    # the 1/2 TITLE entry FIRST (the tier is the primary key, #395),
+    # the 2/2 body entry second
+    assert "matched 1/2" in lines[0] and "hedge.md" in lines[0], lines
+    assert "matched 2/2" in lines[1] and "both.md" in lines[1], lines
 
 
 def merge_conflict_cross(base):

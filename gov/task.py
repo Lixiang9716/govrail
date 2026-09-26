@@ -99,6 +99,8 @@ def _load_cards() -> list[tuple[str, Path, dict]]:
         return []
     cards: list[tuple[str, Path, dict]] = []
     for p in sorted(TASKS_DIR.glob("*.json")):
+        if p.name.startswith("."):
+            continue  # plane bookkeeping (locks, #395's reminder throttle)
         m = CARD_RE.match(p.name)
         if not m:
             print(f"task: {p.name}: card filenames must be "
@@ -545,18 +547,42 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+REMINDER_WINDOW_S = 300
+
+
 def _uncommitted_reminder(card_path: Path) -> None:
     """#345: void/close mutate a tracked card file; if that mutation is
     still uncommitted, say so — the void-before-push ritual lands the
     mutation AFTER the last content commit, and a pushed tree carrying a
-    stale card is exactly the silent regression rule 9 exists for."""
+    stale card is exactly the silent regression rule 9 exists for.
+    #395: once per card per REMINDER_WINDOW_S — ticking a seven-item
+    checklist is seven invocations, and six identical warnings read as
+    noise, not evidence (the push-time task gate still judges the real
+    state). The window lives in a gitignored sidecar, keyed by slug."""
     proc = subprocess.run(
         ["git", "status", "--porcelain", "--", str(card_path)],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         env=locks._scrubbed_env())
-    if proc.returncode == 0 and proc.stdout.strip():
-        print("task: card mutation is uncommitted — commit it before "
-              "pushing so the pushed tree carries the exit")
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return
+    ledger = card_path.parent / ".reminders.json"
+    import time as _time
+    now = _time.time()
+    seen: dict = {}
+    try:
+        seen = json.loads(ledger.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        seen = {}
+    last = float(seen.get(card_path.stem, 0))
+    if now - last < REMINDER_WINDOW_S:
+        return
+    seen[card_path.stem] = now
+    try:
+        ledger.write_text(json.dumps(seen), encoding="utf-8")
+    except OSError:
+        pass  # an unwritable throttle must never gate the reminder's truth
+    print("task: card mutation is uncommitted — commit it before "
+          "pushing so the pushed tree carries the exit")
 
 
 def cmd_repin(args: argparse.Namespace) -> int:
@@ -752,6 +778,7 @@ def cmd_close(args: argparse.Namespace) -> int:
         print(f"task: gate run timed out after {args.timeout}s",
               file=sys.stderr)
         return 1
+    run_report = proc.stderr or ""
     try:
         records = json.loads(proc.stdout)
     except json.JSONDecodeError:
@@ -768,9 +795,16 @@ def cmd_close(args: argparse.Namespace) -> int:
     if failed:
         # A card closes only on an all-green run; a red run changes nothing
         # on ANY card of the batch (the run itself is already in
-        # .gov/history/gates.jsonl).
-        print(f"task: refusing to close {len(planned)} card(s) — gate run "
-              f"not green ({', '.join(failed)})", file=sys.stderr)
+        # .gov/history/gates.jsonl). #395: the refusal names WHICH run it
+        # evaluated — THIS close's own, just recorded — and carries the
+        # runner's report tail, whose per-gate evidence pointers are the
+        # diagnosis (a standalone --gate pass measured a different run).
+        print(f"task: refusing to close {len(planned)} card(s) — THIS "
+              f"close's own gate run ({args.mode}, just recorded) was not "
+              f"green ({', '.join(failed)})", file=sys.stderr)
+        tail = [ln for ln in run_report.splitlines() if ln.strip()]
+        for ln in tail[-12:]:
+            print(f"  run: {ln}", file=sys.stderr)
         return 1
     receipt = {
         "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),

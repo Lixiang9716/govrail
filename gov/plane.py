@@ -339,7 +339,8 @@ def init(project: Path, hooks: bool = False, ci: bool = False,
     # decision._ensure_lock_ignored heals older checkouts at the moment
     # the artifact appears).
     ignore_lines = (".gov/history/", ".gov/last-run/",
-                    ".gov/tasks/.new.lock", "docs/.decision.lock")
+                    ".gov/tasks/.new.lock", ".gov/tasks/.reminders.json",
+                    "docs/.decision.lock")
     ignore_line = ".gov/history/"
     if gitignore.is_symlink():
         # N13/N10: a user-managed .gitignore link (stow, dotfiles) must
