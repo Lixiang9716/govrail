@@ -876,17 +876,28 @@ def run_gates(
                 settle(g.id)
 
     # #375: one run yields all the evidence — every gate's FULL output
-    # lands in .gov/last-run/<gate>.log (cleared per run, gitignored),
-    # so a truncated report view or a scrolled terminal never forces a
-    # re-run just to read a failure.
+    # lands in .gov/last-run/<gate>.log (gitignored), so a truncated
+    # report view or a scrolled terminal never forces a re-run just to
+    # read a failure. #394/#396: logs are ROTATED, never deleted — the
+    # generation this run replaces (a stale gate's log, or a failing
+    # gate's scene about to be overwritten by a passing rerun) moves to
+    # <gate>.log.prev, so a transient crash survives the diagnostic
+    # rerun that used to erase it.
     last_run_dir = Path(".gov") / "last-run"
+
+    def _rotate(gid: str) -> None:
+        old = last_run_dir / f"{gid}.log"
+        if old.is_file():
+            old.replace(last_run_dir / f"{gid}.log.prev")
+
     try:
         last_run_dir.mkdir(parents=True, exist_ok=True)
         for stale in last_run_dir.glob("*.log"):
             if stale.stem not in outcomes:
-                stale.unlink()
+                _rotate(stale.stem)
         for gid, detail in details.items():
             if detail:
+                _rotate(gid)
                 (last_run_dir / f"{gid}.log").write_text(
                     detail + ("\n" if not detail.endswith("\n") else ""),
                     encoding="utf-8")
@@ -947,6 +958,11 @@ def run_gates(
             emit(f"{line} (rerun: gov run --gate {gid}; full output: "
                  f"{(last_run_dir / (gid + '.log')).as_posix()})")
 
+    if failed:
+        emit(f"evidence: {last_run_dir.as_posix()}/<gate>.log holds each "
+             "failing gate's full captured output; *.log.prev is the "
+             "previous generation (#394: a transient crash survives the "
+             "rerun)")
     counts = {o: sum(1 for v in outcomes.values() if v == o) for o in OUTCOME_ORDER}
     parts = [f"{n} {o.lower()}" for o, n in counts.items() if n]
     # #355: the count is qualified — a bare `N gates: N pass` is right and
