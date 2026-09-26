@@ -3,6 +3,13 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.51.0 —
+
+- **task:** `gov task new` mints past the upstream's card ids — parallel branches stop colliding on T-numbers (a bumped mint is announced); two live cards sharing an id still refuse ambiguous prefixes naming both files
+- **run/hook:** `.gov/last-run/` rotates instead of deleting (`*.log.prev` is the previous generation) — a transient gate crash survives the diagnostic rerun; a red pre-push names the evidence directory and exits with the run's own code
+- **task:** the not-green close refusal names THIS close's own run and carries the runner's report tail; the uncommitted-card reminder fires once per card per 5 minutes, not once per tick
+- **recall:** `--any` ranks by where it hits first (title > heading > body, the strict-AND contract), then terms matched — the top line is usually the answer
+
 ## 0.50.0 —
 
 - **note:** `gov note verify <file>...` lints exactly the notes you name — the authoring loop's fast feedback; no names still means the repo-wide gate
