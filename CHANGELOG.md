@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.51.0](https://github.com/Lixiang9716/govrail/compare/v0.50.0...v0.51.0) (2026-09-26)
+
+
+### Features
+
+* DX batch — the close refusal names its own run; the reminder throttles; --any keeps the ranking contract ([#400](https://github.com/Lixiang9716/govrail/issues/400)) ([dc60a17](https://github.com/Lixiang9716/govrail/commit/dc60a170fd110eb914723d76e3a4696766b6bbef))
+
+
+### Bug Fixes
+
+* a crashing gate's scene survives the diagnostic rerun ([#399](https://github.com/Lixiang9716/govrail/issues/399)) ([cbf465d](https://github.com/Lixiang9716/govrail/commit/cbf465dff21cc08e43db5cb5e07850022bf33cbc))
+* task new mints past the upstream's card ids ([#393](https://github.com/Lixiang9716/govrail/issues/393)) ([#397](https://github.com/Lixiang9716/govrail/issues/397)) ([036c772](https://github.com/Lixiang9716/govrail/commit/036c772cd2e43feee3226d7344bc045fc42ea89b))
+
 ## [0.50.0](https://github.com/Lixiang9716/govrail/compare/v0.49.0...v0.50.0) (2026-09-24)
 
 
