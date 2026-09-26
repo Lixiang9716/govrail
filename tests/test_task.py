@@ -910,6 +910,71 @@ def test_close_refuses_unticked_items_and_tick_unblocks(tmp_path, monkeypatch,
     assert task.main(["check"]) == 0
 
 
+def test_new_skips_ids_the_upstream_tree_carries(tmp_path, monkeypatch,
+                                                 capsys):
+    """#393: parallel branches mint from the same sequence and the local
+    high-water cannot see a sibling branch's cards until they merge —
+    the upstream's tracked card set extends 'seen', and a minted number
+    the remote already carries is bumped, named."""
+    # the shared upstream: a bare remote whose tree carries T-0001
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(seed)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=seed, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=seed, check=True)
+    cards = seed / ".gov" / "tasks"
+    cards.mkdir(parents=True)
+    card = {"id": "T-0001", "title": "elsewhere", "checklist": [],
+            "status": "open", "receipt": None}
+    (cards / "T-0001-elsewhere.json").write_text(json.dumps(card),
+                                                 encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=seed, check=True)
+    subprocess.run(["git", "commit", "-qm", "upstream card"], cwd=seed,
+                   check=True)
+    remote = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)],
+                   check=True)
+    subprocess.run(["git", "push", "-q", str(remote), "main"], cwd=seed,
+                   check=True)
+    proj = _project(tmp_path)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(proj)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=proj, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=proj, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)],
+                   cwd=proj, check=True)
+    subprocess.run(["git", "fetch", "origin"], cwd=proj, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "symbolic-ref", "refs/remotes/origin/HEAD",
+                    "refs/remotes/origin/main"], cwd=proj, check=True)
+    monkeypatch.chdir(proj)
+    capsys.readouterr()
+    assert task.main(["new", "the colliding brief"]) == 0
+    err = capsys.readouterr().err
+    minted = sorted(p.name for p in (proj / ".gov" / "tasks").glob("T-*.json"))
+    assert not any(name.startswith("T-0001-") and "colliding" in name
+                   for name in minted), minted
+    assert any(name.startswith("T-0002-") and "colliding" in name
+               for name in minted), minted
+    assert "instead of T-0001" in err
+
+
+def test_resolve_ambiguity_names_both_open_cards(tmp_path, monkeypatch,
+                                                 capsys):
+    """#393's step 4, pinned as a regression: two OPEN cards sharing an
+    id prefix (the post-merge shape) must abort naming both FILES —
+    #352's one-open-wins narrowing only applies when the rest are
+    terminal, never when the collision is still live."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0049", slug="web-client", checklist=["a"])
+    _open_card(proj, cid="T-0049", slug="api-surface", checklist=["b"])
+    with pytest.raises(SystemExit):
+        task.main(["tick", "T-0049", "1"])
+    err = capsys.readouterr().err
+    assert "ambiguous" in err
+    assert "T-0049-web-client" in err and "T-0049-api-surface" in err
+
+
 def test_close_batch_one_run_shared_receipt(tmp_path, monkeypatch, capsys):
     """#385: `task close <id> <id>` runs the gate DAG ONCE and closes
     every card against the SAME receipt — closing N landed cards no

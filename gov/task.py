@@ -154,6 +154,28 @@ def _next_id(cards: list[tuple[str, Path, dict]], root: Path | None = None,
     return f"T-{n:04d}"
 
 
+def _upstream_task_ids() -> set[str]:
+    """T-numbers the UPSTREAM tree already carries (#393).
+
+    ``@{upstream}`` then ``origin/HEAD`` — git's own answers, the same
+    chain the pre-push hook uses for fork points; a repository with
+    neither (no remote, or a bare oddity) scans nothing and keeps the
+    local high-water. The listing is names-only: id numbers live in the
+    card FILE names, so no content is fetched.
+    """
+    import re as _re
+    for ref in ("@{upstream}", "origin/HEAD"):
+        proc = subprocess.run(
+            ["git", "ls-tree", "--name-only", ref, ".gov/tasks/"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", env=locks._scrubbed_env())
+        if proc.returncode != 0:
+            continue
+        return {m.group(0) for name in proc.stdout.splitlines()
+                for m in [_re.search(r"T-\d+", Path(name).name)] if m}
+    return set()
+
+
 def _slugify(title: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug[:40] or "task"
@@ -267,7 +289,21 @@ def cmd_new(args: argparse.Namespace) -> int:
     # on a half-written card).
     with lockfile.exclusive(TASKS_DIR / ".new.lock"):
         cards = _load_cards()
-        cid = _next_id(cards, root=Path.cwd())
+        local = _next_id(cards, root=Path.cwd())
+        # #393: parallel branches mint from the same sequence, and the
+        # local high-water cannot see a sibling branch's cards until
+        # they merge — two T-0049 cards landing from two branches made
+        # every prefix invocation ambiguous afterwards. The upstream's
+        # tracked card set extends "seen" across branches: anything the
+        # remote already carries is never minted again.
+        upstream = _upstream_task_ids()
+        cid = _next_id(cards, root=Path.cwd(), history=upstream)
+        if upstream and cid != local:
+            print(f"task: the upstream tree already carries card ids up "
+                  f"to the number this branch minted locally — minted "
+                  f"{cid} instead of {local} (sibling branches share the "
+                  "sequence; gov task list after a fetch re-checks)",
+                  file=sys.stderr)
         card["id"] = cid
         path = TASKS_DIR / f"{cid}-{_slugify(title)}.json"
         atomicio.write_text(path, json.dumps(card, indent=2) + "\n")
