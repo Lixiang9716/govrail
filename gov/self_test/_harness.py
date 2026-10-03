@@ -442,6 +442,14 @@ def _coverage_report(explain: bool = False) -> None:
     if explain and any("(NONE" in l for l in lines) and not undeclared:
         print("  write one: .gov/rejections/case-<gate-id>.sh, shebang on "
               "line 1, '# gate: <id>' within the first five lines")
+        # #416: the 10s budget cannot carry a build-needing proof — the
+        # sanctioned shape is check-then-skip-loudly, stated where the
+        # authoring remedy is read (the README carries the long form).
+        print("  a proof whose vehicle is expensive to produce (a linked "
+             "binary, a fetched fixture) does not build it in the case: "
+             "check for its presence and skip loudly (`echo SKIP ...; "
+             "exit 0`) when absent — the gate itself builds inside its "
+             "own --timeout")
     if stray:
         print(f"note: case names unknown gate(s): {', '.join(stray)}")
 
@@ -450,7 +458,12 @@ GATE_RX = re.compile(r"(?m)^#\s*gate:\s*([a-z][a-z0-9-]*)")
 
 
 def _run_project_case(p: Path) -> tuple[str, bool]:
-    """(report line, ok) — exit 0 means the rejection proof holds."""
+    """(report line, ok) — exit 0 means the rejection proof holds.
+
+    #416: a case whose proof vehicle is absent may skip LOUDLY — a
+    recognized ``SKIP`` marker on the first stdout line is surfaced as
+    its own report line (still exit-0 semantics: a budget-skip is a
+    pass the reader can see, never a silent one)."""
     if not os.access(p, os.X_OK):
         return f"FAIL {p} (not executable — chmod +x it)", False
     try:
@@ -463,10 +476,19 @@ def _run_project_case(p: Path) -> tuple[str, bool]:
     except OSError as e:
         return f"FAIL {p} (cannot execute — missing shebang? {e.strerror})", False
     if proc.returncode == 0:
+        first = next((l for l in (proc.stdout or "").splitlines()
+                      if l.strip()), "")
+        if _SKIP_RX.search(first):
+            return f"SKIP {p} — {first.strip()}", True
         return f"PASS {p}", True
     tail = ((proc.stdout or "") + (proc.stderr or "")).strip().splitlines()
     why = f": {tail[0]}" if tail else ""
     return f"FAIL {p} (exit {proc.returncode}{why})", False
+
+
+# #416: the loud-skip marker — the word SKIP (a case's own voice, upper
+# case, its first output line) anywhere on that line.
+_SKIP_RX = re.compile(r"\bSKIP\b")
 
 
 def _project_cases() -> list[Path]:

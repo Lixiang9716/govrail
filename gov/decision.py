@@ -345,13 +345,13 @@ def _add_locked(args: argparse.Namespace, src, path: Path, fmt: str,
     _atomic_write(target, new_text)
     where = target.name if fmt == "dir" else str(target)
     print(f"decision add: D{n} written ({where}); run "
-          "`gov verify-decisions` before pushing")
+          "`gov decision verify` before pushing")
     if args.base:
         pending = sorted(x for x in (nums - local) if x <= n)
         if pending:
             names = ", ".join(f"D{x}" for x in pending)
             print(f"note: {names} exist only on '{args.base}' — "
-                  "verify-decisions flags the local gap until you "
+                  "`gov decision verify` flags the local gap until you "
                   "rebase onto it")
     return 0
 

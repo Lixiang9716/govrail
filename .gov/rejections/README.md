@@ -20,7 +20,23 @@ this directory is where that proof runs.
   with this same fix printed inline (#167).
 - **Budget**: each case gets 10 seconds — a rejection proof is small by
   nature. A case that overruns is failed as `(timed out after 10s)`; a
-  runaway case must not hold a CI job hostage.
+  runaway case must not hold a CI job hostage. If your proof vehicle is
+  an artifact that is expensive to produce (a linked binary, a fetched
+  fixture), do not build it in the case — check for its presence and
+  **skip loudly** when absent (`echo "SKIP — build/cli absent on this
+  runner; the gate builds and proves on demand" >&2; exit 0`), and let
+  the gate itself perform the build inside its own `--timeout`. A
+  recognized `SKIP` marker on the case's first output line is surfaced
+  as its own report line.
+
+## This directory is part of the constitution
+
+Adding or changing any file here is a **plane change**: the whole
+directory is sealed, so the next `gov run` refuses until the plane is
+re-sealed (`gov verify-plane --write`, which needs an interactive
+terminal, or `--confirm-unattended --reason <authority>` from an agent
+or CI). Write the case, run it once by hand to see it hold, then
+re-seal — in that order, so the seal never blesses an unproven case.
 
 ## Notes
 

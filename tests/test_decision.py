@@ -486,3 +486,21 @@ def test_decision_lock_is_ensure_ignored(tmp_path, monkeypatch):
     assert decision.main(["add", "--from", draft2]) == 0
     lines = (tmp_path / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert lines.count("docs/.decision.lock") == 1
+
+
+def test_add_success_message_names_the_current_verb(tmp_path, monkeypatch,
+                                                    capsys):
+    """#408: the success hint teaches `gov decision verify`, not the
+    deprecated alias — running the named command must not print a
+    deprecation refusal."""
+    monkeypatch.chdir(tmp_path)
+    _git_repo(tmp_path)
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "decisions.md").write_text(SECTIONS_TABLE, encoding="utf-8")
+    draft = _draft(tmp_path, "mine", "- **选项**: a\n- **被否**: b")
+    assert decision.main(["add", "--from", draft]) == 0
+    out = capsys.readouterr().out
+    assert "run `gov decision verify` before pushing" in out
+    assert "verify-decisions" not in out, (
+        "#408: the deprecated alias must not be what the tool teaches")

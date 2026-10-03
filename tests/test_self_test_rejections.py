@@ -305,3 +305,40 @@ def test_single_line_failure_names_no_dump():
     assert ok is False
     assert "plain one-line failure" in line
     assert "full output" not in line
+
+
+@needs_posix_exec
+def test_project_case_skip_marker_is_visible(tmp_path, monkeypatch, capsys):
+    """#416: a case whose proof vehicle is absent may skip LOUDLY — the
+    recognized SKIP marker on the first output line becomes its own
+    report line (exit semantics unchanged: a budget-skip still passes
+    the run, but never silently)."""
+    monkeypatch.chdir(tmp_path)
+    _rejection(tmp_path, "case-skip-absent.sh",
+               '#!/bin/sh\necho "case-skip-absent: SKIP — build/cli absent '
+               'on this runner; the gate builds and proves on demand"\n'
+               "exit 0\n")
+    assert st.main(["--scope", "project"]) == 0
+    out = capsys.readouterr().out
+    assert "SKIP .gov/rejections/case-skip-absent.sh" in out
+    assert "the gate builds and proves on demand" in out
+    assert "all pass (1 skip-loud)" in out
+
+
+@needs_posix_exec
+def test_failure_headline_names_the_failing_item(tmp_path, monkeypatch,
+                                                 capsys):
+    """#409: the failure headline derives from the FAILURE LIST and
+    lands on stderr (the lane the gate runner's summary quotes) — it
+    names the real failing rejection case, never a PASS line that
+    happened to print last."""
+    monkeypatch.chdir(tmp_path)
+    _rejection(tmp_path, "case-broken.sh", "#!/bin/sh\n"
+               'echo "rawfile closure drift: scenario/composer.js" >&2\n'
+               "exit 1\n")
+    assert st.main(["--scope", "project"]) == 1
+    captured = capsys.readouterr()
+    assert captured.err.startswith(
+        "self-test: FAIL .gov/rejections/case-broken.sh"), captured.err
+    assert "rawfile closure drift" in captured.err
+    assert "PASS" not in captured.err, "a passing test is never the headline"

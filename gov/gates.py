@@ -18,13 +18,30 @@ never silently run and reported PASS.
 Selection: ``--mode <name>`` runs that mode's gate list; otherwise the
 top-level ``defaultMode`` runs (when configured); otherwise every enabled
 gate. ``--base <ref>`` instead selects the gates whose ``paths`` globs match
-the diff against that git ref (unpathed gates always run), and ``--gate <id>``
-runs one gate. ``enabled: false`` parks a gate outside every run — reported
+the diff against that git ref (unpathed gates always run), and ``--gate``
+runs the named gate(s) in one traversal (#405). ``--at <ref>`` judges the
+selection against the tree AS OF the ref (#406) — a detached temporary
+worktree carries the run, so gate triage never needs a checkout.
+``enabled: false`` parks a gate outside every run — reported
 as a ``DISABLED`` line, never silently dropped — so "off" stays written down
 in the config instead of deleting the definition. A gate with
 ``allowFailure: true`` reports its failure output tagged ``advisory``
 without affecting the exit code. Blocking failures end with a summary block
-naming each failed gate, its first output line, and how to rerun it alone.
+naming each failed gate, its diagnostic line, and how to rerun it alone
+(#419: a JSON-emitting gate is quoted by its kernel, not `{`; #404: the
+wall time and the #407 environment classification ride the line). Gates a
+failed dependency took down are named in a "skipped, not evaluated" block
+with the reason (#420).
+
+Two gate properties shape HOW a gate runs, not what it judges. ``exclusive:
+true`` runs the gate ALONE (#403/#417): the scheduler drains the pool before
+starting it and admits nothing else until it settles — a self-test whose
+project cases mutate the live tree can never race a sibling's reads, and a
+fresh-clone gate cannot starve a tight-budget sibling's wall clock.
+``requires: ["network"]`` (the known set is closed: rule 5) classifies what
+a red verdict may really mean (#407): the outcome line and the summary tag
+the failure ENV-possible — the machine's connectivity, not the tree — so a
+docs-only diff's red is readable without a PR-body essay.
 
 The runtime is Python 3 plus the tree-sitter parse layer (D54).
 """
@@ -67,6 +84,10 @@ OUTCOME_ORDER = ("FAIL", "TIMEOUT", "MISSING", "SKIP", "PASS")
 # judgment, #323). SKIP is deliberately absent — a dependency failed,
 # so evidence is genuinely missing.
 NON_RUN_OUTCOMES = ("SCOPED_OUT", "NOT_SELECTED", "NOT_RUN", "DISABLED")
+# #407: the environment vocabulary a gate may declare in `requires`.
+# Closed on purpose (rule 5): a typo like "netwrok" must abort, not
+# silently classify nothing.
+KNOWN_REQUIRES = frozenset({"network"})
 
 def _glob_regex(pattern: str) -> re.Pattern[str]:
     """Compile a path glob under the plane's one grammar (pathmatch).
@@ -246,6 +267,16 @@ class Gate:
     allow_failure: bool = False
     enabled: bool = True
     paths: list[str] = field(default_factory=list)
+    # #407: an environment a gate cannot judge without (known: "network").
+    # A failed gate that declares one is reported ENV-classified — the
+    # verdict may be this machine's connectivity, not the tree.
+    requires: list[str] = field(default_factory=list)
+    # #403/#417: run ALONE — the scheduler drains every running gate
+    # before starting this one and starts nothing else until it settles.
+    # Two field-proven races die here: a gate whose case mutates the live
+    # tree never overlaps a sibling's reads, and a heavy gate (a fresh
+    # clone) never starves a tight-budget sibling's wall clock.
+    exclusive: bool = False
     # Git hooks this gate rides (e.g. "pre-commit"): the hook runner runs
     # the gate against the index (--staged) with the SAME advisory/
     # blocking contract the DAG honors — the hook stopped hand-wiring
@@ -328,7 +359,7 @@ def load_config_from(raw: bytes, path: str) -> tuple[dict[str, list[str]], list[
         g = _require_object(g, f"gates[{i}]")
         allowed_gate = {"id", "command", "label", "description", "needs",
                         "timeoutMs", "allowFailure", "enabled", "paths",
-                        "stages"}
+                        "stages", "requires", "exclusive"}
         unknown = sorted(set(g) - allowed_gate)
         if unknown:
             known_id = g.get("id") or f"gates[{i}]"
@@ -378,6 +409,20 @@ def load_config_from(raw: bytes, path: str) -> tuple[dict[str, list[str]], list[
         if not isinstance(description, str):
             raise ConfigError(
                 f"gate '{gid}': 'description' must be a string")
+        requires = g.get("requires", [])
+        if not isinstance(requires, list) or not all(
+                isinstance(r, str) for r in requires):
+            raise ConfigError(
+                f"gate '{gid}': 'requires' must be an array of strings")
+        bad_requires = sorted(set(requires) - KNOWN_REQUIRES)
+        if bad_requires:
+            raise ConfigError(
+                f"gate '{gid}': unknown requires value(s): "
+                f"{', '.join(bad_requires)} (known: "
+                f"{', '.join(sorted(KNOWN_REQUIRES))})")
+        exclusive = g.get("exclusive", False)
+        if not isinstance(exclusive, bool):
+            raise ConfigError(f"gate '{gid}': 'exclusive' must be a boolean")
         gates.append(
             Gate(
                 id=gid,
@@ -390,6 +435,8 @@ def load_config_from(raw: bytes, path: str) -> tuple[dict[str, list[str]], list[
                 enabled=enabled,
                 paths=list(paths),
                 stages=list(stages),
+                requires=list(requires),
+                exclusive=exclusive,
             )
         )
 
@@ -579,6 +626,9 @@ def _selection_label(selected_by: str, changed: list[str] | None,
                 + (f", {n} gate(s) out of scope" if n else ""))
     if selected_by == "gate":
         return "one gate, named by --gate"
+    if selected_by == "gates":
+        # #405: a subset traversal names more than one gate.
+        return "several gates, named by --gate"
     return "all enabled gates"
 
 
@@ -588,6 +638,85 @@ def _first_line(text: str) -> str:
         if line.strip():
             return line.strip()
     return ""
+
+
+_DIAGNOSTIC_KEYS = ("summary", "error", "message", "detail", "reason",
+                    "description", "finding")
+_DIAGNOSTIC_CLIP = 200
+
+
+def _compact(value: Any) -> str:
+    """One diagnostic-worthy line out of a JSON value (#419)."""
+    if isinstance(value, str):
+        text = value.strip()
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False)
+        except (TypeError, ValueError):
+            text = str(value)
+    text = " ".join(text.split())
+    return text[:_DIAGNOSTIC_CLIP] + ("…" if len(text) > _DIAGNOSTIC_CLIP
+                                      else "")
+
+
+def _json_kernel(text: str) -> str | None:
+    """The actionable kernel of a JSON-emitting gate's output (#419).
+
+    A gate whose report is JSON used to be quoted as its first line —
+    `{` — with the actual finding invisible until the gate was re-run.
+    When the output parses as one JSON value, quote what a human acts
+    on: a known diagnostic field, else the first scalar field, else the
+    first element of the first array (a broken-edge, a finding). None
+    when the text is not JSON — the caller falls back to line quoting.
+    """
+    candidate = text.strip()
+    if not candidate or candidate[0] not in "{[":
+        return None
+    try:
+        doc = json.loads(candidate)
+    except (ValueError, RecursionError):
+        return None
+    if isinstance(doc, dict):
+        for key in _DIAGNOSTIC_KEYS:
+            value = doc.get(key)
+            if isinstance(value, (str, int, float, bool)):
+                return f"{key}: {_compact(value)}"
+        for value in doc.values():
+            # A finding-shaped payload (brokenEdges, findings, drifts)
+            # leads with its LIST — the first element is the actionable
+            # kernel; scalars like host/version are context, not the
+            # finding (#419).
+            if isinstance(value, list) and value:
+                return _compact(value[0])
+        for key, value in doc.items():
+            if isinstance(value, (str, int, float, bool)):
+                return f"{key}: {_compact(value)}"
+    if isinstance(doc, list) and doc:
+        return _compact(doc[0])
+    return None
+
+
+def _diagnostic_line(text: str) -> str:
+    """The one line the failure summary quotes (#419; stderr first per D26).
+
+    Same polarity as before — stderr wins when it said anything — but a
+    JSON-emitting gate's quote is now its kernel (first broken edge /
+    first finding), not the first character of its payload.
+    """
+    source = text if text.strip() else ""
+    if not source:
+        return ""
+    kernel = _json_kernel(source)
+    if kernel is not None:
+        return kernel
+    for line in source.splitlines():
+        stripped = line.strip()
+        # A line that is only a JSON structural character carries no
+        # finding — skip it so a pretty-printed payload falls through to
+        # a content line instead of quoting `{`.
+        if stripped and stripped not in ("{", "}", "[", "]"):
+            return stripped
+    return _first_line(source)
 
 
 def _run_one(gate: Gate, live: set | None = None
@@ -683,7 +812,7 @@ def _run_one(gate: Gate, live: set | None = None
     # record, so "why did it fail" is answered by one run. Passing gates
     # keep their display-side budget instead (D20 tail-3).
     return gate, "FAIL", output, True, duration_ms, \
-        (_first_line(err) if (err or "").strip() else _first_line(out))
+        _diagnostic_line(err if (err or "").strip() else out)
 
 
 def _changed_files(base: str) -> list[str] | None:
@@ -801,13 +930,37 @@ def run_gates(
             if dep in selected_ids:
                 dependents[dep].append(g.id)
 
-    ready = [g for g in selected if indegree[g.id] == 0]
+    # The admission queue (#403/#417): gates start ONLY through pump(), so
+    # an exclusive gate can hold the whole pool — it is admitted alone and
+    # nothing else is admitted until it settles. The pool's internal queue
+    # therefore always stays empty; `concurrency` bounds the running set.
+    from collections import deque
+    ready_q: deque = deque(g for g in selected if indegree[g.id] == 0)
+    running: set[str] = set()
 
     with ThreadPoolExecutor(max_workers=concurrency or 1) as pool:
         pending: dict[Any, Gate] = {}
 
-        def enqueue(gate: Gate) -> None:
-            pending[pool.submit(_run_one, gate, _LIVE_PROCS)] = gate
+        def pump() -> None:
+            """Admit ready gates under the exclusive lane's contract."""
+            while ready_q:
+                exclusive_running = any(
+                    by_id[gid].exclusive for gid in running)
+                if exclusive_running:
+                    return  # an exclusive gate owns the pool until it settles
+                head = ready_q[0]
+                if head.exclusive:
+                    if running:
+                        return  # it runs alone: wait for the pool to drain
+                    ready_q.popleft()
+                    running.add(head.id)
+                    pending[pool.submit(_run_one, head, _LIVE_PROCS)] = head
+                    continue
+                if len(running) >= (concurrency or 1):
+                    return
+                ready_q.popleft()
+                running.add(head.id)
+                pending[pool.submit(_run_one, head, _LIVE_PROCS)] = head
 
         def settle(gid: str) -> None:
             """Propagate a settled gate to its dependents; SKIP transitively."""
@@ -822,33 +975,36 @@ def run_gates(
                     if n in selected_ids and (blocking.get(n, False) or n in skipped_set)
                 ]
                 if failed_needs:
+                    # #420: the reason rides the record — a reader of the
+                    # JSON (or the skipped block below) learns WHY without
+                    # re-deriving the DAG.
+                    reason = f"needs failed: {', '.join(failed_needs)}"
                     outcomes[child] = "SKIP"
+                    details[child] = reason
                     durations[child] = 0
                     skipped_set.add(child)
-                    emit(
-                        f"SKIP {child} (needs failed: {', '.join(failed_needs)})"
-                    )
+                    emit(f"SKIP {child} ({reason})")
                     settle(child)
                 else:
-                    enqueue(child_gate)
+                    ready_q.append(child_gate)
 
-        for g in ready:
-            enqueue(g)
+        pump()
 
         stop = False
         while pending and not stop:
             # FIRST_COMPLETED, not as_completed: a future enqueued by
-            # settle() mid-loop was never visible to the as_completed
+            # pump() mid-loop was never visible to the as_completed
             # iterator created from the earlier snapshot, so a finished
             # child's dependents waited for the whole current generation
             # to drain before they could start (layer-serialized instead
             # of a live DAG). wait(FIRST_COMPLETED) re-reads `pending`
             # every turn: finish one gate, settle it, its dependents are
-            # enqueued and awaited immediately. --fail-fast semantics are
-            # unchanged (blocking failure cancels the pool below).
+            # admitted immediately. --fail-fast semantics are
+            # unchanged (blocking failure kills the pool below).
             done, _ = wait(pending, return_when=FIRST_COMPLETED)
-            for fut in done:
-                pending.pop(fut, None)
+            batch = [(pending.pop(fut), fut) for fut in done]
+            for gate, fut in batch:
+                running.discard(gate.id)
                 g, outcome, detail, is_blocking, duration_ms, summary = \
                     fut.result()
                 outcomes[g.id] = outcome
@@ -874,6 +1030,8 @@ def run_gates(
                     pending = {}
                     break
                 settle(g.id)
+            if not stop:
+                pump()
 
     # #375: one run yields all the evidence — every gate's FULL output
     # lands in .gov/last-run/<gate>.log (gitignored), so a truncated
@@ -943,20 +1101,47 @@ def run_gates(
                  f"{(last_run_dir / (gid + '.log')).as_posix()})")
 
     if failed:
+        by_gate = {g.id: g for g in gates}
         emit(f"--- summary: {len(failed)} blocking failure(s) ---")
         for gid in failed:
             # #341: the quote is the gate's diagnostic line (stderr first,
             # then stdout — see _run_one), never just its first status
             # line: a voided card's story line used to stand in for the
-            # real blocking cause two hundred lines down.
+            # real blocking cause two hundred lines down. #419: a
+            # JSON-emitting gate is quoted by its kernel, not `{`.
             first = summaries.get(gid) or ""
             # #109: the failure line itself names the rerun command — the
             # reader should not have to remember the flag exists. The
             # gate's own output printed once in the body above (#317);
-            # the summary stays a pointer, not a reprint.
+            # the summary stays a pointer, not a reprint. #404: the wall
+            # time rides the line, so "121s here, 69s standalone" is
+            # readable without a manual rerun; #407: a gate that declared
+            # an environment gets that named where the verdict lands.
+            gate = by_gate[gid]
+            notes = []
+            if gate.requires:
+                notes.append(f"requires {', '.join(gate.requires)} — the "
+                             "verdict may be this machine's environment, "
+                             "not the tree")
+            if durations.get(gid, 0) >= 1000:
+                # #404: the wall time rides the line when it can matter —
+                # "121s here, 69s standalone" is the starvation tell; a
+                # sub-second gate's 0.0s is noise, not evidence.
+                notes.append(f"ran {durations[gid] / 1000:.1f}s")
+            note = f" ({'; '.join(notes)})" if notes else ""
             line = f"{gid}: {first}" if first else f"{gid}:"
-            emit(f"{line} (rerun: gov run --gate {gid}; full output: "
+            emit(f"{line}{note} (rerun: gov run --gate {gid}; full output: "
                  f"{(last_run_dir / (gid + '.log')).as_posix()})")
+
+    # #420: the skip set is named WHERE the counts are — a summary that
+    # says "5 skip" without the names or the reasons sends the reader
+    # scrolling (or diffing two runs) for what the runner already knew.
+    skipped = [gid for gid in outcomes if outcomes.get(gid) == "SKIP"]
+    if skipped:
+        emit(f"--- skipped, not evaluated: {len(skipped)} gate(s) ---")
+        for gid in skipped:
+            emit(f"{gid} ({details.get(gid, 'a dependency did not pass')} — "
+                 "SKIP is not evidence; fix the failed need and re-run)")
 
     if failed:
         emit(f"evidence: {last_run_dir.as_posix()}/<gate>.log holds each "
@@ -1124,6 +1309,11 @@ def _outcome_line(gate: Gate, outcome: str, in_scope: int | None = None) -> str:
     parts = []
     if gate.allow_failure and outcome in BLOCKING_OUTCOMES:
         parts.append("(advisory; allowFailure)")
+    if gate.requires and outcome in BLOCKING_OUTCOMES:
+        # #407: the environment classification lands where the verdict
+        # does — a red network-bound gate reads as ENV-possible, not as
+        # a tree defect, without opening gates.json.
+        parts.append(f"[requires {', '.join(gate.requires)} — ENV-possible]")
     if in_scope is not None:
         # #21/D32: a scan over zero matched files must not read like a
         # scan. #317: the count is self-explaining — these are the diff's
@@ -1229,7 +1419,19 @@ def main(argv: list[str] | None = None) -> int:
                         help="select gates whose 'paths' match the diff against this git ref; "
                              "with --merge: the integration target baseline instead "
                              "(default origin/master)")
-    parser.add_argument("--gate", default=None, help="run a single gate by id")
+    parser.add_argument("--gate", nargs="+", default=None, metavar="GATE_ID",
+                        help="run these gate(s) by id, space-separated "
+                             "(#405: one DAG traversal for a subset — "
+                             "`--gate closures bundle-files`; a shipped "
+                             "integration already passes two)")
+    parser.add_argument("--at", default=None, metavar="REF",
+                        help="judge the selected gate(s) against the tree "
+                             "as-of this ref (#406): a detached temporary "
+                             "worktree is materialized and the run happens "
+                             "inside it, so gate triage never needs a "
+                             "checkout; history and receipts are not "
+                             "recorded (the evidence would die with the "
+                             "worktree)")
     parser.add_argument("--only-paths", default=None, metavar="GLOB,...",
                         help="judge only what these globs carry (#374): the "
                              "changed-file set is intersected with the list "
@@ -1295,6 +1497,7 @@ def main(argv: list[str] | None = None) -> int:
             (args.mode, "--mode"), (args.gate, "--gate"),
             (args.every_gate, "--every-gate"), (args.json, "--json"),
             (args.fail_fast, "--fail-fast"), (args.verbose, "--verbose"),
+            (args.at, "--at"),
         ) if flag]
         if conflicts:
             print(f"gov run: --merge and {', '.join(conflicts)} cannot be "
@@ -1308,6 +1511,59 @@ def main(argv: list[str] | None = None) -> int:
             args.merge, base=args.base, config=args.config,
             receipt=args.receipt, tag=caller, cost=args.cost,
             no_record=args.no_record)
+
+    # #406: --at materializes the ref's tree into a detached temporary
+    # worktree and the rest of this function runs INSIDE it — config,
+    # seal precheck, anchors, and the gates themselves all read the
+    # judged tree, so a CI-red gate is reproduced exactly without a
+    # checkout on a shared worktree. Refusals: --receipt (the receipt
+    # and the evidence directory would die with the worktree — a citation
+    # that cannot verify is worse than none) and a ref that is not a
+    # commit. History recording is skipped for the same lifetime reason,
+    # said out loud once.
+    if args.at:
+        if args.receipt:
+            print("gov run: --at and --receipt cannot be combined — a "
+                  "receipt and its evidence would die with the temporary "
+                  "worktree", file=sys.stderr)
+            return 2
+        proc = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{args.at}^{{commit}}"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+        if proc.returncode != 0:
+            print(f"gov run: --at {args.at!r} is not a commit git can "
+                  f"resolve: {(proc.stderr or '').strip().splitlines()[-1] if (proc.stderr or '').strip() else 'unknown error'}",
+                  file=sys.stderr)
+            return 2
+        at_sha = proc.stdout.strip()
+        import atexit
+        import tempfile
+        wt = tempfile.mkdtemp(prefix="gov-at-")
+        proc = subprocess.run(
+            ["git", "worktree", "add", "--detach", wt, at_sha],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+        if proc.returncode != 0:
+            print(f"gov run: --at could not materialize a worktree at "
+                  f"{at_sha[:12]}: {(proc.stderr or '').strip()}",
+                  file=sys.stderr)
+            return 2
+        original_cwd = Path.cwd()
+
+        def _remove_at_worktree() -> None:
+            os.chdir(original_cwd)
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", wt],
+                capture_output=True)
+            shutil.rmtree(wt, ignore_errors=True)
+
+        atexit.register(_remove_at_worktree)
+        os.chdir(wt)
+        args.no_record = True
+        print(f"gov run: --at {args.at} ({at_sha[:12]}) — judging a "
+              "temporary worktree; history is not recorded",
+              file=sys.stderr)
 
     # N8: ONE read of the config bytes; the seal is verified over this
     # exact buffer BEFORE parsing, so a drifted constitution refuses as
@@ -1370,25 +1626,33 @@ def main(argv: list[str] | None = None) -> int:
     # can tell "mode ci chose 5 gates" from "the diff scoped 3 out".
     selected_by = "all-enabled"
     if args.gate:
+        # #405: a subset in ONE DAG traversal — the shipped integrations
+        # already pass two ids, and N separate traversals re-pay the DAG
+        # N times. Unknown and parked ids are refused by NAME (a typo in
+        # the second id must not read as a green first one).
+        gate_ids = list(dict.fromkeys(args.gate))
         known = {g.id for g in gates}
-        if args.gate not in known:
+        unknown = [gid for gid in gate_ids if gid not in known]
+        if unknown:
             print(
-                f"gov run: unknown gate '{args.gate}' (known: {', '.join(sorted(known)) or 'none'})",
+                f"gov run: unknown gate(s): {', '.join(unknown)} "
+                f"(known: {', '.join(sorted(known)) or 'none'})",
                 file=sys.stderr,
             )
             return 2
         by_id = {g.id: g for g in gates}
-        if not by_id[args.gate].enabled:
+        parked = [gid for gid in gate_ids if not by_id[gid].enabled]
+        if parked:
             # N4/D24: explicitly naming a parked gate is operator error —
             # a silent green hides it. Parking is visible; so is this.
             print(
-                f"gov run: gate '{args.gate}' is disabled — re-enable it or "
-                "pick another",
+                f"gov run: gate(s) disabled — {', '.join(parked)}: "
+                "re-enable or pick another",
                 file=sys.stderr,
             )
             return 2
-        selection = [args.gate]
-        selected_by = "gate"
+        selection = gate_ids
+        selected_by = "gate" if len(selection) == 1 else "gates"
     elif args.mode:
         if args.mode not in modes:
             print(

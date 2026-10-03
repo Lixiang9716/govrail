@@ -392,10 +392,23 @@ def main(argv: list[str] | None = None) -> int:
     parts = [f"tools {tools_n}" if tools_n else "", f"project {project_n}" if project_n else ""]
     family = " + ".join(p for p in parts if p)
     crash_rc = _fail_if_thread_crashed()
+    skips = sum(1 for line, ok in results if ok and line.startswith("SKIP "))
     if failures or crash_rc:
         if failures:
             tally = ", ".join(f"{k} {v}" for k, v in counts.items())
             print(f"self-test: {len(failures)} failure(s) ({family}) — {tally}")
+            # #409: the failure headline derives from the FAILURE LIST —
+            # it names the failing item, never whichever PASS line
+            # happened to print last (and never a rerun hint pinned to a
+            # test that passed). On stderr, the lane the gate runner's
+            # summary quotes first (D26): the blocking summary of
+            # `gov run --gate self-test` now opens with the real
+            # rejection case instead of burying it mid-output.
+            head = failures[0]
+            if len(failures) > 1:
+                head += f" (+{len(failures) - 1} more)"
+            print(f"self-test: {head}", file=sys.stderr)
         return 1
-    print(f"self-test: {family or 'no cases selected'} — all pass")
+    print(f"self-test: {family or 'no cases selected'} — all pass"
+          + (f" ({skips} skip-loud)" if skips else ""))
     return 0

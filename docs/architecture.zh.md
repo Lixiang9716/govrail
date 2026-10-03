@@ -10,7 +10,7 @@
 
 不带 `--mode` 时，若配置了顶层 `defaultMode` 则运行它（注入模板自带 `"defaultMode": "all"`）——改 mode 就是改默认运行集。`enabled: false` 把门禁停在一切运行之外，输出一行 `DISABLED`，"下线"留在配置里而不是删除定义。
 
-门禁用 `paths` glob（`**` 跨目录）声明自己覆盖的范围：`gov run --base <ref>` 按 diff 选中 paths 命中的门（无 paths 的门永远相关）并报告哪些门出了范围——最小充分集出自同一事实源，`gov change-scope` 的建议也读同一份 `paths`。`gov run --gate <id>` 单门重跑。
+门禁用 `paths` glob（`**` 跨目录）声明自己覆盖的范围：`gov run --base <ref>` 按 diff 选中 paths 命中的门（无 paths 的门永远相关）并报告哪些门出了范围——最小充分集出自同一事实源，`gov change-scope` 的建议也读同一份 `paths`。`gov run --gate <id> [id...]` 一次遍历重跑点名的一组门；`--at <ref>` 按 ref 时的提交树评判所选门（独立临时 worktree——复现 CI 红从此不需要 checkout）。两个门属性决定门怎么跑：`"exclusive": true` 独跑（调度器先排空池子、落定前不接纳任何门——改树的 self-test 不会再与读树的兄弟门竞速，全新 clone 的重门也不会饿死紧预算的兄弟门）；`"requires": ["network"]` 声明环境分类——红了先怀疑机器的网络而不是树，结局行与摘要都会带上 ENV-possible 标签。`timeoutMs` 是每门的墙钟预算:`concurrency > 1` 时,吃盘的重邻居(全新 clone、整体重建)会侵蚀紧预算的墙钟——预算门与重邻居正是 `exclusive` 的用例,"独立跑绿、DAG 里超时"就是信号(#404)。
 
 模板还自带一个查内容而非只看退出码的门：`gov verify conflict-markers`（issue #104/D38）读变更文件的工作区内容，发现行首的 git 冲突标记即以 `file:line` 点名失败——git 拒绝自查的那种 rebase 失败模式由门禁接管；确实要写字面量的行追加令牌 `gov:ignore-marker` 即豁免，孤立的裸 `=======`（Markdown 标题下划线）不算标记。
 
@@ -22,7 +22,7 @@
 
 预演协调的是落地前的分支；分支内部的 worker 之间也可能要协调共享资源——几个互相盲态的 agent 共写一个文件。`gov lease acquire <resource> [--agent ID] [--ttl S] [--wait S]` 取一份租约：在 git common dir（D32#9 的先例）下以 O_CREAT|O_EXCL 原子创建一个小 JSON 文件，同 clone 的全部 worktree 天然共享；`gov lease release --agent ID` 做持有者校验（不匹配即 exit 2 点名实际持有者——租约绝不代他人释放）；`gov lease list` 只读列出。资源被占是 exit 3——D2 词汇的 additive 扩展，0/1/2 语义不变（D52）。过期租约在 flock 守护的临界区内懒接管——这是 flock 的合法形态（仅单命令时长）：评审 P0 的结论仍然成立，flock 属于持有进程、进程退出即失锁，任何长持物都绝不建在它上面。分层才是重点：租约是**活性层**（避免重复劳动；`--ttl` 封顶，绝不永久阻塞），刻意不承载正确性——holder 挂起超过 TTL 就可能双持，正确性仍锚在它本来就在的地方（master 的 push CAS、文档的交付 rebase）。`gov lease list` 永不参与准入决策：JSON 只是诊断层。
 
-每个门禁落到五种结局之一——`PASS` / `FAIL` / `TIMEOUT` / `MISSING`（可执行文件不存在）/ `SKIP`——`allowFailure: true` 让该门禁的失败仅作 advisory：结局行与输出带 `advisory` 标记照常报告，退出码保持 0。通过但有输出的门禁以 `(passed with output)` 块保留其末尾几行——"有话说的通过"绝不被静默（D20）。退出码 0 = 全绿，1 = 有阻塞失败；阻塞失败末尾追加摘要块：哪个门挂了 + 首行输出 + 单门重跑命令。
+每个门禁落到五种结局之一——`PASS` / `FAIL` / `TIMEOUT` / `MISSING`（可执行文件不存在）/ `SKIP`——`allowFailure: true` 让该门禁的失败仅作 advisory：结局行与输出带 `advisory` 标记照常报告，退出码保持 0。通过但有输出的门禁以 `(passed with output)` 块保留其末尾几行——"有话说的通过"绝不被静默（D20）。退出码 0 = 全绿，1 = 有阻塞失败；阻塞失败末尾追加摘要块：哪个门挂了 + 诊断行（输出 JSON 的门引用其内核而非 `{`）+ 墙钟耗时 + 单门重跑命令；被失败依赖拖下的门以"skipped, not evaluated"块点名并给出原因。
 
 一次运行还能留下可机检的证据，而不只是一行账：`gov run --receipt` 把本次运行的哈希链回执追加到 `.gov/history/receipts.jsonl`（issue #124/D44）——逐门结局绑到树的 commit **与** tree sha，带上运行的 caller 标签（`--tag`/`$GOV_CALLER`，D42），并链到上一条回执。改、删、重排历史都会让后续所有链接断裂：`gov receipt verify <commit>` 重走链条，以 exit 0 或点名失败回答"这棵树上是否录得一次**完整**（覆盖全部 enabled 门）、**干净**（无 tracked 文件偏离 commit）、**全绿**（每门 PASS）的运行"——squash merge 换 commit sha 不换 tree，也照常命中。PR 正文引用的单条回执经 `gov receipt verify <commit> --record '<json>'` 自校验成立，"reviewer 重跑过门禁"这类散文从此可以换成机器可查的 id。链条刻意无密钥——证明一致性与绑定，不证明作者身份；真签名是后续工作。
 

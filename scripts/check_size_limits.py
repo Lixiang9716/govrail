@@ -58,6 +58,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", default=str(Path(__file__).resolve().parent.parent),
                         help="repository root to scan (default: this checkout)")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG))
+    parser.add_argument("--only", action="append", default=None,
+                        metavar="PATH_OR_GLOB",
+                        help="judge only files matching this literal path "
+                             "or glob (#414: a parallel worker gets a "
+                             "verdict for ITS files without paying the "
+                             "whole-tree scan; whole-tree stays the "
+                             "default and the CI mode). Repeatable; a "
+                             "slash-less pattern also matches a basename. "
+                             "A filter matching nothing is a typo, not a "
+                             "pass — exit 2 names it")
     args = parser.parse_args(argv)
 
     root = Path(args.root)
@@ -70,7 +80,27 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         raise SystemExit(2)
 
+    # #414: the same pathmatch grammar the plane's path-scoped gates use
+    # (one glob language, not a second one) — a slash-less filter also
+    # matches a basename, mirroring `gov run --only-paths`.
+    try:
+        from gov.pathmatch import glob_to_regex
+    except ImportError:  # direct-script execution from scripts/
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from gov.pathmatch import glob_to_regex
+    filters = [(f, glob_to_regex(f)) for f in (args.only or [])]
+
+    def _wanted(rel: str) -> bool:
+        if not filters:
+            return True
+        parts = rel.replace("\\", "/").split("/")
+        for literal, rx in filters:
+            if rx.match(rel) or ("/" not in literal and rx.match(parts[-1])):
+                return True
+        return False
+
     seen: set[Path] = set()
+    judged: int = 0
     problems: list[str] = []
     for pattern in scan:
         matches = sorted(root.glob(pattern))
@@ -83,6 +113,9 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             seen.add(f.resolve())
             rel = f.relative_to(root).as_posix()
+            if not _wanted(rel):
+                continue
+            judged += 1
             count = len(f.read_text(encoding="utf-8").splitlines())
             limit = overrides.get(rel, default_limit)
             if count > limit:
@@ -93,14 +126,24 @@ def main(argv: list[str] | None = None) -> int:
                         " scripts/size-limits.json")
                 problems.append(f"{rel}: {count} lines (limit {limit}{over})")
 
+    if filters and judged == 0:
+        # Rule 5: a filtered run that judges nothing is a caller typo —
+        # the same contract `gov run --only-paths` holds.
+        print("size-limits: --only matched none of the "
+              f"{len(seen)} scanned file(s): {', '.join(f for f, _ in filters)}",
+              file=sys.stderr)
+        raise SystemExit(2)
+
     if problems:
         for p in problems:
             print(f"size-limits: {p}", file=sys.stderr)
         print(f"size-limits: {len(problems)} file(s) over their declared limit",
               file=sys.stderr)
         return 1
-    print(f"size-limits: {len(seen)} file(s) within limits "
-          f"(default {default_limit}, {len(overrides)} override(s))")
+    scope = (f" (--only: {judged} of {len(seen)} file(s) judged)"
+             if filters else
+             f" (default {default_limit}, {len(overrides)} override(s))")
+    print(f"size-limits: {judged} file(s) within limits{scope}")
     return 0
 
 
