@@ -60,7 +60,8 @@ FLAGS: dict[str, set[str]] = {
              "--json", "--adopt", "--adopt-new", "--preview", "--preset",
              "--platforms"},
     "uninstall": {"--project", "--force"},
-    "run": {"--config", "--allow-unsealed-config", "--mode", "--base", "--gate", "--every-gate", "--only-paths",
+    "run": {"--config", "--allow-unsealed-config", "--mode", "--base",
+            "--gate", "--at", "--every-gate", "--only-paths",
             "--merge", "--tag", "--no-record", "--receipt", "--json",
             "--fail-fast", "--verbose", "--cost"},
     "self-test": {"--scope", "--case", "--explain"},
@@ -112,7 +113,8 @@ FLAGS: dict[str, set[str]] = {
     "hooks": set(),  # the pre-commit subcommand is flagless
     "verify-plane": {"--write", "--confirm-unattended", "--reason"},
     "gate": {"--paths", "--stage", "--description", "--mode",
-             "--allow-failure", "--timeout", "--dry-run"},  # #309: on the `add` subcommand
+             "--allow-failure", "--timeout", "--needs", "--exclusive",
+             "--dry-run"},  # #309: on the `add` subcommand; --needs/--exclusive #412
 }
 
 

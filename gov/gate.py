@@ -98,6 +98,13 @@ def cmd_add(args: argparse.Namespace) -> int:
         gate["stages"] = list(args.stage)
     if args.timeout is not None:
         gate["timeoutMs"] = args.timeout
+    if args.needs:
+        # #412: a DAG edge is wireable through the blessed CLI — the
+        # schema validates references and cycles when the merged config
+        # is loaded below, naming the offending id or the cycle.
+        gate["needs"] = list(dict.fromkeys(args.needs))
+    if args.exclusive:
+        gate["exclusive"] = True
     doc["gates"].append(gate)
 
     # Mode membership: a gate in no mode never runs in a normal `gov run`
@@ -133,6 +140,10 @@ def cmd_add(args: argparse.Namespace) -> int:
         print("  modes: " + (", ".join(memberships) if memberships
                              else "(none — the gate runs only via "
                                   "--gate/--every-gate)"))
+        if gate.get("needs"):
+            # #412: the resolved edge set is part of the wiring a PR
+            # quotes — print it even though `entry` carries it too.
+            print(f"  needs: {', '.join(gate['needs'])}")
         print(f"  verify with: {' '.join(_gov_invocation())} run --gate "
               f"{args.id}")
         return 0
@@ -218,6 +229,18 @@ def build_parser() -> argparse.ArgumentParser:
                             "config's defaultMode; 'none' skips modes)")
     p_add.add_argument("--allow-failure", action="store_true",
                        help="advisory: failures are reported, never block")
+    p_add.add_argument("--needs", action="append", default=[],
+                       metavar="GATE_ID",
+                       help="run only after this gate passes; on its "
+                            "failure or skip this gate skips (repeatable; "
+                            "#412 — unknown ids and cycles are refused by "
+                            "the schema validation below, naming the "
+                            "offender)")
+    p_add.add_argument("--exclusive", action="store_true",
+                       help="run alone: the scheduler drains the pool "
+                            "first and admits nothing else until this "
+                            "gate settles (#403/#417 — a tree-mutating "
+                            "or heavy gate never races a sibling)")
     p_add.add_argument("--timeout", type=int, default=None, metavar="MS",
                        help="kill the gate after this many milliseconds")
     p_add.add_argument("--dry-run", action="store_true",

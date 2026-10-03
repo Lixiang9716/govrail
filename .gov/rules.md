@@ -44,7 +44,11 @@ offending name. A misconfiguration discovered late is a defect now.
 
 A gate that never fails is a vacuous script, not evidence. Each governance
 gate ships a rejection case that proves it catches the violation it claims to;
-`gov self-test` runs them.
+`gov self-test` runs them. A case that mutates the live tree (moving a file
+away to prove an absence check) must never run concurrently with gates that
+read it: mark the gate that carries the cases `"exclusive": true` in
+`gates.json` — it then runs alone — or serialize it another way; two CI reds
+on an identical green tree is the race this prevents.
 
 ## 7. Bilingual pairs merge whole
 

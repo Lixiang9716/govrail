@@ -243,3 +243,32 @@ def _last_hash(tmp_path):
              _receipt_path(tmp_path).read_text(encoding="utf-8").splitlines()
              if ln]
     return json.loads(lines[-1])["hash"]
+
+
+def test_runtime_evidence_does_not_dirty_the_receipt(tmp_path, monkeypatch):
+    """#423: the runner rewrites its own evidence (.gov/last-run) on
+    every run — an adopter's habitual `git add -A` that tracked those
+    files made every receipt veto itself. Runtime-evidence churn never
+    judges the tree; real tracked drift still does."""
+    import subprocess
+    monkeypatch.chdir(tmp_path)
+    for cmd in (["git", "init", "-q", "."],
+                ["git", "config", "user.email", "t@t"],
+                ["git", "config", "user.name", "t"]):
+        subprocess.run(cmd, check=True, capture_output=True)
+    ev = tmp_path / ".gov" / "last-run"
+    ev.mkdir(parents=True)
+    (ev / "g.log.prev").write_text("old evidence\n", encoding="utf-8")
+    (tmp_path / "tracked.txt").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm",
+                    "tracked evidence"], check=True, capture_output=True)
+    # rewrite ONLY the tracked evidence: the exact rotation the run does
+    (ev / "g.log.prev").write_text("new evidence\n", encoding="utf-8")
+    commit, tree, dirty = receipt_mod.tree_state()
+    assert dirty is False, (
+        "#423: the runner's own evidence churn must not dirty the "
+        "receipt it records")
+    # real tracked drift still dirties
+    (tmp_path / "tracked.txt").write_text("changed\n", encoding="utf-8")
+    assert receipt_mod.tree_state()[2] is True

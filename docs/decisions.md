@@ -580,3 +580,57 @@ release:ship 标签即自动放行。
 且固定节奏仍可能在无变更时空转；(c) 多一条需要记住的旁路，与"显式、
 有记录"的文化相比收益为负。触发集不变（feat/fix/perf/revert 才开
 release PR，chore/docs 本就不触发）。
+
+## D67 — D67 — D67 — 调度诚实:exclusive 串行道与 requires 环境分类(D67)
+
+## 问题
+
+采用方两个反复踩到的竞速/误读类(#403/#417/#407):① self-test 的项目拒绝用例会临时改动活树(mv 走文件证明缺失检查),并发 DAG 里与读同一文件的兄弟门竞速——两次 CI 红出在字节相同的绿树上;② 重门(全新 clone 的 vendoring-repro)与紧墙钟预算的门(check 120s、self-test 10s/用例)并发抢盘,超时读作门失败实为调度致红,独立重跑即绿;③ 依赖网络的门在网络抖动时把 docs-only diff 判红,红色读作树缺陷实为机器环境——"红不是这个 diff 的"只能靠 PR 正文散文解释,恰是门应当消除的裁量。
+
+## 选项
+
+(a) gates.json 增两个门属性:`"exclusive": true`(调度器先排空运行池再接纳该门、落定前不接纳任何门)与 `"requires": ["network"]`(封闭词表,失败时结局行与摘要块打 ENV-possible 标签;仍是阻塞失败,不做静默降级);(b) self-test 在临时 worktree 快照里跑项目用例——不依赖采用方改配置,但用例引用的未提交脚本/产物不在快照里,创作回路(写用例→红→改)被破坏;(c) 超时按负载归类 environment-suspect 并同趟重测——需要检测负载,不可靠。
+
+## 状态
+
+已决
+
+## 决定
+
+(a)。(b) 的快照语义对"改树用例"是真修复,但对引用未提交产物的用例是静默降级——证据面收窄且无声,违规则 5;(c) 依赖不可观测的负载信号。(a) 把判断显式交给最懂自己门的人:改树的重门由项目标 exclusive(本仓库自己的 self-test 门已标),网络门声明 requires 后红得诚实——仍是阻塞(证据缺失不冒充绿),但"机器环境还是树"一眼可辨。调度器改动限准入:ready 队列只经 pump() 准入,exclusive 门独占期内外什么都不准入;有限 DAG 无饿死(队列排空必然轮到)。timeoutRetries 不做——命名超时 + 墙钟时长 + 独立重跑命令已覆盖其实际诉求。
+
+## D68 — D68 — D68 — 评判被推送的树:pre-push 物化与 `gov run --at`(D68)
+
+## 问题
+
+#402/#406 同根:门禁评判的对象是工作树而不是被推送的提交。既有分支推送时,同检出里并行工作流的未提交/未跟踪文件会把红带到它不在场的 push 上(同一提交从干净 worktree 推立即绿);复现 CI 的单门红需要 `git checkout <sha>`——共享 worktree 上的切换曾把另一会话的提交搬走。
+
+## 选项
+
+(a) pre-push 钩子把 pushed sha 物化成独立临时 worktree(`git worktree add --detach`),路径限定的 DAG 在其中跑,红时把 .gov/last-run 证据拷回主检出再清理;`gov run` 增 `--at <ref>`,同一机制服务单门复现,history/receipt 不落(证据会随 worktree 消失,不可核的引用比没有更糟);(b) 传 GOV_SCOPE_TREE=committed 让收集器只枚举 git 列表——语义对,但每个读树的门都要各自改造,面太大;(c) 维持现状,文档建议手工开 worktree——#402 的两次阻塞证明"建议"不是控制。
+
+## 状态
+
+已决
+
+## 决定
+
+(a)。"评判 push 所携带的树"与 CI 同形,钩子一次 checkout 秒级成本;无法物化时回退旧路径并声明(fail loud,不静默)。#363 的新分支路径同迁(收益相同)。多 range/full matrix 路径维持原位运行:一个 worktree 只能装一个 sha,多 ref push 评判哪个都是欠约束。worktree 缺未跟踪构建产物导致的红,是"评判被推送的树"的诚实语义——采用方的门应自带物化(如 vendoring-repro 本就全新 clone)。
+
+## D69 — D69 — D69 — 回执的脏判定与双消费者裁决(#423):运行时证据不判树,愈合法定(D69)
+
+## 问题
+
+采用方仓库 25 个 .gov/last-run/*.log.prev 被 `git add -A` 习惯收编为 tracked:每次 run 的证据轮写(#375/#394)都在弄脏它正要认证的树——回执永远 dirty=true,`gov receipt verify` 一票否决,4/4 回执全不可核。同时 `gov task close` 的绿判定没有 dirty 项、NON_RUN 记为簿记:同一条回执,close 判绿、verify 拒绝,两个消费者同 run 异裁,而 close 的成功输出不说自己用的是哪个标准。
+
+## 选项
+
+(a) tree_state 的脏判定排除 .gov/last-run/ 与 .gov/history/ 前缀(扩展既有"history 天然 untracked"豁免),且 run 在写证据时治愈追踪:ls-files 命中即 `git rm -r --cached` + ensure-ignore + 点名通告(incex 删除随下次提交落地),#353 锁愈合同形、大一号;(b) 只治愈不豁免——治好后 tracked 状态消失,豁免看似多余,但治愈前的窗口内回执仍自否,且未来任何误 tracked 的 .gov 运行时文件都会复发;(c) 只豁免不治愈——git status 永久挂着 runner 的脏文件,采用方的 diff 噪音。
+
+## 状态
+
+已决
+
+## 决定
+
+(a)+(c),即两者都做,彼此正交:豁免让回执语义归位("回执判树,不判 runner 自己的抓痕"),治愈让工作树安静。治愈必须点名(exit 0 通告,不静默改 index——staged 删除是可见的树变更,由采用方提交)。close 的成功输出声明自己的绿标准(全选门全评、无 fail 无 skip),并说明 `gov receipt verify` 用更严的净树标准(PASS-only + dirty 否决)可能仍拒同一回执——同一证据、两个标准,各自说出来,不再假装一致。verify 侧维持严格(NOT_SELECTED 不算绿是"停用的门没有恰好在树上变绿"的正确立场)。

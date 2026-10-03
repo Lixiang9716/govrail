@@ -115,8 +115,10 @@ def test_22_hook_selects_by_push_range():
     hook = (HERE / "templates" / "pre-push").read_text(encoding="utf-8")
     # #394: the DAG invocation funnels through run_dag, which reacts to
     # a red run by naming the evidence directory before exiting with the
-    # run's own code (gov_cmd no longer execs).
-    assert 'run_dag --base "$base"' in hook
+    # run's own code (gov_cmd no longer execs). #402: the scoped path
+    # materializes the pushed tree first — the DAG never judges the
+    # incidental working tree on an existing-branch push.
+    assert 'run_dag_at_pushed_tree "$pushed_sha" "$base"' in hook
     assert "per-gate evidence" in hook
     assert "unset GIT_DIR" in hook
     # functional: feed push stdin, expect scoped invocation (dry: sh -n ok)

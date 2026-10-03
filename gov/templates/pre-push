@@ -52,6 +52,44 @@ run_dag() {
     return $hook_rc
 }
 
+# #402: judge WHAT THE PUSH DELIVERS, not the incidental working tree.
+# An existing branch with unrelated uncommitted state used to gate the
+# WORKING TREE — a foreign scratch file could block a push that never
+# carried it. Materializing the pushed sha into a detached temporary
+# worktree (the same shape CI uses) makes the scoped DAG read only the
+# committed tree; on red, the judged evidence is copied back so the
+# .gov/last-run pointers outlive the worktree. Falls back to the
+# working tree (the old behavior) if the worktree cannot be created.
+run_dag_at_pushed_tree() {   # $1 = the pushed sha, $2 = the scope base
+    pushed_tree_wt=$(mktemp -d "${TMPDIR:-/tmp}/gov-prepush.XXXXXX") || {
+        echo "pre-push: cannot create a temp dir — judging the working tree" >&2
+        GOV_CHANGE_BASE="$2" GOV_CHANGE_ROOT="$repo_root" run_dag --base "$2"
+        return $?
+    }
+    if git worktree add --detach "$pushed_tree_wt" "$1" >/dev/null 2>&1; then
+        echo "pre-push: judging the pushed tree $1 in a temporary worktree (#402)" >&2
+        (
+            cd "$pushed_tree_wt" || exit 97
+            GOV_CHANGE_BASE="$2" GOV_CHANGE_ROOT="$pushed_tree_wt" run_dag --base "$2"
+        )
+        hook_rc=$?
+        if [ "$hook_rc" -ne 0 ] && [ -n "$repo_root" ] \
+                && [ -d "$pushed_tree_wt/.gov/last-run" ]; then
+            # The judged tree's evidence outlives the worktree it ran in:
+            # a red scene must not vanish with the cleanup below.
+            mkdir -p "$repo_root/.gov/last-run"
+            cp -RPp "$pushed_tree_wt/.gov/last-run/." "$repo_root/.gov/last-run/" 2>/dev/null
+        fi
+        git worktree remove --force "$pushed_tree_wt" >/dev/null 2>&1
+        rm -rf "$pushed_tree_wt"
+        git worktree prune >/dev/null 2>&1
+        return $hook_rc
+    fi
+    echo "pre-push: could not materialize the pushed tree — judging the \
+working tree (commit, stash or remove unrelated files for an exact verdict)" >&2
+    GOV_CHANGE_BASE="$2" GOV_CHANGE_ROOT="$repo_root" run_dag --base "$2"
+}
+
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_QUARANTINE_PATH \
       GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
@@ -132,8 +170,7 @@ if [ "$full" = 1 ] && [ "$bases" = 0 ] && [ "$updates" = 1 ] \
     done
     if [ -n "$fork" ]; then
         echo "pre-push: new branch — scoping to the fork point $fork" >&2
-        GOV_CHANGE_BASE="$fork" GOV_CHANGE_ROOT="$repo_root" \
-            run_dag --base "$fork"
+        run_dag_at_pushed_tree "$pushed_sha" "$fork"
     else
         echo "pre-push: new branch with no shared ancestor (no @{upstream}, \
 no origin/HEAD) — running the full matrix" >&2
@@ -151,6 +188,9 @@ else
     # own size/logging gates that read it) which range this run is about;
     # without it they fall back to their own cascade, which on a dirty
     # tree means the working tree. See the pre-push-checks skill.
-    GOV_CHANGE_BASE="$base" GOV_CHANGE_ROOT="$repo_root" \
-        run_dag --base "$base"
+    # #402: the DAG itself judges the PUSHED TREE in a temporary
+    # worktree — the developer's incidental working-tree state (an
+    # unrelated parallel workstream's uncommitted files) never blocks a
+    # push that does not carry it.
+    run_dag_at_pushed_tree "$pushed_sha" "$base"
 fi

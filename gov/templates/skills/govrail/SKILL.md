@@ -85,15 +85,20 @@ push (the pre-push hook re-runs the scoped DAG automatically).
   into gates.json (validated against the runner's schema, merged
   atomically, then one verification `gov run --gate <id>`). Use for
   every test/lint/build wiring; hand-edited gates.json is the
-  exception, not the path. `--dry-run` previews the entry, its mode
+  exception, not the path. `--needs <gate>` wires a DAG edge;
+  `--exclusive` runs the gate alone (tree-mutating or heavy gates
+  never race a sibling). `--dry-run` previews the entry, its mode
   memberships and the verification argv without writing — the way to
-  quote a wiring in a PR without drifting a sealed gates.json. In a governed repo the seal speaks after
-  the edit — accept it with `gov verify-plane --write`.
+  quote a wiring in a PR without drifting a sealed gates.json. In a
+  governed repo the seal speaks after the edit — accept it with
+  `gov verify-plane --write`.
 - `gov run --every-gate` — the full matrix. CI owns this; use it when
   several push ranges make one base ref insufficient (the hook does
   this automatically).
-- `gov run --gate <id>` — one gate. Use for re-running a single red
-  gate AFTER reading its failure output (the summary inlines it).
+- `gov run --gate <id> [id...]` — a named subset in one traversal
+  (#405); re-run red gates AFTER reading their failure output. `--at
+  <ref>` judges the selection AS OF a ref (#406) — reproducing a CI
+  red never needs a checkout; nothing records there.
 - `gov run --receipt` — evidence run: records a tamper-evident receipt
   bound to the tree. Use when a claim needs to be verifiable later.
 - `gov change-scope --base <ref>` — the surfaces the outgoing diff

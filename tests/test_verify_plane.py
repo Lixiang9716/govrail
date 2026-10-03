@@ -134,9 +134,13 @@ def test_write_refused_without_terminal_and_recorded_with_consent(
     monkeypatch.setenv("GOV_CALLER", "agent-7")
     (tmp_path / ".gov" / "pairing.json").write_text("{}\n", encoding="utf-8")
 
-    # bare --write without a terminal: refused (exit 2), nothing landed
+    # bare --write without a terminal: refused (exit 2), nothing landed.
+    # #413: the FIRST refusal names both requirements — following it
+    # verbatim must not die a second time on --reason it never mentioned.
     assert vp.main(["--write"]) == 2
-    assert "UNATTENDED" in capsys.readouterr().err
+    refusal = capsys.readouterr().err
+    assert "UNATTENDED" in refusal
+    assert "--confirm-unattended" in refusal and "--reason" in refusal
     seal = _json.loads((tmp_path / ".gov" / "plane-seal.json")
                        .read_text(encoding="utf-8"))
     assert ".gov/pairing.json" not in seal["files"]

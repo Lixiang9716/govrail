@@ -250,9 +250,39 @@ def test_close_refusal_carries_the_run_evidence(tmp_path, monkeypatch,
                       "--timeout", "60"]) == 1
     err = capsys.readouterr().err
     assert "THIS close's own gate run" in err
-    assert "(boom)" in err
+    assert "failed: boom" in err, (
+        "#420: the refusal partitions WHAT was not green — a FAIL reads "
+        "differently from a SKIP that was never evaluated")
     assert "run: --- summary:" in err, "the runner's report tail rides along"
     assert ".gov/last-run/boom.log" in err
+
+
+def test_close_refusal_partitions_skip_from_fail(tmp_path, monkeypatch,
+                                                 capsys):
+    """#420: SKIP was never evaluated — a close receipt must cover the
+    run with no skips — and the refusal must say so SEPARATELY from the
+    real failure, instead of naming both identically (six names for one
+    failure and five dependency-taken-down gates)."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["boom", "child"]},
+        "gates": [
+            {"id": "boom", "command": FAIL},
+            {"id": "child", "command": PASS, "needs": ["boom"]},
+        ],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="alpha", checklist=["x"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "--mode", "all",
+                      "--timeout", "60"]) == 1
+    err = capsys.readouterr().err
+    assert "failed: boom" in err
+    assert "skipped, not evaluated: child" in err
+    assert "SKIP is not green evidence" in err
 
 
 def test_uncommitted_reminder_throttles_per_card(tmp_path, monkeypatch,
@@ -1069,6 +1099,10 @@ def test_close_batch_one_run_shared_receipt(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "closed T-0001 (T-0001-alpha)" in out
     assert "closed T-0002 (T-0002-beta)" in out
+    # #423: the success line names ITS bar, so a later `gov receipt
+    # verify` decline (stricter clean-tree bar) is not a contradiction
+    assert out.count("green bar: task's own") == 1, \
+        "the bar is stated once for the batch's shared run"
     assert marker.read_text(encoding="utf-8") == "x", \
         "the batch must cost exactly ONE gate run"
     a = json.loads((proj / ".gov/tasks/T-0001-alpha.json")
@@ -1178,10 +1212,12 @@ def test_repin_advances_a_stale_brief_and_records_it(tmp_path, monkeypatch,
     capsys.readouterr()
     assert task.main(["check"]) == 1                     # STALE blocks
     err = capsys.readouterr().err
-    assert "gov task re-pin T-0001 --reason" in err, (
-        "the stale report must name the remedy (#368)")
+    assert "gov task repin T-0001 --reason" in err, (
+        "the stale report must name the remedy (#368) — and the verb it "
+        "names must be the implemented one (#401: the old hint said "
+        "'re-pin', a subcommand that does not exist)")
     assert task.main(["close", "T-0001"]) == 1           # close refuses
-    assert "gov task re-pin T-0001 --reason" in capsys.readouterr().err
+    assert "gov task repin T-0001 --reason" in capsys.readouterr().err
 
     with pytest.raises(SystemExit):                      # --reason required
         task.main(["repin", "T-0001"])

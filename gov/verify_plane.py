@@ -390,12 +390,20 @@ def _run(argv: list[str] | None = None) -> int:
         # unattended re-baseline.
         interactive = not args.confirm_unattended and sys.stdin.isatty()
         if not interactive and not args.confirm_unattended:
+            # #413: the first refusal names BOTH requirements — the old
+            # text sent the reader through --confirm-unattended only to
+            # be refused a second time on the --reason it never
+            # mentioned, costing every agent a round.
             print(
                 f"{PROG}: REFUSED — accepting a new constitution is a "
                 "recorded decision, and this shell has no terminal to hold "
                 "it. Re-run from an interactive terminal, or pass "
-                "--confirm-unattended to record it as UNATTENDED machine "
-                "consent under your caller identity.", file=sys.stderr)
+                "--confirm-unattended together with --reason naming the "
+                "authority (the decision, note, or issue that reviewed "
+                "the new constitution) — the consent is recorded as "
+                "UNATTENDED machine consent under your caller identity, "
+                "and the reason lands in the seal and the ritual ledger.",
+                file=sys.stderr)
             return 2
         if args.confirm_unattended and not (args.reason or "").strip():
             # #311: an unattended re-baseline is the one move this plane

@@ -4,7 +4,7 @@
       "sha256": "e5bef639ff66be81140b789404a58511bb7853171ddb312372555f0fca51b408"
     },
     ".gov/rejections/README.md": {
-      "sha256": "b6cf8158221e72e763cd355362d53ff0a56a0cd7400f6e55c53ae1e46ee8b419"
+      "sha256": "635cd5298f2f09ad6f1be1f53c0ef747de4c242239edf7509c32a4bfeeb28d7e"
     },
     ".gov/rejections/case-archive.sh": {
       "sha256": "bcdb51e63a9bec18eeb9875a90561a88a2faad6dba22660ad1c80b679462811d"
@@ -46,7 +46,7 @@
       "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
     },
     ".gov/rules.md": {
-      "sha256": "96fd0e5ea27ee87bf1cb3faed88a46d5286edf2f6f911104e4be233b82996976"
+      "sha256": "19130bbbfecc7ed434cf6505f6c38692ca378ae65f7fd09195091bb9dc6be92f"
     },
     ".gov/surfaces.json": {
       "sha256": "eb694e30b6087b731bda67a87dceee5186f88897e9d4b638ee40c19686d50156"
@@ -56,7 +56,7 @@
     }
   },
   "last_rebaseline": {
-    "ts": "2026-09-24T11:48:53+00:00",
+    "ts": "2026-10-03T11:04:57+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }

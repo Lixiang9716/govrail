@@ -1008,3 +1008,237 @@ def test_summary_line_names_the_selecting_mechanism(capsys):
     assert "path-scoped vs HEAD~1, 1 gate(s) out of scope" in out
     assert gates.run_gates(gs, None, 1, False, selected_by="every-gate") == 0
     assert "[every enabled gate]" in capsys.readouterr().out
+
+
+# ── issue batch #401-#420: the runner's new surfaces ──────────────────
+
+def test_main_gate_accepts_several_ids(tmp_path, capsys, monkeypatch):
+    """#405: `--gate a b` runs a named SUBSET in one traversal — the
+    shipped integrations already pass two ids, and N single-gate runs
+    re-pay the DAG N times."""
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, {"gates": [
+        {"id": "a", "command": PASS},
+        {"id": "b", "command": PASS},
+        {"id": "c", "command": PASS},
+    ]})
+    assert gates.main(["--gate", "a", "c"]) == 0
+    out = capsys.readouterr().out
+    assert "PASS a" in out and "PASS c" in out
+    assert "PASS b" not in out, "the unnamed gate must not run"
+    assert "[several gates, named by --gate]" in out
+
+
+def test_main_gate_multi_unknown_id_refused_by_name(tmp_path, capsys,
+                                                    monkeypatch):
+    """#405: a typo in the SECOND id must not read as a green first one."""
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
+    assert gates.main(["--gate", "a", "nope"]) == 2
+    err = capsys.readouterr().err
+    assert "unknown gate(s): nope" in err
+
+
+def test_diagnostic_line_quotes_json_kernel():
+    """#419: a JSON-emitting gate's summary quote is its actionable
+    kernel — the broken edge / the finding — not the first character of
+    the payload."""
+    payload = ('{"host": "h", "brokenEdges": '
+               '["upstream/shims/slot.js:22 -> /vendor/x/lib/index.js"], '
+               '"ok": false}\n')
+    assert gates._diagnostic_line(payload) == (
+        "upstream/shims/slot.js:22 -> /vendor/x/lib/index.js")
+    # a diagnostic-named field wins over an arbitrary first scalar
+    assert gates._diagnostic_line('{"ok": false, "summary": "2 drifts"}') \
+        == "summary: 2 drifts"
+    # non-JSON output keeps the plain first-content-line quote
+    assert gates._diagnostic_line("{\nboom: the real finding\n}") == \
+        "boom: the real finding"
+    assert gates._diagnostic_line("plain failure") == "plain failure"
+
+
+def test_summary_carries_skip_reasons(tmp_path, capsys, monkeypatch):
+    """#420: the skip set is named WHERE the counts are — one line per
+    skipped gate with its reason, and the reason rides the JSON record."""
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, {"gates": [
+        {"id": "boom", "command": FAIL},
+        {"id": "child", "command": PASS, "needs": ["boom"]},
+    ]})
+    assert gates.main(["--every-gate"]) == 1
+    out = capsys.readouterr().out
+    assert "--- skipped, not evaluated: 1 gate(s) ---" in out
+    assert "child (needs failed: boom" in out
+    assert "SKIP is not evidence" in out
+
+
+def test_requires_classification_names_environment(tmp_path, capsys,
+                                                   monkeypatch):
+    """#407: a gate that declared an environment gets that named where
+    the verdict lands — the red is readable as ENV-possible without
+    opening gates.json."""
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, {"gates": [
+        {"id": "net", "command": FAIL, "requires": ["network"]},
+    ]})
+    assert gates.main(["--every-gate"]) == 1
+    out = capsys.readouterr().out
+    assert "[requires network — ENV-possible]" in out
+    assert "the verdict may be this machine's environment" in out
+
+
+def test_requires_unknown_value_aborts_loud(tmp_path, monkeypatch):
+    """rule 5: a typo like 'netwrok' must refuse the config, not
+    silently classify nothing."""
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, {"gates": [
+        {"id": "net", "command": PASS, "requires": ["netwrok"]},
+    ]})
+    with pytest.raises(gates.ConfigError, match="netwrok"):
+        gates.load_config("gates.json")
+
+
+def test_exclusive_gate_runs_alone(tmp_path, monkeypatch):
+    """#403/#417: an exclusive gate holds the pool — nothing else is
+    admitted between its start and its settle, so a tree-mutating
+    self-test can never race a sibling's reads and a heavy fresh-clone
+    gate cannot starve a sibling's wall clock."""
+    monkeypatch.chdir(tmp_path)
+    log = tmp_path / "order.log"
+    script = tmp_path / "mark.py"
+    script.write_text(
+        "import sys, time\n"
+        "name = sys.argv[1]\n"
+        f"log = {str(log)!r}\n"
+        "def mark(word):\n"
+        "    open(log, 'a').write(word + ' ' + name + '\\n')\n"
+        "if __name__ == '__main__':\n"
+        "    import json\n"
+        "    args = json.loads(sys.argv[2]) if len(sys.argv) > 2 else []\n"
+        "    mark('start')\n"
+        "    time.sleep(args[0] if args else 0)\n"
+        "    mark('end')\n",
+        encoding="utf-8")
+    _write(tmp_path, {"concurrency": 4, "gates": [
+        {"id": "heavy", "command": [sys.executable, str(script), "heavy",
+                                    "[0.4]"], "exclusive": True},
+        {"id": "q1", "command": [sys.executable, str(script), "q1"]},
+        {"id": "q2", "command": [sys.executable, str(script), "q2"]},
+    ]})
+    assert gates.main([]) == 0
+    events = [tuple(line.split()) for line in
+              log.read_text(encoding="utf-8").splitlines()]
+    starts = {name for word, name in events if word == "start"}
+    assert starts == {"heavy", "q1", "q2"}
+    heavy_start = events.index(("start", "heavy"))
+    heavy_end = events.index(("end", "heavy"))
+    between = [name for word, name in events[heavy_start + 1:heavy_end]
+               if word == "start"]
+    assert between == [], (
+        f"#403/#417: nothing may run between an exclusive gate's start "
+        f"and settle, got {between}")
+
+
+def test_at_judges_the_ref_tree(tmp_path, capsys, monkeypatch):
+    """#406: `--at <ref>` reproduces a CI red against the tree AS OF the
+    ref — no checkout on a shared worktree — and records no history
+    (the evidence would die with the temporary worktree)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    for cmd in (["git", "init", "-q", "."],
+                ["git", "config", "user.email", "t@t"],
+                ["git", "config", "user.name", "t"]):
+        subprocess.run(cmd, check=True, capture_output=True)
+    subject = repo / "subject.txt"  # noqa: the spawns below pin encoding
+    subject.write_text("old", encoding="utf-8")
+    _write(repo, {"gates": [
+        {"id": "reader", "command": [sys.executable, "-c",
+                                     "print(open('subject.txt').read())"]},
+    ]})
+    subprocess.run(["git", "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "old"], check=True,
+                   capture_output=True)
+    subject.write_text("new", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-qm", "new"], check=True,
+                   capture_output=True)
+    assert gates.main(["--gate", "reader", "--at", "HEAD~1"]) == 0
+    captured = capsys.readouterr()
+    out, err = captured.out, captured.err
+    # the judged tree is the REF's tree, not the working tree: the gate
+    # read the content AS OF HEAD~1 ("old") while the working tree and
+    # HEAD say "new"
+    assert "PASS reader" in out
+    assert "old" in out and "new" not in out, (
+        "#406: the gate must read the ref's tree, not the working tree")
+    assert "judging a" in err and "temporary worktree" in err
+    assert "history is not recorded" in err
+
+
+def test_at_with_receipt_refused(tmp_path, capsys, monkeypatch):
+    """#406: a receipt would die with the temporary worktree — a
+    citation that cannot verify is worse than none."""
+    monkeypatch.chdir(tmp_path)
+    for cmd in (["git", "init", "-q", "."],
+                ["git", "config", "user.email", "t@t"],
+                ["git", "config", "user.name", "t"],
+                ["git", "commit", "--allow-empty", "-qm", "x"]):
+        subprocess.run(cmd, check=True, capture_output=True)
+    _write(tmp_path, {"gates": [{"id": "a", "command": PASS}]})
+    assert gates.main(["--gate", "a", "--at", "HEAD", "--receipt"]) == 2
+    assert "--receipt" in capsys.readouterr().err
+
+
+def test_summary_line_carries_wall_time_for_slow_failures(tmp_path, capsys,
+                                                          monkeypatch):
+    """#404: the wall time rides the failure line when it can matter —
+    '121s here, 69s standalone' is the starvation tell; a sub-second
+    gate stays uncluttered."""
+    monkeypatch.chdir(tmp_path)
+    slow = tmp_path / "slow.py"
+    slow.write_text("import time, sys\ntime.sleep(1.1)\n"
+                    "print('slow boom', file=sys.stderr)\n"
+                    "raise SystemExit(3)\n", encoding="utf-8")
+    _write(tmp_path, {"gates": [{"id": "slow", "command":
+                                 [sys.executable, str(slow)]}]})
+    assert gates.main([]) == 1
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if l.startswith("slow: slow boom"))
+    assert "ran 1." in line, line
+    assert "rerun: gov run --gate slow" in line
+
+
+def test_run_heals_tracked_evidence(tmp_path, capsys, monkeypatch):
+    """#423: an adopter's habitual `git add -A` can track the runner's
+    own evidence (.gov/last-run) — the rotation then dirties every
+    receipt the run records. The run untracks the directory from the
+    index, ignores it, and says so once."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    for cmd in (["git", "init", "-q", "."],
+                ["git", "config", "user.email", "t@t"],
+                ["git", "config", "user.name", "t"]):
+        subprocess.run(cmd, check=True, capture_output=True)
+    ev = repo / ".gov" / "last-run"
+    ev.mkdir(parents=True)
+    (ev / "stale.log.prev").write_text("old\n", encoding="utf-8")
+    (repo / "gates.json").write_text(json.dumps(
+        {"gates": [{"id": "ok", "command": PASS}]}), encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm",
+                    "tracked evidence"], check=True, capture_output=True)
+    assert gates.main([]) == 0
+    out = capsys.readouterr().out
+    assert "healed evidence tracking" in out
+    ls = subprocess.run(["git", "ls-files", "--", ".gov/last-run"],
+                        capture_output=True, text=True, check=True,
+                        encoding="utf-8", errors="replace")
+    assert ls.stdout.strip() == "", "evidence is untracked from the index"
+    gitignore = (repo / ".gitignore").read_text(encoding="utf-8")
+    assert ".gov/last-run/" in gitignore
+    # the heal is one-time: a second clean run says nothing
+    capsys.readouterr()
+    assert gates.main([]) == 0
+    assert "healed evidence tracking" not in capsys.readouterr().out

@@ -231,7 +231,9 @@ def test_push_scope_is_exported_to_the_gates(hooked, monkeypatch, tmp_path):
     ROOT, on every branch that sets it (#371) — so change-scoped TOOLS
     can honor it (#363): a project gate reading the env judges the push
     range instead of the working tree, and a scratch repository the gate
-    spawns knows the scope is not its own."""
+    spawns knows the scope is not its own. #402: the ROOT is the
+    materialized pushed-tree worktree — the run's own root — not the
+    developer's checkout."""
     tmp_path, log, checkout, fork, tip = _hooked_with_origin(hooked)
     stub = tmp_path / "gov-env-stub.sh"
     stub.write_text(
@@ -244,5 +246,37 @@ def test_push_scope_is_exported_to_the_gates(hooked, monkeypatch, tmp_path):
     r = _push((tmp_path, log, checkout),
               [f"{checkout} {tip} refs/heads/feature {ZERO}"])
     assert r.returncode == 0, r.stderr
-    assert _calls(log) == [f"GOV_CHANGE_BASE={fork} ROOT={tmp_path} "
-                           f"run --base {fork}"]
+    calls = _calls(log)
+    assert len(calls) == 1 and calls[0].endswith(f"run --base {fork}")
+    assert calls[0].startswith(f"GOV_CHANGE_BASE={fork} ROOT=")
+    root = calls[0].split("ROOT=")[1].split(" run ")[0]
+    assert Path(root).name.startswith("gov-prepush."), (
+        f"#402: the scoped run's ROOT must be the materialized pushed-tree "
+        f"worktree, got {root!r}")
+
+
+def test_existing_branch_push_judges_the_pushed_tree(hooked):
+    """#402: an existing branch (an upstream head exists) judges the
+    PUSHED TREE in a temporary worktree — the developer's unrelated
+    uncommitted state never gates a push that does not carry it — and
+    the worktree does not outlive the hook."""
+    tmp_path, log, checkout, fork, tip = _hooked_with_origin(hooked)
+    stub = tmp_path / "gov-cwd-stub.sh"
+    stub.write_text(
+        "#!/bin/sh\n"
+        f'echo "cwd=$(pwd) $@" >> {log}\n', encoding="utf-8")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    os.environ["GOV_BIN"] = str(stub)
+    try:
+        r = _push((tmp_path, log, checkout),
+                  [f"{checkout} {tip} {checkout} {fork}"])
+    finally:
+        os.environ.pop("GOV_BIN", None)
+    assert r.returncode == 0, r.stderr
+    assert "judging the pushed tree" in r.stderr
+    calls = _calls(log)
+    assert len(calls) == 1 and calls[0].endswith(f"run --base {fork}")
+    cwd = calls[0].split("cwd=")[1].split(" run ")[0]
+    assert cwd != str(tmp_path), "the run must not happen in the checkout"
+    assert Path(cwd).name.startswith("gov-prepush.")
+    assert not Path(cwd).exists(), "the worktree must be cleaned up"

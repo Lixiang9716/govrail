@@ -26,8 +26,20 @@ Gates declare what they cover with `paths` globs (`**` spans directories):
 `gov run --base <ref>` selects the gates whose paths match the diff (unpathed
 gates always run) and reports what was left out as out of scope — the
 smallest sufficient set from one source of truth, the same `paths`
-`gov change-scope` reads for its suggestions. `gov run --gate <id>` reruns a
-single gate.
+`gov change-scope` reads for its suggestions. `gov run --gate <id> [id...]`
+reruns the named gates in one traversal, and `--at <ref>` judges the
+selection against the tree as of a ref (a detached temporary worktree —
+gate triage never needs a checkout). Two gate properties shape how a gate
+runs: `"exclusive": true` runs it alone (the scheduler drains the pool
+first and admits nothing else until it settles — a tree-mutating self-test
+never races a sibling's reads, a fresh-clone gate never starves a
+tight-budget sibling), and `"requires": ["network"]` classifies what a red
+verdict may mean — the outcome line and the summary tag the failure
+ENV-possible (the machine's connectivity, not the tree). `timeoutMs` is a
+wall-clock budget per gate: under `concurrency > 1` a disk-heavy sibling
+(a fresh clone, a full rebuild) eats into a tight budget's wall time, so
+budgeted gates and heavy neighbors are exactly the `exclusive` use case —
+"passes standalone, times out in the DAG" is the tell (#404).
 
 One shipped gate inspects content rather than exit codes:
 `gov verify conflict-markers` (issue #104/D38) reads the changed files'
@@ -93,7 +105,10 @@ gate's failure advisory: the outcome line and its output are reported tagged
 its last lines visible in a `(passed with output)` block — passing with
 something to say is never silenced (D20). Exit code 0 = all green,
 1 = a blocking failure, which ends with a summary block naming each failed
-gate, its first output line, and how to rerun it alone.
+gate, its diagnostic line (a JSON-emitting gate is quoted by its kernel,
+not `{`), its wall time, and how to rerun it alone; gates a failed
+dependency took down are named in a "skipped, not evaluated" block with
+the reason.
 
 A run can leave verifiable evidence, not just a ledger line:
 `gov run --receipt` appends a hash-chained receipt of the run —

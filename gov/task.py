@@ -404,7 +404,7 @@ def cmd_check(args: argparse.Namespace) -> int:
                     f"{cid}: pins rules@{pinned[:12]} but the project is at "
                     f"rules@{combined[:12]} — the brief is stale after a "
                     f"governance adoption ({path}); if the same brief still "
-                    f"describes the work, advance it: gov task re-pin {cid} "
+                    f"describes the work, advance it: gov task repin {cid} "
                     "--reason <why>; otherwise close or void it")
                 print(f"STALE {cid} {title}")
             else:
@@ -602,7 +602,7 @@ def cmd_repin(args: argparse.Namespace) -> int:
     the actor, the instant and the reason.
     """
     if not args.reason.strip():
-        print("task: re-pin needs --reason (what changed, and why the "
+        print("task: repin needs --reason (what changed, and why the "
               "brief still holds)", file=sys.stderr)
         return 2
     combined, _files = rules_hash()
@@ -714,7 +714,7 @@ def _close_preflight(path: Path, card: dict, combined: str,
     if pinned != combined:
         return (1, f"task: {card['id']} pins rules@{str(pinned)[:12]} but "
                 f"the project is at rules@{combined[:12]} — if this brief "
-                f"still describes the work, advance it (gov task re-pin "
+                f"still describes the work, advance it (gov task repin "
                 f"{card['id']} --reason <why>); otherwise re-brief against "
                 "the adopted rules (gov task check names the stale cards)")
     # #358: the checklist is the contract the card exists to carry, so a
@@ -793,15 +793,27 @@ def cmd_close(args: argparse.Namespace) -> int:
     # genuinely missing.
     failed = _receipt_failures(records)
     if failed:
-        # A card closes only on an all-green run; a red run changes nothing
-        # on ANY card of the batch (the run itself is already in
-        # .gov/history/gates.jsonl). #395: the refusal names WHICH run it
-        # evaluated — THIS close's own, just recorded — and carries the
-        # runner's report tail, whose per-gate evidence pointers are the
-        # diagnosis (a standalone --gate pass measured a different run).
+        # #420: the refusal partitions WHAT was not green — a FAIL the
+        # tree must answer for reads differently from a SKIP that was
+        # never evaluated, and the old lumped list named them
+        # identically (six names for one failure and five gates a
+        # dependency took down).
+        outcome_by_gate = {g.get("gate"): g.get("outcome")
+                           for g in records if isinstance(g, dict)}
+        hard = [gid for gid in failed if outcome_by_gate.get(gid) != "SKIP"]
+        skips = [gid for gid in failed if outcome_by_gate.get(gid) == "SKIP"]
         print(f"task: refusing to close {len(planned)} card(s) — THIS "
               f"close's own gate run ({args.mode}, just recorded) was not "
-              f"green ({', '.join(failed)})", file=sys.stderr)
+              "green", file=sys.stderr)
+        if hard:
+            print(f"  failed: {', '.join(hard)} — the run report above "
+                  "names each; per-gate evidence: .gov/last-run/<gate>.log",
+                  file=sys.stderr)
+        if skips:
+            print(f"  skipped, not evaluated: {', '.join(skips)} — a close "
+                  "receipt must cover the run with no skips; fix the "
+                  "failed need and re-close (SKIP is not green evidence)",
+                  file=sys.stderr)
         tail = [ln for ln in run_report.splitlines() if ln.strip()]
         for ln in tail[-12:]:
             print(f"  run: {ln}", file=sys.stderr)
@@ -823,6 +835,17 @@ def cmd_close(args: argparse.Namespace) -> int:
         shared = "" if i == 0 else " — the batch's shared run"
         print(f"task: closed {_named(card, path)} with an all-green "
               f"{args.mode} run ({len(records)} gates){shared}")
+        if i == 0:
+            # #423: name the bar, so "green, closed" and a later "receipt
+            # verify: not a full clean green run" for the same receipt are
+            # one readable judgment, not two contradictory verdicts —
+            # close's green means every gate evaluated, none failed or
+            # skipped; receipt verify additionally vetoes a dirty tree
+            # and any non-PASS outcome.
+            print("  green bar: task's own — every selected gate "
+                  "evaluated, none failed or skipped; `gov receipt "
+                  "verify` applies the stricter clean-tree bar and may "
+                  "still decline this receipt")
         _uncommitted_reminder(path)
     return 0
 

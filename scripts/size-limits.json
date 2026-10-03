@@ -4,5 +4,7 @@
     "gov/**/*.py",
     "scripts/*.py"
   ],
-  "overrides": {}
+  "overrides": {
+    "gov/gates.py": 1850
+  }
 }
