@@ -1099,6 +1099,10 @@ def test_close_batch_one_run_shared_receipt(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "closed T-0001 (T-0001-alpha)" in out
     assert "closed T-0002 (T-0002-beta)" in out
+    # #423: the success line names ITS bar, so a later `gov receipt
+    # verify` decline (stricter clean-tree bar) is not a contradiction
+    assert out.count("green bar: task's own") == 1, \
+        "the bar is stated once for the batch's shared run"
     assert marker.read_text(encoding="utf-8") == "x", \
         "the batch must cost exactly ONE gate run"
     a = json.loads((proj / ".gov/tasks/T-0001-alpha.json")

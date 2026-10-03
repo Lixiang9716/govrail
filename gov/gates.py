@@ -865,6 +865,55 @@ def _select_by_paths(
     return selected, out
 
 
+def _heal_evidence_tracking(last_run_dir: Path) -> None:
+    """#423: tracked evidence dirties every receipt the run records — a
+    habitual ``git add -A`` tracked 25 ``.log.prev`` files in the field
+    and the rotation then made the adopter's ledger 4/4 ``dirty=true``.
+    Untrack the directory's contents from the index and ignore it, with
+    a named notice; the staged removals ride the adopter's next commit
+    (the same shape #353 used for the allocator locks, one level louder:
+    here the artifact is a whole directory)."""
+    try:
+        ls = subprocess.run(
+            ["git", "ls-files", "--", last_run_dir.as_posix()],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+        if ls.returncode != 0 or not ls.stdout.strip():
+            return
+        rm = subprocess.run(
+            ["git", "rm", "-r", "--cached", "-q", "--",
+             last_run_dir.as_posix()],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+        if rm.returncode != 0:
+            print(f"gov run: cannot untrack tracked evidence under "
+                  f"{last_run_dir.as_posix()}: {(rm.stderr or '').strip()}",
+                  file=sys.stderr)
+            return
+        top = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace")
+        root = (Path(top.stdout.strip()) if top.returncode == 0
+                and top.stdout.strip() else Path.cwd())
+        try:
+            from . import atomicio as _atomicio
+        except ImportError:  # direct-script execution (self-test scratch)
+            import atomicio as _atomicio
+        _atomicio.ensure_line(root / ".gitignore",
+                              last_run_dir.as_posix() + "/")
+        n = len(ls.stdout.splitlines())
+        print(f"gov run: healed evidence tracking — {n} file(s) under "
+              f"{last_run_dir.as_posix()} were tracked (an add -A habit "
+              "captures the runner's own scratch, and the rotation then "
+              "dirtied every receipt this run records); untracked them "
+              "from the index — commit the removal and the .gitignore "
+              "line")
+    except OSError as e:
+        print(f"gov run: evidence-tracking heal failed: {e}",
+              file=sys.stderr)
+
+
 def run_gates(
     gates: list[Gate],
     selection: list[str] | None,
@@ -1050,6 +1099,7 @@ def run_gates(
 
     try:
         last_run_dir.mkdir(parents=True, exist_ok=True)
+        _heal_evidence_tracking(last_run_dir)
         for stale in last_run_dir.glob("*.log"):
             if stale.stem not in outcomes:
                 _rotate(stale.stem)

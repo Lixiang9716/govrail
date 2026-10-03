@@ -835,6 +835,17 @@ def cmd_close(args: argparse.Namespace) -> int:
         shared = "" if i == 0 else " — the batch's shared run"
         print(f"task: closed {_named(card, path)} with an all-green "
               f"{args.mode} run ({len(records)} gates){shared}")
+        if i == 0:
+            # #423: name the bar, so "green, closed" and a later "receipt
+            # verify: not a full clean green run" for the same receipt are
+            # one readable judgment, not two contradictory verdicts —
+            # close's green means every gate evaluated, none failed or
+            # skipped; receipt verify additionally vetoes a dirty tree
+            # and any non-PASS outcome.
+            print("  green bar: task's own — every selected gate "
+                  "evaluated, none failed or skipped; `gov receipt "
+                  "verify` applies the stricter clean-tree bar and may "
+                  "still decline this receipt")
         _uncommitted_reminder(path)
     return 0
 

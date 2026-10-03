@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from pathlib import Path
@@ -5,6 +6,9 @@ from pathlib import Path
 import pytest
 
 from gov import self_test as st
+
+PASS_CMD = [sys.executable, "-c", "pass"]
+FAIL_CMD = [sys.executable, "-c", "raise SystemExit(1)"]
 
 # The project family executes arbitrary scripts directly; a POSIX shebang
 # script cannot run on Windows (WinError 193). Teaching self-test to run
@@ -342,3 +346,43 @@ def test_failure_headline_names_the_failing_item(tmp_path, monkeypatch,
         "self-test: FAIL .gov/rejections/case-broken.sh"), captured.err
     assert "rawfile closure drift" in captured.err
     assert "PASS" not in captured.err, "a passing test is never the headline"
+
+
+@needs_posix_exec
+def test_failing_case_with_red_baseline_is_environment_suspect(
+        tmp_path, monkeypatch, capsys):
+    """#421: a project case failing on its restore leg against an
+    already-red declared gate is classified environment-suspect — the
+    baseline probe names the real cause (on a fresh checkout, the
+    project's materialization step never ran) instead of leaving the
+    reader to re-derive it for a third time."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "gates.json").write_text(json.dumps(
+        {"gates": [{"id": "probe-me", "command": FAIL_CMD}]}),
+        encoding="utf-8")
+    _rejection(tmp_path, "case-probe-me.sh",
+               "#!/bin/sh\n# gate: probe-me\nexit 1\n")
+    assert st.main(["--scope", "project"]) == 1
+    out = capsys.readouterr().out
+    assert "baseline probe: gate 'probe-me' is already red" in out
+    assert "materialization step" in out
+    assert "environment-suspect 1" in out
+    assert "unclassified 0" in out
+
+
+@needs_posix_exec
+def test_failing_case_with_green_baseline_stays_unclassified(
+        tmp_path, monkeypatch, capsys):
+    """#421: the probe classifies nothing when the declared gate is
+    green on the untouched tree — a red case on a green baseline is a
+    genuine case-or-tree finding and keeps the hand-repro hint."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "gates.json").write_text(json.dumps(
+        {"gates": [{"id": "calm", "command": PASS_CMD}]}),
+        encoding="utf-8")
+    _rejection(tmp_path, "case-calm.sh",
+               "#!/bin/sh\n# gate: calm\nexit 1\n")
+    assert st.main(["--scope", "project"]) == 1
+    out = capsys.readouterr().out
+    assert "baseline probe" not in out
+    assert "unclassified 1" in out

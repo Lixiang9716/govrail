@@ -1207,3 +1207,38 @@ def test_summary_line_carries_wall_time_for_slow_failures(tmp_path, capsys,
     line = next(l for l in out.splitlines() if l.startswith("slow: slow boom"))
     assert "ran 1." in line, line
     assert "rerun: gov run --gate slow" in line
+
+
+def test_run_heals_tracked_evidence(tmp_path, capsys, monkeypatch):
+    """#423: an adopter's habitual `git add -A` can track the runner's
+    own evidence (.gov/last-run) — the rotation then dirties every
+    receipt the run records. The run untracks the directory from the
+    index, ignores it, and says so once."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.chdir(repo)
+    for cmd in (["git", "init", "-q", "."],
+                ["git", "config", "user.email", "t@t"],
+                ["git", "config", "user.name", "t"]):
+        subprocess.run(cmd, check=True, capture_output=True)
+    ev = repo / ".gov" / "last-run"
+    ev.mkdir(parents=True)
+    (ev / "stale.log.prev").write_text("old\n", encoding="utf-8")
+    (repo / "gates.json").write_text(json.dumps(
+        {"gates": [{"id": "ok", "command": PASS}]}), encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm",
+                    "tracked evidence"], check=True, capture_output=True)
+    assert gates.main([]) == 0
+    out = capsys.readouterr().out
+    assert "healed evidence tracking" in out
+    ls = subprocess.run(["git", "ls-files", "--", ".gov/last-run"],
+                        capture_output=True, text=True, check=True,
+                        encoding="utf-8", errors="replace")
+    assert ls.stdout.strip() == "", "evidence is untracked from the index"
+    gitignore = (repo / ".gitignore").read_text(encoding="utf-8")
+    assert ".gov/last-run/" in gitignore
+    # the heal is one-time: a second clean run says nothing
+    capsys.readouterr()
+    assert gates.main([]) == 0
+    assert "healed evidence tracking" not in capsys.readouterr().out

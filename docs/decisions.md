@@ -616,3 +616,21 @@ release PR，chore/docs 本就不触发）。
 ## 决定
 
 (a)。"评判 push 所携带的树"与 CI 同形,钩子一次 checkout 秒级成本;无法物化时回退旧路径并声明(fail loud,不静默)。#363 的新分支路径同迁(收益相同)。多 range/full matrix 路径维持原位运行:一个 worktree 只能装一个 sha,多 ref push 评判哪个都是欠约束。worktree 缺未跟踪构建产物导致的红,是"评判被推送的树"的诚实语义——采用方的门应自带物化(如 vendoring-repro 本就全新 clone)。
+
+## D69 — D69 — D69 — 回执的脏判定与双消费者裁决(#423):运行时证据不判树,愈合法定(D69)
+
+## 问题
+
+采用方仓库 25 个 .gov/last-run/*.log.prev 被 `git add -A` 习惯收编为 tracked:每次 run 的证据轮写(#375/#394)都在弄脏它正要认证的树——回执永远 dirty=true,`gov receipt verify` 一票否决,4/4 回执全不可核。同时 `gov task close` 的绿判定没有 dirty 项、NON_RUN 记为簿记:同一条回执,close 判绿、verify 拒绝,两个消费者同 run 异裁,而 close 的成功输出不说自己用的是哪个标准。
+
+## 选项
+
+(a) tree_state 的脏判定排除 .gov/last-run/ 与 .gov/history/ 前缀(扩展既有"history 天然 untracked"豁免),且 run 在写证据时治愈追踪:ls-files 命中即 `git rm -r --cached` + ensure-ignore + 点名通告(incex 删除随下次提交落地),#353 锁愈合同形、大一号;(b) 只治愈不豁免——治好后 tracked 状态消失,豁免看似多余,但治愈前的窗口内回执仍自否,且未来任何误 tracked 的 .gov 运行时文件都会复发;(c) 只豁免不治愈——git status 永久挂着 runner 的脏文件,采用方的 diff 噪音。
+
+## 状态
+
+已决
+
+## 决定
+
+(a)+(c),即两者都做,彼此正交:豁免让回执语义归位("回执判树,不判 runner 自己的抓痕"),治愈让工作树安静。治愈必须点名(exit 0 通告,不静默改 index——staged 删除是可见的树变更,由采用方提交)。close 的成功输出声明自己的绿标准(全选门全评、无 fail 无 skip),并说明 `gov receipt verify` 用更严的净树标准(PASS-only + dirty 否决)可能仍拒同一回执——同一证据、两个标准,各自说出来,不再假装一致。verify 侧维持严格(NOT_SELECTED 不算绿是"停用的门没有恰好在树上变绿"的正确立场)。

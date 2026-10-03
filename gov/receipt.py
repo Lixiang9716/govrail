@@ -99,6 +99,19 @@ def _receipt_path() -> Path:
     return Path(".gov/history/receipts.jsonl")
 
 
+def _runtime_evidence(status_line: str) -> bool:
+    """True when a porcelain line names the runner's own runtime state
+    (#423): ``.gov/last-run/`` evidence and the history ledgers are
+    rewritten by the very run a receipt certifies — their churn never
+    judges the tree."""
+    path = status_line[3:].strip()
+    if " -> " in path:
+        path = path.split(" -> ", 1)[1]
+    if path.startswith('"') and path.endswith('"'):
+        path = path[1:-1]
+    return path.startswith((".gov/last-run/", ".gov/history/"))
+
+
 def tree_state() -> tuple[str | None, str | None, bool]:
     """(HEAD commit sha, HEAD tree sha, dirty?) — best effort; outside
     git all three degrade.
@@ -112,7 +125,13 @@ def tree_state() -> tuple[str | None, str | None, bool]:
     unstaged modifications); untracked files do not dirty a receipt —
     they are not part of the commit's tree, and the plane's own ledgers
     under .gov/history are untracked by nature. An *edited* tracked file
-    absolutely changes what the gates just tested, hence the flag.
+    absolutely changes what the gates just tested, hence the flag — with
+    one carve-out (#423): the runner's own evidence under
+    ``.gov/last-run/`` (and the history ledgers) is rewritten BY the run
+    being certified, so an adopter's habitual ``git add -A`` that
+    tracked those files made every receipt veto itself; runtime
+    evidence churn is the plane's own doing, not a tree judgment
+    (``gov run`` heals the tracking with a named notice).
     """
     commit = tree = None
     try:
@@ -130,7 +149,11 @@ def tree_state() -> tuple[str | None, str | None, bool]:
             ["git", "status", "--porcelain", "--untracked-files=no"],
             capture_output=True, text=True,
             encoding="utf-8", errors="replace")
-        return commit, tree, bool(dirty.returncode == 0 and dirty.stdout.strip())
+        if dirty.returncode != 0:
+            return commit, tree, False
+        entries = [ln for ln in dirty.stdout.splitlines()
+                   if ln.strip() and not _runtime_evidence(ln)]
+        return commit, tree, bool(entries)
     except OSError:
         return commit, tree, False
 
@@ -190,7 +213,8 @@ def append_receipt(record: dict, path: Path | None = None) -> dict:
     # N10: BEFORE anything reads or writes through the path — even the
     # chain-head read must not follow a link out of the repository.
     atomicio.assert_contained(target, root=_ledger_root_of(target))
-    with open(target.with_name(target.name + ".lock"), "a+") as guard:
+    with open(target.with_name(target.name + ".lock"), mode="a+",
+              encoding="utf-8") as guard:  # a flock guard: never read, codec stated for the checker
         if fcntl is not None:
             fcntl.flock(guard, fcntl.LOCK_EX)
         try:

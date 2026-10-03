@@ -297,6 +297,65 @@ def _watchdog_env_marked() -> bool:
 
 
 
+def _classify_project_failure(p: Path, probed: dict[str, list[str]]) -> list[str]:
+    """#421: a project case that fails on its RESTORE/CLEAN leg may be
+    asserting against a non-green baseline — on a fresh checkout the
+    declared gate is already red because the project's materialization
+    step never ran, and the case's failure message reads as a case or
+    gate defect. Re-run the DECLARED gate once against the untouched
+    tree (after the cases finish; their traps restore the mutations):
+    red baseline → the failure is classified environment-suspect with
+    the fix named. `probed` memoizes per gate id — several failing
+    cases may declare the same gate, and the tree does not change
+    between probes. Green (or an unknown gate / config error) classifies
+    nothing: the generic hand-repro hint stands."""
+    try:
+        declared = _harness_gate_rx().findall("\n".join(
+            p.read_text(encoding="utf-8", errors="replace").splitlines()[:5]))
+    except OSError:
+        return []
+    if not declared:
+        return []
+    gid = declared[0]
+    if gid not in probed:
+        probed[gid] = []
+        # In-process on purpose: a subprocess would resolve whatever
+        # `gov` sits on the path (a pinned, older copy) and inherit the
+        # seal precheck's refusals — neither belongs in a probe whose
+        # only question is "is this gate red on the untouched tree".
+        try:
+            try:
+                from .. import gates as gates_mod
+            except ImportError:  # direct-script execution (scratch)
+                import gates as gates_mod
+            import contextlib
+            import io as _io
+            _modes, all_gates, concurrency, _dm = gates_mod.load_config(
+                "gates.json")
+            gate = next((g for g in all_gates if g.id == gid), None)
+            if gate is not None and gate.enabled:
+                buf = _io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    rc = gates_mod.run_gates([gate], [gid],
+                                             concurrency or 1, False)
+                probed[gid] = (
+                    [f"    baseline probe: gate '{gid}' is already red "
+                     "on the untouched tree — environment-suspect: this "
+                     "case's restore leg asserts against a non-green "
+                     "baseline; fix the baseline first (on a fresh "
+                     "checkout this is usually the project's "
+                     "materialization step, e.g. a sync/vendor script)"]
+                    if rc == 1 else [])
+        except Exception:  # noqa: BLE001 — a probe that cannot run classifies nothing
+            probed[gid] = []
+    return probed[gid]
+
+
+def _harness_gate_rx():
+    from ._harness import GATE_RX
+    return GATE_RX
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         from ..root import anchor_to_git_root
@@ -369,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     # under project failures (their scripts may legitimately need this
     # environment; an automatic replay would prove nothing).
     counts = {"tool-defect": 0, "environment-suspect": 0, "unclassified": 0}
+    baseline_probes: dict[str, list[str]] = {}
     for idx, (line, ok) in enumerate(results):
         print(line)
         if ok:
@@ -383,10 +443,17 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     counts["unclassified"] += 1
         else:
-            print("    clean-env comparison not attempted — project cases "
-                  "run arbitrary scripts; reproduce by hand in a minimal "
-                  "environment.")
-            counts["unclassified"] += 1
+            case = project_jobs[idx - len(tool_jobs)]
+            baseline = _classify_project_failure(case, baseline_probes)
+            if baseline:
+                for verdict in baseline:
+                    print(verdict)
+                    counts["environment-suspect"] += 1
+            else:
+                print("    clean-env comparison not attempted — project "
+                      "cases run arbitrary scripts; reproduce by hand in "
+                      "a minimal environment.")
+                counts["unclassified"] += 1
     _coverage_report(explain=getattr(args, "explain", False))
     tools_n, project_n = len(tool_jobs), len(project_jobs)
     parts = [f"tools {tools_n}" if tools_n else "", f"project {project_n}" if project_n else ""]
