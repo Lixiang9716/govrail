@@ -329,6 +329,36 @@ def _render_record(fields: dict[str, str]) -> str:
     )
 
 
+_RESIDUAL_NOTE = (" — scope: existence + digests; cross-language links "
+                  "NOT checked here (a project's crosslink gate owns "
+                  "those, if wired) — a green here never means the links "
+                  "exist (#426)")
+
+
+def _residual_note() -> str:
+    """What a green pairing verdict does NOT mean (#426): the local
+    pre-flight and a project's crosslink gate enforce different halves
+    of one bilingual convention, and the pre-flight's silent green read
+    as 'compliant' while CI's crosslink gate said 'violation'. The
+    verifier states its scope where it states its verdict."""
+    return _RESIDUAL_NOTE
+
+
+def _link_hint(record: Path, fields: dict[str, str]) -> str:
+    """The expected bidirectional crosslink shape for ONE pair (#427's
+    authoring-time hint): the convention is discoverable only by
+    reading a conforming pair today. Uses the pair's ACTUAL names, so
+    the line is copy-pasteable regardless of the project's counterpart
+    naming. Not a check — the pairing contract (rule 7) does not include
+    links; a project that wants them owns a gate for them."""
+    src_name = record.name[:-len(".i18n.yaml")] + ".md"
+    zh_name = fields.get("counterpart") or src_name
+    return (f"  link hint (not verified here): the usual shape is a "
+            f"bidirectional line under the H1 — en side: "
+            f"`English | [中文]({zh_name})`; zh side: "
+            f"`[English]({src_name}) | 中文`")
+
+
 def _announce_wrote(record: Path, fields: dict[str, str],
                     previous: dict[str, str] | None = None) -> None:
     """Issue #150: --write names the field values it wrote, not just the
@@ -350,6 +380,10 @@ def _announce_wrote(record: Path, fields: dict[str, str],
     print(f"  en_commit: {fields['en_commit'] or 'untracked'}  "
           f"zh_commit: {fields['zh_commit'] or 'untracked'}"
           "  (last commit that touched each side — not HEAD)")
+    if not previous:
+        # #427: a FIRST confirmation is the authoring moment — say the
+        # expected crosslink shape here, while the pair is on screen.
+        print(_link_hint(record, fields))
     untracked = [s for s in ("en", "zh") if not fields[f"{s}_commit"]]
     if untracked:
         # #253: the commit stamps are frozen facts — a side stamped
@@ -660,6 +694,12 @@ def _explain(cfg: dict[str, list[str]]) -> int:
     print("  - last_confirmed is datetime.isoformat() in UTC (+00:00).")
     print("  - Do not hand-edit the record: re-confirm with --write instead.")
     print()
+    print()
+    print("Not part of this contract: cross-language LINKS between the")
+    print("sides (the line-2 'English | [中文](x.zh.md)' pattern some")
+    print("projects add). This verifier judges existence + digests only;")
+    print("a green here never means the links exist (#426).")
+    print()
     print("Commands:")
     print("  gov verify-pairing                    # the gate: full check")
     print("  gov verify-pairing --write <stem>     # re-confirm one pair")
@@ -722,7 +762,8 @@ def _run(args: argparse.Namespace, cfg: dict[str, list[str]]) -> int:
             print(f"verify_translation_pairing: {len(errors)} violation(s) in "
                   f"{len(sources)} staged pair(s)")
             return 1
-        print(f"verify_translation_pairing: {len(sources)} staged pair(s) ok")
+        print(f"verify_translation_pairing: {len(sources)} staged pair(s) ok"
+              f"{_residual_note()}")
         return 0
 
     errors: list[str] = []
@@ -746,7 +787,8 @@ def _run(args: argparse.Namespace, cfg: dict[str, list[str]]) -> int:
             print(e)
         print(f"verify_translation_pairing: {len(errors)} violation(s)")
         return 1
-    print(f"verify_translation_pairing: {len(pairs)} pair(s) ok")
+    print(f"verify_translation_pairing: {len(pairs)} pair(s) ok"
+          f"{_residual_note()}")
     return 0
 
 

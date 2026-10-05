@@ -384,3 +384,58 @@ def test_record_header_names_the_canonical_spelling(tmp_path, monkeypatch):
     rec = (docs / "foo.i18n.yaml").read_text(encoding="utf-8")
     assert "`gov verify pairing --write`" in rec
     assert "gov verify-pairing" not in rec
+
+
+# ── #426/#427: the green verdict states its scope; the authoring moment
+#    teaches the crosslink shape ────────────────────────────────────────
+
+def test_green_verdict_names_its_scope(tmp_path, monkeypatch, capsys):
+    """#426: a green pairing verdict never means 'the whole bilingual
+    convention holds' — the verifier states what it does NOT check
+    (cross-language links belong to a project's crosslink gate), so the
+    local pre-flight cannot read as compliant while a crosslink gate
+    says violation."""
+    monkeypatch.chdir(tmp_path)
+    _pair(tmp_path)
+    rc = vtp.main(["--write", "foo"])
+    assert rc == 0
+    capsys.readouterr()
+    assert vtp.main([]) == 0
+    out = capsys.readouterr().out
+    assert "1 pair(s) ok" in out
+    assert "cross-language links NOT checked here" in out
+    assert "#426" in out
+
+
+def test_write_fresh_pair_prints_link_hint_once(tmp_path, monkeypatch,
+                                                capsys):
+    """#427 (authoring-time half): the FIRST --write of a pair prints
+    the expected bidirectional crosslink shape with the pair's ACTUAL
+    names — copy-pasteable; a re-confirm does not repeat it."""
+    monkeypatch.chdir(tmp_path)
+    _pair(tmp_path)
+    assert vtp.main(["--write", "foo"]) == 0
+    out = capsys.readouterr().out
+    assert "English | [中文](foo.zh.md)" in out
+    assert "[English](foo.md) | 中文" in out
+    assert "not verified here" in out
+    # a side edit + re-confirm absorbs the change without re-teaching
+    (tmp_path / "docs" / "foo.md").write_text("# foo v2\n",
+                                              encoding="utf-8")
+    assert vtp.main(["--write", "foo"]) == 0
+    out2 = capsys.readouterr().out
+    assert "link hint" not in out2
+
+
+def test_explain_names_the_link_residual(tmp_path, monkeypatch, capsys):
+    """#427: the read-only schema dump states that links are NOT part of
+    the pairing contract — the convention's halves are named in one
+    place an author actually reads."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".gov").mkdir()
+    (tmp_path / ".gov" / "pairing.json").write_text(
+        json.dumps({"counterparts": ["{stem}.zh.md"]}), encoding="utf-8")
+    assert vtp.main(["--explain"]) == 0
+    out = capsys.readouterr().out
+    assert "cross-language LINKS" in out
+    assert "existence + digests only" in out
