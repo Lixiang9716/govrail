@@ -3,6 +3,11 @@
 Usage-oriented highlights (the CHANGELOG carries commits; this carries
 how to use them). `gov whatsnew [--since <version>]` prints from here.
 
+## 0.52.0 — (draft: copied from CHANGELOG, rewrite for usage)
+
+- verify-pairing states its scope where it says green; the authoring moment teaches the crosslink shape
+- issue batch [#401](https://github.com/Lixiang9716/govrail/issues/401)-[#423](https://github.com/Lixiang9716/govrail/issues/423) — reports quote the real failure; gates can run alone and at a ref; the hook judges the pushed tree
+
 ## 0.51.0 —
 
 - **task:** `gov task new` mints past the upstream's card ids — parallel branches stop colliding on T-numbers (a bumped mint is announced); two live cards sharing an id still refuse ambiguous prefixes naming both files

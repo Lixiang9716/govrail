@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.52.0](https://github.com/Lixiang9716/govrail/compare/v0.51.0...v0.52.0) (2026-10-05)
+
+
+### Features
+
+* verify-pairing states its scope where it says green; the authoring moment teaches the crosslink shape ([#426](https://github.com/Lixiang9716/govrail/issues/426)) ([#428](https://github.com/Lixiang9716/govrail/issues/428)) ([94f3c54](https://github.com/Lixiang9716/govrail/commit/94f3c54f88172ee4617c0c8f04aa629a013cefce))
+
+
+### Bug Fixes
+
+* issue batch [#401](https://github.com/Lixiang9716/govrail/issues/401)-[#423](https://github.com/Lixiang9716/govrail/issues/423) — reports quote the real failure; gates can run alone and at a ref; the hook judges the pushed tree ([#424](https://github.com/Lixiang9716/govrail/issues/424)) ([c6e9033](https://github.com/Lixiang9716/govrail/commit/c6e9033de7511484cdcf2354d06167e9b3b6138e))
+
 ## [0.51.0](https://github.com/Lixiang9716/govrail/compare/v0.50.0...v0.51.0) (2026-09-26)
 
 
