@@ -387,18 +387,34 @@ def main(argv: list[str] | None = None) -> int:
                              "per-gate case list and the case-authoring "
                              "remedy (the default reports coverage counts "
                              "only, #337)")
-    parser.add_argument("--case", metavar="NAME",
-                        help="run one tools-family case by name and exit — "
-                             "the diagnostic building block of the clean-env "
-                             "replay (#139); implies --scope tools")
+    parser.add_argument("--case", metavar="NAME_OR_PATH",
+                        help="run ONE case and exit: a tools-family case "
+                             "by name, or a project case by path "
+                             "(.gov/rejections/case-foo.sh — #445-1: the "
+                             "single-flaky-case fix loop); implies "
+                             "--scope tools")
     args = parser.parse_args(argv)
 
     if args.case:
+        _scrub_environment()
+        # #445-1: a project case is named by its PATH (.gov/rejections/…)
+        # — the fix-loop for one flaky case re-runs it 30 times without
+        # paying the suite. Tools-family cases keep the by-name form.
+        candidate = Path(args.case)
+        if "/" in args.case or "\\" in args.case \
+                or candidate.suffix in (".sh", ".bash", ".py"):
+            if not candidate.is_file():
+                print(f"self-test: no such project case: {args.case}",
+                      file=sys.stderr)
+                return 2
+            line, ok = _run_project_case(candidate)
+            print(line)
+            return 0 if ok else 1
         case = _find_case(args.case)
         if case is None:
-            parser.error(f"unknown case '{args.case}' — not in CASES or the "
-                         "diagnostic probes")
-        _scrub_environment()
+            parser.error(f"unknown case '{args.case}' — not in CASES, the "
+                         "diagnostic probes, or an existing project-case "
+                         "path")
         # --case is the innermost single-case execution (the pool's
         # watchdog forked this very process to reach here): run direct
         line, ok = _run_tool_case_direct(case)
@@ -444,6 +460,18 @@ def main(argv: list[str] | None = None) -> int:
                     counts["unclassified"] += 1
         else:
             case = project_jobs[idx - len(tool_jobs)]
+            # #429: on Windows a "cannot execute" FAIL is the OS refusing
+            # a shebang script — the environment speaking, not 15 proofs
+            # that never ran being gate defects. Named before the
+            # baseline probe (a gate that cannot exec proves nothing).
+            if os.name == "nt" and "cannot execute" in line:
+                print("    environment-suspect: Windows cannot exec "
+                      "shebang cases directly — export GOV_CASE_BASH to "
+                      "a Git Bash binary (System32's bash.exe is WSL and "
+                      "mangles Windows paths); the case never ran, so "
+                      "this says nothing about the gate")
+                counts["environment-suspect"] += 1
+                continue
             baseline = _classify_project_failure(case, baseline_probes)
             if baseline:
                 for verdict in baseline:

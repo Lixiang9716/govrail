@@ -386,3 +386,31 @@ def test_failing_case_with_green_baseline_stays_unclassified(
     out = capsys.readouterr().out
     assert "baseline probe" not in out
     assert "unclassified 1" in out
+
+
+def test_case_selector_accepts_a_project_case_path(tmp_path, monkeypatch,
+                                                   capsys):
+    """#445-1: the single-flaky-case fix loop runs ONE project case by
+    path without paying the suite — `gov self-test --case
+    .gov/rejections/case-foo.sh`."""
+    monkeypatch.chdir(tmp_path)
+    _rejection(tmp_path, "case-solo.sh",
+               '#!/bin/sh\n# gate: conflict-markers\nexit 0\n')
+    assert st.main(["--case", ".gov/rejections/case-solo.sh"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("PASS .gov/rejections/case-solo.sh")
+    # a failing case exits 1 with its evidence
+    _rejection(tmp_path, "case-bad.sh", "#!/bin/sh\nexit 1\n")
+    assert st.main(["--case", ".gov/rejections/case-bad.sh"]) == 1
+    # a nonexistent path refuses by name
+    assert st.main(["--case", ".gov/rejections/case-ghost.sh"]) == 2
+
+
+def test_case_shell_is_none_on_posix():
+    """#429: the bash routing exists for Windows only — a POSIX host
+    execs shebangs natively and must never pay a shell indirection."""
+    import sys as _sys
+    if _sys.platform == "win32":
+        pytest.skip("the POSIX assertion is the subject")
+    from gov.self_test._harness import _case_shell
+    assert _case_shell() is None

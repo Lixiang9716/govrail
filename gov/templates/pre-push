@@ -16,6 +16,16 @@
 # self-test's scratch repositories) must resolve repositories by cwd,
 # not by inherited environment (#20).
 
+# #440: CI owns the full matrix — a path-scoped green here says nothing
+# about the gates this push's diff scoped out. Say so once, where the
+# author decides to push, so a cross-cutting PR's extra CI red is not
+# the first place the gap surfaces (gov run's scope line names the
+# out-of-scope ids above).
+ci_note() {
+    echo "pre-push: CI additionally runs the FULL gate matrix — gates \
+out of this push's scope (see the scope line above) still run there" >&2
+}
+
 # Resolve gov robustly (D29): explicit override, then PATH, then module.
 # $GOV_BIN is an argv STRING and is word-split by design — it may carry
 # interpreter arguments ("python -m gov"); a path containing spaces is
@@ -48,6 +58,8 @@ run_dag() {
     if [ "$hook_rc" -ne 0 ]; then
         echo "pre-push: the gate DAG is red — per-gate evidence: \
 .gov/last-run/<gate>.log (previous generation: *.log.prev)" >&2
+    else
+        ci_note
     fi
     return $hook_rc
 }

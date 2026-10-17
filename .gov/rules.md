@@ -80,7 +80,11 @@ the task gate fails on stale pins and receipt-less done cards, and the
 pre-push hook surfaces both. To push, close the card (all items checked
 + green receipt) or explicitly defer it. The checklist is not a
 self-authored todo — it is a gate-enforced contract between the caller
-and the plane.
+and the plane. Exempt (#444): a delegated run whose sole deliverable is
+a report returned to its caller, and whose only mutations are untracked
+scratch — a read-only observation run carries no contract a card could
+enforce, and forcing one would put an uncommittable file into a
+no-write mandate; the report itself is the evidence.
 
 ## 10. A new command ships its discovery surface in the same PR
 

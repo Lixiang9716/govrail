@@ -185,3 +185,26 @@ def test_similar_hint_surfaces_a_real_match(tmp_path, monkeypatch, capsys):
                  "--sig", "lease-root-second"], tmp_path, monkeypatch) == 0
     out = capsys.readouterr().out
     assert "similar earlier" in out and "lease-root" in out
+
+
+def test_record_tolerates_legacy_schema_rows(tmp_path, monkeypatch, capsys):
+    """#430/#438: rows written before the expectation/reality split
+    (keys summary/discovered) made the record-time similarity join
+    crash with KeyError — AFTER the append, so the record landed and
+    the command still failed (the natural retry double-appends).
+    Legacy rows are skipped from scoring with one named line; they
+    still count toward their sig's threshold."""
+    monkeypatch.chdir(tmp_path)
+    ledger = tmp_path / ".gov" / "surprises.jsonl"
+    ledger.parent.mkdir(parents=True)
+    legacy = {"ts": "2026-10-07T00:00:00+00:00", "sig": "old-schema",
+              "summary": "something happened", "severity": "low",
+              "discovered": "2026-10-07"}
+    ledger.write_text(json.dumps(legacy) + "\n", encoding="utf-8")
+    assert surprise.main(["record", "fresh expectation",
+                          "--reality", "fresh reality"]) == 0
+    out = capsys.readouterr().out
+    assert "1 ledger row(s) predate the expectation/reality schema" in out
+    lines = ledger.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2, "the new record landed"
+    assert json.loads(lines[1])["expectation"] == "fresh expectation"

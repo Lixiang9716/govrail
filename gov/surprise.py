@@ -173,8 +173,21 @@ def _cmd_record(args: argparse.Namespace) -> int:
     counts = _counts(entries + [entry])
     print(f"surprise: recorded under sig '{sig}' "
           f"({counts[sig]} entr{'y' if counts[sig] == 1 else 'ies'} so far)")
+    # #430/#438: the ledger is append-only and outlives schema changes —
+    # rows written before the expectation/reality split carry summary/
+    # discovered instead. They cannot join the similarity score (no
+    # expectation to compare), so they are skipped with one named line:
+    # data lands, signal degrades LOUDLY, never a KeyError after the
+    # append made the caller think the record failed.
+    foreign = [e for e in entries
+               if "expectation" not in e or "reality" not in e]
+    if foreign:
+        print(f"surprise: {len(foreign)} ledger row(s) predate the "
+              "expectation/reality schema — skipped from similarity "
+              "scoring (they still count toward their sig's threshold)")
     others = [e for e in entries
-              if e["sig"] != sig
+              if e.get("sig") != sig
+              and "expectation" in e and "reality" in e
               and len(_terms(expectation + " " + reality)
                       & _terms(e["expectation"] + " " + e["reality"])) >= 2]
     if others:

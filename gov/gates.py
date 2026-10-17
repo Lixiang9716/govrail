@@ -1026,8 +1026,11 @@ def run_gates(
                 if failed_needs:
                     # #420: the reason rides the record — a reader of the
                     # JSON (or the skipped block below) learns WHY without
-                    # re-deriving the DAG.
-                    reason = f"needs failed: {', '.join(failed_needs)}"
+                    # re-deriving the DAG. #434: causal connector — the
+                    # old "needs failed: X" parsed as "requires X to
+                    # fail", the exact opposite of what happened.
+                    reason = (f"blocked by red: "
+                              f"{', '.join(failed_needs)}")
                     outcomes[child] = "SKIP"
                     details[child] = reason
                     durations[child] = 0
@@ -1191,7 +1194,8 @@ def run_gates(
         emit(f"--- skipped, not evaluated: {len(skipped)} gate(s) ---")
         for gid in skipped:
             emit(f"{gid} ({details.get(gid, 'a dependency did not pass')} — "
-                 "SKIP is not evidence; fix the failed need and re-run)")
+                 "skipped because that gate failed; SKIP is not evidence; "
+                 "fix the red gate and re-run)")
 
     if failed:
         emit(f"evidence: {last_run_dir.as_posix()}/<gate>.log holds each "
@@ -1199,7 +1203,26 @@ def run_gates(
              "previous generation (#394: a transient crash survives the "
              "rerun)")
     counts = {o: sum(1 for v in outcomes.values() if v == o) for o in OUTCOME_ORDER}
-    parts = [f"{n} {o.lower()}" for o, n in counts.items() if n]
+    # #437: the one line a reader is guaranteed to see (piped, CI,
+    # tail-ed) carries the ids, not just counts — "1 fail, 1 timeout"
+    # sent an operator through ten --gate reruns to find two names the
+    # runner already had. Capped: a 20-gate red would bury the line.
+    def _names(outcome: str) -> str:
+        ids = [gid for gid in outcomes if outcomes.get(gid) == outcome]
+        if not ids:
+            return ""
+        shown = ", ".join(ids[:5]) + ("…" if len(ids) > 5 else "")
+        return f" ({shown})"
+
+    parts = []
+    for o in OUTCOME_ORDER:
+        n = counts.get(o, 0)
+        if not n:
+            continue
+        if o in BLOCKING_OUTCOMES:
+            parts.append(f"{n} {o.lower()}{_names(o)}")
+        else:
+            parts.append(f"{n} {o.lower()}")
     # #355: the count is qualified — a bare `N gates: N pass` is right and
     # unreadable (the same tree answers 8, 9 and 12 from three entry
     # points); the bracket names the mechanism that picked the set.
@@ -1469,7 +1492,22 @@ def main(argv: list[str] | None = None) -> int:
                         help="select gates whose 'paths' match the diff against this git ref; "
                              "with --merge: the integration target baseline instead "
                              "(default origin/master)")
-    parser.add_argument("--gate", nargs="+", default=None, metavar="GATE_ID",
+    class _GateOnce(argparse.Action):
+        # #441: argparse replaces on a repeated flag, so `--gate a --gate
+        # b` ran ONE gate while the caller read four verifications off
+        # one command. The subset form is space-separated; a repeated
+        # flag is a caller bug and refuses loud (rule 5), naming the
+        # working form.
+        def __call__(self, parser, namespace, values, option_string=None):
+            if getattr(namespace, self.dest, None) is not None:
+                parser.error(
+                    f"--gate given more than once ({option_string} "
+                    f"{' '.join(values)}); pass the ids space-separated: "
+                    "--gate <id1> <id2> ...")
+            setattr(namespace, self.dest, values)
+
+    parser.add_argument("--gate", nargs="+", action=_GateOnce,
+                        default=None, metavar="GATE_ID",
                         help="run these gate(s) by id, space-separated "
                              "(#405: one DAG traversal for a subset — "
                              "`--gate closures bundle-files`; a shipped "
