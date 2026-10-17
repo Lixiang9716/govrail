@@ -487,21 +487,29 @@ def _run_project_case(p: Path) -> tuple[str, bool]:
     recognized ``SKIP`` marker on the first stdout line is surfaced as
     its own report line (still exit-0 semantics: a budget-skip is a
     pass the reader can see, never a silent one)."""
+    if not os.access(p, os.X_OK):
+        return f"FAIL {p} (not executable — chmod +x it)", False
     argv = [str(p)]
     if os.name == "nt" and p.suffix in (".sh", ".bash"):
         # #429: CreateProcess cannot exec a shebang script — route .sh
         # cases through a resolved POSIX shell (GOV_CASE_BASH, or a
         # which-found bash with the System32 WSL candidate excluded).
-        shell = _case_shell()
-        if shell is None:
-            return (f"FAIL {p} (Windows cannot exec a shebang case and "
-                    "no bash was found — export GOV_CASE_BASH to your "
-                    "Git Bash, e.g. D:\\Git\\usr\\bin\\bash.exe; "
-                    "System32's bash.exe is WSL and mangles Windows "
-                    "paths)", False)
-        argv = [*shell, p.as_posix()]
-    if not os.access(p, os.X_OK):
-        return f"FAIL {p} (not executable — chmod +x it)", False
+        # A case WITHOUT a shebang keeps the direct spawn: the
+        # missing-shebang FAIL is the contract everywhere (a bash
+        # indirection would silently run it and turn the bad-case
+        # proof into a pass), and the OSError below names it.
+        has_shebang = p.read_text(encoding="utf-8",
+                                  errors="replace").startswith("#!")
+        if has_shebang:
+            shell = _case_shell()
+            if shell is None:
+                return (f"FAIL {p} (Windows cannot exec a shebang case "
+                        "and no bash was found — export GOV_CASE_BASH "
+                        "to your Git Bash, e.g. "
+                        "D:\\Git\\usr\\bin\\bash.exe; System32's "
+                        "bash.exe is WSL and mangles Windows paths)",
+                        False)
+            argv = [*shell, p.as_posix()]
     try:
         proc = _run_text(
             argv, capture_output=True, text=True,

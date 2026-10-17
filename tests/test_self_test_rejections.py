@@ -388,6 +388,7 @@ def test_failing_case_with_green_baseline_stays_unclassified(
     assert "unclassified 1" in out
 
 
+@needs_posix_exec
 def test_case_selector_accepts_a_project_case_path(tmp_path, monkeypatch,
                                                    capsys):
     """#445-1: the single-flaky-case fix loop runs ONE project case by
