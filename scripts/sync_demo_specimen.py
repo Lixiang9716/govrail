@@ -113,11 +113,20 @@ def sync_gates() -> int:
 
 def main() -> int:
     changed = sync_copies() + sync_gates()
+    sys.path.insert(0, str(REPO))
+    from gov import verify_plane
+    # Re-seal on drift, not only on sync-changed: a copy updated by an
+    # external `cp` (the batch-edit reflex) leaves the script seeing
+    # "nothing to do" while the specimen's seal judges the OLD content
+    # — the CI demo_specimen cell then refuses on the drifted rules.md.
+    drift = verify_plane.violations(DEMO)
     if changed:
-        sys.path.insert(0, str(REPO))
-        from gov import verify_plane
         verify_plane.baseline(DEMO, unattended=True)
         print("re-sealed the demo's plane seal over the synced state")
+    elif drift:
+        verify_plane.baseline(DEMO, unattended=True)
+        print("re-sealed the demo's plane seal (content was current but "
+              f"the seal lagged: {', '.join(sorted(drift)[:3])})")
     else:
         print("sync: nothing to do — the specimen is current")
     return 0

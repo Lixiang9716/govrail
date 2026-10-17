@@ -1068,7 +1068,8 @@ def test_summary_carries_skip_reasons(tmp_path, capsys, monkeypatch):
     assert gates.main(["--every-gate"]) == 1
     out = capsys.readouterr().out
     assert "--- skipped, not evaluated: 1 gate(s) ---" in out
-    assert "child (needs failed: boom" in out
+    assert "child (blocked by red: boom" in out
+    assert "skipped because that gate failed" in out
     assert "SKIP is not evidence" in out
 
 
@@ -1242,3 +1243,45 @@ def test_run_heals_tracked_evidence(tmp_path, capsys, monkeypatch):
     capsys.readouterr()
     assert gates.main([]) == 0
     assert "healed evidence tracking" not in capsys.readouterr().out
+
+
+def test_repeated_gate_flag_refuses_loud(tmp_path, capsys, monkeypatch):
+    """#441: `--gate a --gate b` used to keep only the LAST flag value —
+    a caller passing four gates read four verifications off one command
+    and signed off on one. The subset form is space-separated; the
+    repeated form refuses naming it."""
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, {"gates": [
+        {"id": "a", "command": PASS},
+        {"id": "b", "command": PASS},
+    ]})
+    with pytest.raises(SystemExit) as exc:
+        gates.main(["--gate", "a", "--gate", "b"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "more than once" in err
+    assert "space-separated" in err
+
+
+def test_count_summary_carries_the_gate_ids(tmp_path, capsys, monkeypatch):
+    """#437: the one line a reader is guaranteed to see carries the ids,
+    not just counts — '1 fail, 1 timeout' sent an operator through ten
+    --gate reruns to find two names the runner already had."""
+    monkeypatch.chdir(tmp_path)
+    slow = tmp_path / "slow.py"
+    slow.write_text("import time, sys\ntime.sleep(1.1)\n"
+                    "raise SystemExit(3)\n", encoding="utf-8")
+    _write(tmp_path, {"gates": [
+        {"id": "boom", "command": FAIL},
+        {"id": "slow", "command": [sys.executable, str(slow)],
+         "timeoutMs": 200},
+        {"id": "child", "command": PASS, "needs": ["boom"]},
+        {"id": "ok", "command": PASS},
+    ]})
+    assert gates.main([]) == 1
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if "gates:" in l and "pass" in l)
+    assert "1 fail (boom)" in line
+    assert "1 timeout (slow)" in line
+    assert "1 skip," in line
+    assert "1 pass" in line

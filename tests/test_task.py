@@ -1247,3 +1247,96 @@ def test_repin_refuses_non_open_and_needs_reason(tmp_path, monkeypatch,
     assert "not open" in capsys.readouterr().err
     with pytest.raises(SystemExit):                     # --reason is required
         task.main(["repin", "T-0001"])
+
+
+# ── #431/#435/#436/#442 ───────────────────────────────────────────────
+
+def test_new_refuses_duplicate_open_brief(tmp_path, monkeypatch, capsys):
+    """#431: an accidental second `task new` with the same brief minted
+    a silent empty twin that surfaced only at close. An OPEN card with
+    the identical title refuses with its id; --force mints on purpose."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="alpha", title="same brief",
+               checklist=["x"])
+    assert task.main(["new", "same", "brief"]) == 2
+    err = capsys.readouterr().err
+    assert "already carries this exact title: T-0001" in err
+    assert "--force" in err
+    # a voided twin does not block: retire the first brief, mint again
+    assert task.main(["void", "T-0001", "--reason", "retired for the "
+                      "guard test"]) == 0
+    capsys.readouterr()
+    assert task.main(["new", "same", "brief"]) == 0
+
+
+def test_mint_marker_claims_across_sibling_mints(tmp_path, monkeypatch):
+    """#435: four sibling worktrees of one clone each computed the same
+    'next id' and minted four same-id cards. The claim is an O_EXCL
+    marker in the SHARED common dir: first mint wins, the loser's
+    re-allocation bumps past it."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    subprocess.run(["git", "init", "-q", "."], cwd=proj, check=True,
+                   capture_output=True)
+    common = task._common_dir_quiet()
+    assert common is not None
+    assert task._mint_marker("T-0001", common) is True
+    assert task._mint_marker("T-0001", common) is False, \
+        "the same id cannot be claimed twice in one clone"
+    assert task._mint_marker("T-0002", common) is True
+    marker = common / "gov-task-minted" / "T-0001.spent"
+    assert marker.exists()
+
+
+def test_resolve_miss_names_checkout_context(tmp_path, monkeypatch, capsys):
+    """#436: 'no card matches' reads as 'does not exist' — cards are
+    per-checkout until merged. The miss names the branch and, when the
+    id ever existed in history, says so instead of inviting a re-create."""
+    proj = _project(tmp_path)
+    monkeypatch.chdir(proj)
+    subprocess.run(["git", "init", "-q", "."], cwd=proj, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=proj,
+                   check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=proj,
+                   check=True, capture_output=True)
+    _open_card(proj, cid="T-0001", slug="alpha", checklist=["x"])
+    subprocess.run(["git", "add", "-A"], cwd=proj, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-qm",
+                    "card"], cwd=proj, check=True, capture_output=True)
+    (proj / ".gov" / "tasks" / "T-0001-alpha.json").unlink()
+    with pytest.raises(SystemExit):
+        task.main(["show", "T-0001"])
+    err = capsys.readouterr().err
+    assert "no card matches 'T-0001' in this checkout (branch" in err
+    assert "may live on another branch or worktree" in err
+    assert "existed in git history" in err
+
+
+def test_close_timeout_names_the_abandonment(tmp_path, monkeypatch, capsys):
+    """#442: a close run killed by its budget was reported as eleven
+    'not green' gates — the run never finished and nothing was judged.
+    The timeout names the abandonment and the escape; the default is
+    unbounded (the close run IS the receipt run)."""
+    proj = _project(tmp_path)
+    (proj / "gates.json").write_text(json.dumps({
+        "modes": {"all": ["slow"]},
+        "gates": [{"id": "slow",
+                   "command": [sys.executable, "-c", "import time; "
+                               "time.sleep(5)"]}],
+    }), encoding="utf-8")
+    from gov import verify_plane as _vp
+    _vp.baseline(proj)
+    monkeypatch.chdir(proj)
+    _open_card(proj, cid="T-0001", slug="alpha", checklist=["x"])
+    assert task.main(["tick", "T-0001", "1"]) == 0
+    capsys.readouterr()
+    assert task.main(["close", "T-0001", "--timeout", "1"]) == 1
+    err = capsys.readouterr().err
+    assert "hit the 1s budget and was abandoned partway" in err
+    assert "nothing was judged" in err
+    card = json.loads((proj / ".gov/tasks/T-0001-alpha.json")
+                      .read_text(encoding="utf-8"))
+    assert card["status"] == "open", "an abandoned run changes nothing"

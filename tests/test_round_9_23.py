@@ -121,6 +121,11 @@ def test_22_hook_selects_by_push_range():
     assert 'run_dag_at_pushed_tree "$pushed_sha" "$base"' in hook
     assert "per-gate evidence" in hook
     assert "unset GIT_DIR" in hook
+    # #440: a scoped green names that CI's full matrix still runs the
+    # out-of-scope gates — the local-green/CI-red gap gets an inline
+    # hint at the decision moment.
+    assert "CI additionally runs the FULL gate matrix" in hook
+    assert "ci_note" in hook
     # functional: feed push stdin, expect scoped invocation (dry: sh -n ok)
     assert subprocess.run(["sh", "-n", str(HERE / "templates" / "pre-push")]).returncode == 0
 

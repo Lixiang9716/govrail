@@ -46,7 +46,7 @@
       "sha256": "858a307b8c70691401f322f0f18eae8ecc422e1d82976126f1bc0cb43cbe6328"
     },
     ".gov/rules.md": {
-      "sha256": "19130bbbfecc7ed434cf6505f6c38692ca378ae65f7fd09195091bb9dc6be92f"
+      "sha256": "966d5b99d440c8058dd0a3c037e27652960005126de1040f00a8899571bbf2fa"
     },
     ".gov/surfaces.json": {
       "sha256": "eb694e30b6087b731bda67a87dceee5186f88897e9d4b638ee40c19686d50156"
@@ -56,7 +56,7 @@
     }
   },
   "last_rebaseline": {
-    "ts": "2026-10-03T11:04:57+00:00",
+    "ts": "2026-10-17T02:07:29+00:00",
     "caller": "lx@DESKTOP-AOFQD6F",
     "unattended": true
   }
